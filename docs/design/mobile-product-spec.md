@@ -1,0 +1,61 @@
+# Mobile product specification
+
+## Concepts considered
+
+| Direction | Hermes fidelity | Mobile use | Tablet scale | Accessibility | Cost |
+| --- | --- | --- | --- | --- | --- |
+| Dense terminal cockpit | High visual familiarity, poor product fidelity | Weak for touch and long reading | Good density | Poor scaling/focus | Medium |
+| Conventional chat with settings drawer | Easy to learn but generic | Strong basic chat | Wastes wide layouts | Strong | Low |
+| Session atlas plus focused run surface | Preserves Hermes session/tool hierarchy | Fast switching and clear interrupts | Natural two-pane/master-detail | Strong with explicit semantics | Medium |
+
+The session-atlas direction is selected. Chat remains home, while tools, approvals and agent activity emerge from the run that produced them. Management nouns become real destinations only when their backend path is implemented.
+
+## Information architecture
+
+- Phone: session atlas → conversation. Predictive back returns to the atlas without closing the live session.
+- Tablet/foldable expanded: persistent 330dp session rail plus conversation.
+- Future durable destinations: Skills, Automations, Agents, Artifacts and Settings.
+- Short tasks: model selection, approval, clarification, rename and backend switch use sheets/dialogs.
+- Detail panes: tool output and artifacts may expand side-by-side on wide layouts without stealing focus.
+
+## Visual language
+
+The token seed comes directly from current Hermes Desktop's Nous theme: Nous blue `#0053FD`, Psyche blue `#1540B1`, Psyche warm `#FFE6CB`, neutral ink and the existing destructive red family. Typography pairs technical monospace headings/labels with a readable system sans body. Layout is flat rather than nested cards; tool activity uses a single tinted technical surface.
+
+The temporary `H` adaptive icon is deliberately isolated and must be replaced with an approved official asset before any first-party release.
+
+## States
+
+- Loading never replaces the whole shell after initial connection.
+- Empty session lists offer a real new-session action.
+- Reconnecting preserves transcript and draft, disables send, and keeps stop/approval state visible.
+- Auth expiry identifies the failed leg and returns to backend re-authentication.
+- Unsupported capabilities are absent from primary UI; diagnostics explain the required server version.
+- Tool and provider errors retain technical status codes with secrets removed.
+- Process recreation restores navigation, selected backend metadata and drafts; live state is rehydrated from Hermes.
+
+## Notifications and permissions
+
+Notification channels will separate approvals/input, run completion/failure and cron/automation results. Content previews default to private. Notification actions must carry a signed, single-use server action token or open the exact in-app prompt; broadcast extras alone never authorise an approval.
+
+Microphone permission is requested only when voice recording begins. Storage uses the system document picker and Storage Access Framework. Camera permission is requested only for direct capture. Notification permission is requested after the value is explained, not during cold start.
+
+## Offline behaviour
+
+The app is not an offline agent. Previously hydrated transcripts and drafts may remain readable. Mutations are not blindly replayed: pending user messages have client IDs and require an explicit retry after authoritative session reconciliation. Approvals are never queued offline because they may expire or refer to a changed run.
+
+## Motion system
+
+- Onboarding: one state machine moves from architecture explanation to backend link. Back reverses the same spatial transition.
+- Master/detail: selecting a session moves from atlas to the conversation destination; predictive back reverses it.
+- Tool activity: request inserts one stable row, progress modifies it, completion settles the same identity.
+- Approval/clarification: a blocking prompt is owned by its originating runtime session and cannot be dismissed into a lost state.
+- Connection loss changes a narrow status line; the transcript does not flash or relayout.
+- Reduced-motion mode replaces spatial transitions with immediate changes or short fades. Streaming content never animates each token.
+
+Interrupted animations settle to semantic state. Process recreation restores the destination, not an animation phase.
+
+## Accessibility
+
+Minimum 48dp controls, scalable text, semantic headings, labelled icon actions, logical master/detail traversal and no colour-only state. Streaming updates do not continuously steal TalkBack focus. Hardware Enter sends only from the composer; Escape/back affects the topmost owned interaction once. Tool state combines icon, text and colour.
+
