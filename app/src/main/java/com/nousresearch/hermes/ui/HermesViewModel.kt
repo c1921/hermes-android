@@ -77,6 +77,8 @@ class HermesViewModel @Inject constructor(
     fun renameProfile(name: String, newName: String) = viewModelScope.launch { repository.renameProfile(name, newName) }
     fun setActiveProfile(name: String) = viewModelScope.launch { repository.setActiveProfile(name) }
     fun deleteProfile(name: String) = viewModelScope.launch { repository.deleteProfile(name) }
+    fun selectBackend(id: String) = viewModelScope.launch { repository.selectBackend(id) }
+    fun forgetBackend(id: String) = viewModelScope.launch { repository.forgetBackend(id) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }
 }
 

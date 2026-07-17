@@ -107,7 +107,7 @@ import com.nousresearch.hermes.ui.theme.Success
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -188,11 +188,20 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
     }
     HermesTheme {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            if (state.backend == null) {
+            if (state.backend == null && state.savedBackends.isEmpty()) {
                 OnboardingScreen(
                     busy = state.loading,
                     error = state.error,
                     onConnect = viewModel::connect,
+                )
+            } else if (state.backend == null) {
+                BackendsScreen(
+                    state = state,
+                    onConnect = viewModel::connect,
+                    onSelect = viewModel::selectBackend,
+                    onForget = viewModel::forgetBackend,
+                    onBack = null,
+                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
                 )
             } else {
                 HermesWorkspace(
@@ -211,6 +220,9 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     modelActions = modelActions,
                     sessionActions = sessionActions,
                     managementActions = managementActions,
+                    onConnectBackend = viewModel::connect,
+                    onSelectBackend = viewModel::selectBackend,
+                    onForgetBackend = viewModel::forgetBackend,
                 )
             }
         }
@@ -351,6 +363,9 @@ private fun HermesWorkspace(
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
     managementActions: ManagementActions,
+    onConnectBackend: (String, String, String, Boolean) -> Unit,
+    onSelectBackend: (String) -> Unit,
+    onForgetBackend: (String) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
@@ -373,6 +388,7 @@ private fun HermesWorkspace(
                     onSkills = { destination = WorkspaceDestination.SKILLS },
                     onCron = { destination = WorkspaceDestination.CRON },
                     onProfiles = { destination = WorkspaceDestination.PROFILES },
+                    onBackends = { destination = WorkspaceDestination.BACKENDS },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -396,6 +412,14 @@ private fun HermesWorkspace(
                         onRename = managementActions.renameProfile,
                         onSetActive = managementActions.setActiveProfile,
                         onDelete = managementActions.deleteProfile,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.BACKENDS -> BackendsScreen(
+                        state = state,
+                        onConnect = onConnectBackend,
+                        onSelect = onSelectBackend,
+                        onForget = onForgetBackend,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -449,6 +473,14 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
+                    WorkspaceDestination.BACKENDS -> BackendsScreen(
+                        state = state,
+                        onConnect = onConnectBackend,
+                        onSelect = onSelectBackend,
+                        onForget = onForgetBackend,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
@@ -456,6 +488,7 @@ private fun HermesWorkspace(
                         onSkills = { destination = WorkspaceDestination.SKILLS },
                         onCron = { destination = WorkspaceDestination.CRON },
                         onProfiles = { destination = WorkspaceDestination.PROFILES },
+                        onBackends = { destination = WorkspaceDestination.BACKENDS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
                 }
@@ -474,6 +507,7 @@ private fun SessionRail(
     onSkills: () -> Unit,
     onCron: () -> Unit,
     onProfiles: () -> Unit,
+    onBackends: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
@@ -483,7 +517,7 @@ private fun SessionRail(
         ) {
             BrandGlyphSmall()
             Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).clickable(onClick = onBackends)) {
                 Text("HERMES", style = MaterialTheme.typography.titleLarge)
                 Text(state.backend?.label.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }

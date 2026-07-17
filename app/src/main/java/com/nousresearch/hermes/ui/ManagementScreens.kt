@@ -47,8 +47,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.ProfileInfo
@@ -56,9 +58,144 @@ import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.StoredSession
 
 @Composable
+internal fun BackendsScreen(
+    state: HermesState,
+    onConnect: (String, String, String, Boolean) -> Unit,
+    onSelect: (String) -> Unit,
+    onForget: (String) -> Unit,
+    onBack: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    var adding by rememberSaveable { mutableStateOf(false) }
+    var forgetId by rememberSaveable { mutableStateOf<String?>(null) }
+    val forgetBackend = state.savedBackends.firstOrNull { it.id == forgetId }
+    Column(modifier.fillMaxSize()) {
+        ManagementHeader("BACKENDS", "Saved Hermes installations", state.loading, null, onBack)
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+        ) {
+            Text(
+                "Connection metadata is stored in app-private preferences. Tokens are encrypted separately with Android Keystore and are never displayed here.",
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Button(onClick = { adding = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
+            Icon(Icons.Outlined.Add, null)
+            Spacer(Modifier.width(6.dp))
+            Text("Add backend")
+        }
+        state.error?.let { ManagementError(it) }
+        LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(state.savedBackends, key = BackendConfig::id) { backend ->
+                val selected = backend.id == state.backend?.id
+                Surface(
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(backend.label, fontWeight = FontWeight.SemiBold)
+                                Text(backend.baseUrl, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (selected) {
+                                Text("CONNECTED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            } else {
+                                TextButton(onClick = { onSelect(backend.id) }) { Text("Connect") }
+                            }
+                            IconButton(onClick = { forgetId = backend.id }) { Icon(Icons.Outlined.Delete, "Forget ${backend.label}") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            backend.lastHermesVersion?.let { Text("HERMES $it", style = MaterialTheme.typography.labelSmall) }
+                            if (backend.baseUrl.startsWith("http://")) {
+                                Text("PRIVATE HTTP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Text("TLS", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (adding) {
+        BackendConnectionDialog(
+            onDismiss = { adding = false },
+            onConnect = { label, url, token, allowPrivate ->
+                adding = false
+                onConnect(label, url, token, allowPrivate)
+            },
+        )
+    }
+    forgetBackend?.let { backend ->
+        AlertDialog(
+            onDismissRequest = { forgetId = null },
+            title = { Text("FORGET BACKEND?") },
+            text = { Text("${backend.label} will be removed from this device and its Keystore token deleted. Nothing is deleted from the Hermes server.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        forgetId = null
+                        onForget(backend.id)
+                    },
+                ) { Text("Forget") }
+            },
+            dismissButton = { TextButton(onClick = { forgetId = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun BackendConnectionDialog(
+    onDismiss: () -> Unit,
+    onConnect: (String, String, String, Boolean) -> Unit,
+) {
+    var label by rememberSaveable { mutableStateOf("") }
+    var url by rememberSaveable { mutableStateOf("") }
+    var token by rememberSaveable { mutableStateOf("") }
+    var allowPrivate by rememberSaveable { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ADD HERMES BACKEND") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
+                TextField(url, { url = it }, label = { Text("HTTPS URL") }, singleLine = true)
+                TextField(
+                    token,
+                    { token = it },
+                    label = { Text("Dashboard token") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Allow private-network HTTP")
+                        Text("Only literal LAN, loopback, or Tailscale IPs.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(allowPrivate, { allowPrivate = it })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConnect(label, url, token, allowPrivate) },
+                enabled = url.isNotBlank() && token.isNotBlank(),
+            ) { Text("Test and save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
 internal fun SkillsScreen(
     state: HermesState,
-    onRefresh: () -> Unit,
+    onRefresh: (() -> Unit)?,
     onToggle: (String, Boolean) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -405,7 +542,9 @@ private fun ManagementHeader(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-        IconButton(onClick = onRefresh, enabled = !loading) { Icon(Icons.Outlined.Refresh, "Refresh $title") }
+        onRefresh?.let {
+            IconButton(onClick = it, enabled = !loading) { Icon(Icons.Outlined.Refresh, "Refresh $title") }
+        }
     }
     HorizontalDivider()
 }

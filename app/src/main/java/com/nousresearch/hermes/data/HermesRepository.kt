@@ -48,6 +48,7 @@ import kotlinx.serialization.json.put
 
 data class HermesState(
     val backend: BackendConfig? = null,
+    val savedBackends: List<BackendConfig> = emptyList(),
     val status: StatusResponse? = null,
     val sessions: List<StoredSession> = emptyList(),
     val activeStoredSession: StoredSession? = null,
@@ -134,14 +135,15 @@ class HermesRepository @Inject constructor(
     init {
         scope.launch {
             combine(backendRegistry.backends, backendRegistry.activeBackendId) { backends, activeId ->
-                backends.firstOrNull { it.id == activeId }
-            }.collectLatest { backend ->
+                backends to backends.firstOrNull { it.id == activeId }
+            }.collectLatest { (backends, backend) ->
                 if (backend == null) {
                     intentionalDisconnect = true
                     reconnectJob?.cancel()
                     gateway.disconnect()
-                    mutableState.value = HermesState()
+                    mutableState.value = HermesState(savedBackends = backends)
                 } else {
+                    mutableState.value = mutableState.value.copy(savedBackends = backends)
                     connect(backend)
                 }
             }
@@ -881,6 +883,16 @@ class HermesRepository @Inject constructor(
         backendRegistry.remove(backend.id)
     }
 
+    suspend fun selectBackend(id: String) {
+        require(mutableState.value.savedBackends.any { it.id == id }) { "Saved Hermes backend was not found" }
+        backendRegistry.select(id)
+    }
+
+    suspend fun forgetBackend(id: String) {
+        tokenStore.remove(id)
+        backendRegistry.remove(id)
+    }
+
     private suspend fun connect(backend: BackendConfig) {
         intentionalDisconnect = false
         val token = tokenStore.get(backend.id)
@@ -888,7 +900,11 @@ class HermesRepository @Inject constructor(
             mutableState.value = HermesState(backend = backend, error = "Saved credentials are unavailable. Reconnect this backend.")
             return
         }
-        mutableState.value = HermesState(backend = backend, loading = true)
+        mutableState.value = HermesState(
+            backend = backend,
+            savedBackends = mutableState.value.savedBackends,
+            loading = true,
+        )
         runCatching {
             val status = restClient.status(backend, token)
             gateway.connect(backend, token)
