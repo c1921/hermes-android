@@ -1,10 +1,14 @@
 package com.nousresearch.hermes.data
 
+import android.net.Uri
 import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.network.HermesRestClient
+import com.nousresearch.hermes.protocol.FileAttachResult
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
+import com.nousresearch.hermes.protocol.ImageAttachResult
+import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionResumeResult
 import com.nousresearch.hermes.protocol.StatusResponse
@@ -15,7 +19,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -35,7 +41,18 @@ data class HermesState(
     val timeline: TimelineState = TimelineState(),
     val loading: Boolean = false,
     val sending: Boolean = false,
+    val attaching: Boolean = false,
+    val pendingAttachments: List<PendingAttachment> = emptyList(),
     val error: String? = null,
+)
+
+data class PendingAttachment(
+    val id: String,
+    val label: String,
+    val mimeType: String,
+    val byteCount: Int,
+    val refText: String? = null,
+    val queuedImagePaths: List<String> = emptyList(),
 )
 
 @Singleton
@@ -45,9 +62,12 @@ class HermesRepository @Inject constructor(
     private val restClient: HermesRestClient,
     private val gateway: HermesGatewayClient,
     private val json: Json,
+    private val attachmentReader: AttachmentReader,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(HermesState())
+    private var reconnectJob: Job? = null
+    private var intentionalDisconnect = false
     val state = mutableState.asStateFlow()
     val connectionState = gateway.connectionState
 
@@ -57,6 +77,8 @@ class HermesRepository @Inject constructor(
                 backends.firstOrNull { it.id == activeId }
             }.collectLatest { backend ->
                 if (backend == null) {
+                    intentionalDisconnect = true
+                    reconnectJob?.cancel()
                     gateway.disconnect()
                     mutableState.value = HermesState()
                 } else {
@@ -72,6 +94,17 @@ class HermesRepository @Inject constructor(
                     mutableState.value = current.copy(
                         timeline = TimelineReducer.reduce(current.timeline, event),
                     )
+                }
+            }
+        }
+        scope.launch {
+            gateway.connectionState.collect { connection ->
+                if (
+                    !intentionalDisconnect &&
+                    mutableState.value.backend != null &&
+                    (connection is GatewayConnectionState.Closed || connection is GatewayConnectionState.Failed)
+                ) {
+                    scheduleReconnect()
                 }
             }
         }
@@ -167,6 +200,11 @@ class HermesRepository @Inject constructor(
             newSession()
             requireNotNull(mutableState.value.runtimeSessionId)
         }
+        val attachmentRefs = mutableState.value.pendingAttachments.mapNotNull { it.refText }
+        val submittedText = buildString {
+            append(cleaned)
+            if (attachmentRefs.isNotEmpty()) append("\n\n").append(attachmentRefs.joinToString("\n"))
+        }
         val optimisticId = "local:${UUID.randomUUID()}"
         mutableState.value = mutableState.value.copy(
             timeline = TimelineReducer.appendUserMessage(mutableState.value.timeline, optimisticId, cleaned),
@@ -178,12 +216,109 @@ class HermesRepository @Inject constructor(
                 "prompt.submit",
                 buildJsonObject {
                     put("session_id", sessionId)
-                    put("text", cleaned)
+                    put("text", submittedText)
                 },
             )
         }.onSuccess {
-            mutableState.value = mutableState.value.copy(sending = false)
+            mutableState.value = mutableState.value.copy(sending = false, pendingAttachments = emptyList())
         }.onFailure(::fail)
+    }
+
+    suspend fun attach(uri: Uri) {
+        val sessionId = mutableState.value.runtimeSessionId ?: run {
+            newSession()
+            requireNotNull(mutableState.value.runtimeSessionId)
+        }
+        mutableState.value = mutableState.value.copy(attaching = true, error = null)
+        runCatching {
+            val payload = attachmentReader.read(uri)
+            when {
+                payload.mimeType.startsWith("image/") -> {
+                    val result = gateway.request(
+                        "image.attach_bytes",
+                        buildJsonObject {
+                            put("session_id", sessionId)
+                            put("content_base64", payload.base64)
+                            put("filename", payload.displayName)
+                        },
+                    )
+                    val attached = json.decodeFromJsonElement(ImageAttachResult.serializer(), result)
+                    PendingAttachment(
+                        id = UUID.randomUUID().toString(),
+                        label = payload.displayName,
+                        mimeType = payload.mimeType,
+                        byteCount = payload.byteCount,
+                        queuedImagePaths = listOf(attached.path),
+                    )
+                }
+                payload.mimeType == "application/pdf" -> {
+                    val result = gateway.request(
+                        "pdf.attach",
+                        buildJsonObject {
+                            put("session_id", sessionId)
+                            put("content_base64", payload.base64)
+                            put("filename", payload.displayName)
+                        },
+                    )
+                    val attached = json.decodeFromJsonElement(PdfAttachResult.serializer(), result)
+                    PendingAttachment(
+                        id = UUID.randomUUID().toString(),
+                        label = payload.displayName,
+                        mimeType = payload.mimeType,
+                        byteCount = payload.byteCount,
+                        queuedImagePaths = attached.pages.map { it.path },
+                    )
+                }
+                else -> {
+                    val result = gateway.request(
+                        "file.attach",
+                        buildJsonObject {
+                            put("session_id", sessionId)
+                            put("name", payload.displayName)
+                            put("path", payload.displayName)
+                            put("data_url", "data:${payload.mimeType};base64,${payload.base64}")
+                        },
+                    )
+                    val attached = json.decodeFromJsonElement(FileAttachResult.serializer(), result)
+                    PendingAttachment(
+                        id = UUID.randomUUID().toString(),
+                        label = payload.displayName,
+                        mimeType = payload.mimeType,
+                        byteCount = payload.byteCount,
+                        refText = attached.refText,
+                    )
+                }
+            }
+        }.onSuccess { attachment ->
+            mutableState.value = mutableState.value.copy(
+                attaching = false,
+                pendingAttachments = mutableState.value.pendingAttachments + attachment,
+            )
+        }.onFailure { error ->
+            mutableState.value = mutableState.value.copy(attaching = false)
+            fail(error)
+        }
+    }
+
+    suspend fun removePendingAttachment(id: String) {
+        val attachment = mutableState.value.pendingAttachments.firstOrNull { it.id == id } ?: return
+        val sessionId = mutableState.value.runtimeSessionId
+        if (sessionId != null) {
+            attachment.queuedImagePaths.forEach { path ->
+                runCatching {
+                    gateway.request(
+                        "image.detach",
+                        buildJsonObject {
+                            put("session_id", sessionId)
+                            put("path", path)
+                        },
+                    )
+                }
+            }
+        }
+        mutableState.value = mutableState.value.copy(
+            pendingAttachments = mutableState.value.pendingAttachments.filterNot { it.id == id },
+        )
     }
 
     suspend fun interrupt() {
@@ -229,12 +364,15 @@ class HermesRepository @Inject constructor(
 
     suspend fun disconnectAndForget() {
         val backend = mutableState.value.backend ?: return
+        intentionalDisconnect = true
+        reconnectJob?.cancel()
         gateway.disconnect()
         tokenStore.remove(backend.id)
         backendRegistry.remove(backend.id)
     }
 
     private suspend fun connect(backend: BackendConfig) {
+        intentionalDisconnect = false
         val token = tokenStore.get(backend.id)
         if (token.isNullOrBlank()) {
             mutableState.value = HermesState(backend = backend, error = "Saved credentials are unavailable. Reconnect this backend.")
@@ -268,5 +406,30 @@ class HermesRepository @Inject constructor(
             sending = false,
             error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
+    }
+
+    private fun scheduleReconnect() {
+        if (reconnectJob?.isActive == true) return
+        reconnectJob = scope.launch {
+            val backend = mutableState.value.backend ?: return@launch
+            val token = tokenStore.get(backend.id) ?: return@launch
+            val delays = listOf(1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 30_000L)
+            for ((index, retryDelay) in delays.withIndex()) {
+                if (intentionalDisconnect || mutableState.value.backend?.id != backend.id) return@launch
+                delay(retryDelay)
+                val connected = runCatching { gateway.connect(backend, token) }.isSuccess
+                if (connected) {
+                    val active = mutableState.value.activeStoredSession
+                    if (active != null) runCatching { openSession(active) }
+                    return@launch
+                }
+                mutableState.value = mutableState.value.copy(
+                    error = "Hermes reconnect attempt ${index + 1} failed; retrying in ${delays.getOrElse(index + 1) { retryDelay } / 1_000}s.",
+                )
+            }
+            mutableState.value = mutableState.value.copy(
+                error = "Hermes remains unreachable after bounded retries. Check the backend, TLS and network, then retry.",
+            )
+        }
     }
 }
