@@ -96,3 +96,19 @@ data class ProfileCreatePayload(
     @SerialName("clone_all") val cloneAll: Boolean = false,
     @SerialName("no_skills") val noSkills: Boolean = false,
 )
+
+@Serializable
+data class ActionResponse(
+    val name: String,
+    val ok: Boolean,
+    val pid: Long,
+)
+
+@Serializable
+data class ActionStatusResponse(
+    @SerialName("exit_code") val exitCode: Int? = null,
+    val lines: List<String> = emptyList(),
+    val name: String,
+    val pid: Long? = null,
+    val running: Boolean,
+)

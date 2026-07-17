@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Send
@@ -94,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
 import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.TimelineItem
@@ -107,7 +109,7 @@ import com.nousresearch.hermes.ui.theme.Success
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, DIAGNOSTICS }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -142,6 +144,7 @@ private data class ManagementActions(
     val renameProfile: (String, String) -> Unit,
     val setActiveProfile: (String) -> Unit,
     val deleteProfile: (String) -> Unit,
+    val runDiagnostic: (DiagnosticAction) -> Unit,
 )
 
 @Composable
@@ -184,6 +187,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             renameProfile = viewModel::renameProfile,
             setActiveProfile = viewModel::setActiveProfile,
             deleteProfile = viewModel::deleteProfile,
+            runDiagnostic = viewModel::runDiagnostic,
         )
     }
     HermesTheme {
@@ -389,6 +393,7 @@ private fun HermesWorkspace(
                     onCron = { destination = WorkspaceDestination.CRON },
                     onProfiles = { destination = WorkspaceDestination.PROFILES },
                     onBackends = { destination = WorkspaceDestination.BACKENDS },
+                    onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -420,6 +425,13 @@ private fun HermesWorkspace(
                         onConnect = onConnectBackend,
                         onSelect = onSelectBackend,
                         onForget = onForgetBackend,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.DIAGNOSTICS -> DiagnosticsScreen(
+                        state = state,
+                        connection = connection,
+                        onRun = managementActions.runDiagnostic,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -481,6 +493,13 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
+                    WorkspaceDestination.DIAGNOSTICS -> DiagnosticsScreen(
+                        state = state,
+                        connection = connection,
+                        onRun = managementActions.runDiagnostic,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
@@ -489,6 +508,7 @@ private fun HermesWorkspace(
                         onCron = { destination = WorkspaceDestination.CRON },
                         onProfiles = { destination = WorkspaceDestination.PROFILES },
                         onBackends = { destination = WorkspaceDestination.BACKENDS },
+                        onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
                 }
@@ -508,6 +528,7 @@ private fun SessionRail(
     onCron: () -> Unit,
     onProfiles: () -> Unit,
     onBackends: () -> Unit,
+    onDiagnostics: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
@@ -522,6 +543,7 @@ private fun SessionRail(
                 Text(state.backend?.label.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh sessions") }
+            IconButton(onClick = onDiagnostics) { Icon(Icons.Outlined.Info, "Diagnostics") }
             IconButton(onClick = onNewSession) { Icon(Icons.Outlined.Add, "New session") }
         }
         ConnectionLine(connection)

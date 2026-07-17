@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.HermesRepository
 import com.nousresearch.hermes.protocol.StoredSession
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -77,6 +78,7 @@ class HermesViewModel @Inject constructor(
     fun renameProfile(name: String, newName: String) = viewModelScope.launch { repository.renameProfile(name, newName) }
     fun setActiveProfile(name: String) = viewModelScope.launch { repository.setActiveProfile(name) }
     fun deleteProfile(name: String) = viewModelScope.launch { repository.deleteProfile(name) }
+    fun runDiagnostic(action: DiagnosticAction) = viewModelScope.launch { repository.runDiagnostic(action) }
     fun selectBackend(id: String) = viewModelScope.launch { repository.selectBackend(id) }
     fun forgetBackend(id: String) = viewModelScope.launch { repository.forgetBackend(id) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }

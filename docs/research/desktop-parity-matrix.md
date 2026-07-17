@@ -8,7 +8,7 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | OAuth remote backend | `dashboard_auth/routes.py`; `/api/auth/ws-ticket` | Blocked | Native PKCE app link, revocable device session | Browser cookies cannot be transferred safely from Custom Tabs | Native OAuth exchange |
 | Username/password dashboard auth | `/auth/password-login` | Blocked | Credential form followed by native client session | Current result is browser cookie-only | Native OAuth/session exchange |
 | Multiple saved backends | Desktop connection config | Implemented baseline | Add/test/select/forget backends; metadata in DataStore and tokens in Keystore | HTTP+WebSocket validation; discovery/QR pairing pending | No |
-| Capability/version display | `/api/status`; `session.info.desktop_contract` | Foundation | Contract warning and version-gated attachment/YOLO controls | Compatibility warning implemented; full diagnostics UI pending | Canonical capability document desirable |
+| Capability/version display | `/api/status`; `session.info.desktop_contract` | Implemented baseline | Dedicated diagnostics surface plus contract warning and version-gated attachment/YOLO controls | Displays app, audited upstream, server, auth, connection, capabilities and session contract; canonical capability document remains desirable | Canonical capability document desirable |
 | Session list across profiles | `/api/profiles/sessions` | Implemented | Phone atlas; tablet rail | Real REST path | No |
 | Session resume | `session.resume` | Implemented | Durable→runtime identity translation | Reducer tests; real backend pending | No |
 | New session | `session.create` | Implemented | One-tap new conversation | Real RPC path | No |
@@ -41,7 +41,7 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Agents/Command Center | Desktop agents/command-center; delegation RPCs | Not implemented | Run tree and intervention surface | Omitted; no empty screen shipped | Replay/push beneficial |
 | Usage/token accounting | session usage + analytics REST | Not implemented | Accessible summaries | Omitted | No |
 | Checkpoint/rollback | `rollback.list/diff/restore` | Not implemented | Explicit diff and confirmation | Omitted | No |
-| Logs/doctor/security audit/backup | REST ops/action status | Not implemented | Redacted diagnostics/export | Omitted | No |
+| Logs/doctor/security audit/backup | `/api/ops/doctor`; `/api/ops/security-audit`; `/api/actions/{name}/status` | Doctor and security audit implemented; backup/export absent | Bounded status polling and selectable on-device output with defense-in-depth secret/home-path redaction | Typed route tests and redactor tests; server action may continue after the two-minute mobile polling bound | No |
 | Notifications/deep links | Desktop native notifications | Blocked for background delivery | Private channels and exact target links | Foreground prompts work only | Device delivery v1 |
 | Local Termux runtime | Upstream Termux support | Research only | Detect/link to explicit companion | No cross-app runtime API | Optional Termux companion contract |
 | Phone/tablet/foldable layout | Desktop has responsive renderer | Implemented baseline | Master/detail below 840dp, two-pane above | Visual device QA pending | No |

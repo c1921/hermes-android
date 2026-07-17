@@ -28,11 +28,13 @@ import com.nousresearch.hermes.protocol.SessionUndoResult
 import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.security.DiagnosticRedactor
 import com.nousresearch.hermes.security.SecureTokenStore
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -69,6 +71,7 @@ data class HermesState(
     val activeProfile: String = "default",
     val currentProfile: String = "default",
     val managementLoading: Boolean = false,
+    val diagnostics: Map<DiagnosticAction, DiagnosticRunState> = emptyMap(),
     val error: String? = null,
 ) {
     val compatibilityWarning: String?
@@ -92,6 +95,20 @@ data class HermesState(
         const val MINIMUM_DESKTOP_CONTRACT = 3
     }
 }
+
+enum class DiagnosticAction(val wireName: String) {
+    DOCTOR("doctor"),
+    SECURITY_AUDIT("security-audit"),
+}
+
+data class DiagnosticRunState(
+    val running: Boolean = false,
+    val pid: Long? = null,
+    val exitCode: Int? = null,
+    val lines: List<String> = emptyList(),
+    val error: String? = null,
+    val timedOut: Boolean = false,
+)
 
 data class ModelSelection(val provider: String, val model: String) {
     fun rpcValue(): String {
@@ -723,6 +740,61 @@ class HermesRepository @Inject constructor(
         }
     }
 
+    suspend fun runDiagnostic(action: DiagnosticAction) {
+        val (backend, token) = activeCredentials()
+        updateDiagnostic(action, DiagnosticRunState(running = true))
+        try {
+            val started = when (action) {
+                DiagnosticAction.DOCTOR -> restClient.runDoctor(backend, token)
+                DiagnosticAction.SECURITY_AUDIT -> restClient.runSecurityAudit(backend, token)
+            }
+            require(started.ok && started.name == action.wireName) {
+                "Hermes did not start the requested diagnostic action"
+            }
+            updateDiagnostic(action, DiagnosticRunState(running = true, pid = started.pid))
+            repeat(DIAGNOSTIC_POLL_LIMIT) {
+                val status = restClient.actionStatus(backend, token, action.wireName)
+                updateDiagnostic(
+                    action,
+                    DiagnosticRunState(
+                        running = status.running,
+                        pid = status.pid ?: started.pid,
+                        exitCode = status.exitCode,
+                        lines = DiagnosticRedactor.redactLines(status.lines),
+                    ),
+                )
+                if (!status.running) return
+                delay(DIAGNOSTIC_POLL_INTERVAL_MILLIS)
+            }
+            val current = mutableState.value.diagnostics[action] ?: DiagnosticRunState()
+            updateDiagnostic(
+                action,
+                current.copy(
+                    running = false,
+                    timedOut = true,
+                    error = "Status polling stopped after two minutes. The server action may still be running.",
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            val current = mutableState.value.diagnostics[action] ?: DiagnosticRunState()
+            updateDiagnostic(
+                action,
+                current.copy(
+                    running = false,
+                    error = DiagnosticRedactor.redact(error.message.orEmpty()).ifBlank { "Diagnostic action failed" },
+                ),
+            )
+        }
+    }
+
+    private fun updateDiagnostic(action: DiagnosticAction, run: DiagnosticRunState) {
+        mutableState.value = mutableState.value.copy(
+            diagnostics = mutableState.value.diagnostics + (action to run),
+        )
+    }
+
     private fun replaceCronJob(job: CronJob) {
         val existing = mutableState.value.cronJobs
         mutableState.value = mutableState.value.copy(
@@ -962,6 +1034,9 @@ class HermesRepository @Inject constructor(
         }
     }
 }
+
+private const val DIAGNOSTIC_POLL_INTERVAL_MILLIS = 1_000L
+private const val DIAGNOSTIC_POLL_LIMIT = 120
 
 private fun String.isSafeModelToken(): Boolean =
     isNotBlank() && length <= 512 && !startsWith('-') && none { it.isWhitespace() || it.isISOControl() }

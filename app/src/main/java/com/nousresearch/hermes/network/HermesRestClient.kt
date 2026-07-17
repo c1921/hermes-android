@@ -1,6 +1,8 @@
 package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.protocol.ActionResponse
+import com.nousresearch.hermes.protocol.ActionStatusResponse
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
@@ -256,6 +258,33 @@ class HermesRestClient(
         )
     }
 
+    suspend fun runDoctor(config: BackendConfig, token: String): ActionResponse =
+        startAction(config, token, "/api/ops/doctor")
+
+    suspend fun runSecurityAudit(config: BackendConfig, token: String): ActionResponse =
+        startAction(config, token, "/api/ops/security-audit")
+
+    suspend fun actionStatus(
+        config: BackendConfig,
+        token: String,
+        name: String,
+        lines: Int = 400,
+    ): ActionStatusResponse {
+        require(name in ALLOWED_ACTIONS) { "Unsupported Hermes diagnostic action" }
+        return get(
+            config,
+            token,
+            "/api/actions/$name/status?lines=${lines.coerceIn(1, 2_000)}",
+            ActionStatusResponse.serializer(),
+        )
+    }
+
+    private suspend fun startAction(config: BackendConfig, token: String, path: String): ActionResponse =
+        json.decodeFromJsonElement(
+            ActionResponse.serializer(),
+            request(config, token, path, method = "POST", body = buildJsonObject { }),
+        )
+
     private suspend fun <T> get(
         config: BackendConfig,
         token: String?,
@@ -300,6 +329,7 @@ class HermesRestClient(
             .build().encodedPath.removePrefix("/")
 
     private companion object {
+        val ALLOWED_ACTIONS = setOf("doctor", "security-audit")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
