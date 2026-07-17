@@ -60,3 +60,33 @@ data class CronJobUpdates(
     val prompt: String? = null,
     val schedule: String? = null,
 )
+
+@Serializable
+data class ProfileInfo(
+    @SerialName("has_env") val hasEnv: Boolean = false,
+    @SerialName("is_default") val isDefault: Boolean = false,
+    val model: String? = null,
+    val name: String,
+    val path: String = "",
+    val provider: String? = null,
+    @SerialName("skill_count") val skillCount: Int = 0,
+)
+
+@Serializable
+data class ProfilesResponse(
+    val profiles: List<ProfileInfo> = emptyList(),
+)
+
+@Serializable
+data class ActiveProfileResponse(
+    val active: String = "default",
+    val current: String = "default",
+)
+
+@Serializable
+data class ProfileCreatePayload(
+    val name: String,
+    @SerialName("clone_from") val cloneFrom: String? = null,
+    @SerialName("clone_all") val cloneAll: Boolean = false,
+    @SerialName("no_skills") val noSkills: Boolean = false,
+)

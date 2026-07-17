@@ -4,6 +4,9 @@ import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
+import com.nousresearch.hermes.protocol.ActiveProfileResponse
+import com.nousresearch.hermes.protocol.ProfileCreatePayload
+import com.nousresearch.hermes.protocol.ProfilesResponse
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
 import com.nousresearch.hermes.protocol.SkillInfo
@@ -191,6 +194,51 @@ class HermesRestClient(
             config,
             token,
             "/api/cron/jobs/${encodePathSegment(jobId)}",
+            method = "DELETE",
+        )
+    }
+
+    suspend fun profiles(config: BackendConfig, token: String): ProfilesResponse =
+        get(config, token, "/api/profiles", ProfilesResponse.serializer())
+
+    suspend fun activeProfile(config: BackendConfig, token: String): ActiveProfileResponse =
+        get(config, token, "/api/profiles/active", ActiveProfileResponse.serializer())
+
+    suspend fun createProfile(config: BackendConfig, token: String, payload: ProfileCreatePayload) {
+        request(
+            config,
+            token,
+            "/api/profiles",
+            method = "POST",
+            body = json.encodeToJsonElement(ProfileCreatePayload.serializer(), payload),
+        )
+    }
+
+    suspend fun renameProfile(config: BackendConfig, token: String, name: String, newName: String) {
+        request(
+            config,
+            token,
+            "/api/profiles/${encodePathSegment(name)}",
+            method = "PATCH",
+            body = buildJsonObject { put("new_name", newName) },
+        )
+    }
+
+    suspend fun setActiveProfile(config: BackendConfig, token: String, name: String) {
+        request(
+            config,
+            token,
+            "/api/profiles/active",
+            method = "POST",
+            body = buildJsonObject { put("name", name) },
+        )
+    }
+
+    suspend fun deleteProfile(config: BackendConfig, token: String, name: String) {
+        request(
+            config,
+            token,
+            "/api/profiles/${encodePathSegment(name)}",
             method = "DELETE",
         )
     }

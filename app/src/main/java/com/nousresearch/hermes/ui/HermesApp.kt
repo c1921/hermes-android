@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -106,7 +107,7 @@ import com.nousresearch.hermes.ui.theme.Success
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -135,6 +136,11 @@ private data class ManagementActions(
     val createCron: (String, String, String, String) -> Unit,
     val updateCron: (String, String, String, String, String) -> Unit,
     val deleteCron: (String) -> Unit,
+    val refreshProfiles: () -> Unit,
+    val createProfile: (String, String, Boolean, Boolean) -> Unit,
+    val renameProfile: (String, String) -> Unit,
+    val setActiveProfile: (String) -> Unit,
+    val deleteProfile: (String) -> Unit,
 )
 
 @Composable
@@ -171,6 +177,11 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             createCron = viewModel::createCron,
             updateCron = viewModel::updateCron,
             deleteCron = viewModel::deleteCron,
+            refreshProfiles = viewModel::refreshProfiles,
+            createProfile = viewModel::createProfile,
+            renameProfile = viewModel::renameProfile,
+            setActiveProfile = viewModel::setActiveProfile,
+            deleteProfile = viewModel::deleteProfile,
         )
     }
     HermesTheme {
@@ -327,7 +338,7 @@ private fun HermesWorkspace(
     connection: GatewayConnectionState,
     onRefresh: () -> Unit,
     onSession: (StoredSession) -> Unit,
-    onNewSession: () -> Unit,
+    onNewSession: (String?) -> Unit,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
@@ -356,9 +367,10 @@ private fun HermesWorkspace(
                 SessionRail(
                     state, connection, onRefresh,
                     onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
-                    onNewSession = { onNewSession(); destination = WorkspaceDestination.CHAT },
+                    onNewSession = { onNewSession(null); destination = WorkspaceDestination.CHAT },
                     onSkills = { destination = WorkspaceDestination.SKILLS },
                     onCron = { destination = WorkspaceDestination.CRON },
+                    onProfiles = { destination = WorkspaceDestination.PROFILES },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -371,6 +383,17 @@ private fun HermesWorkspace(
                         managementActions.triggerCron, managementActions.createCron,
                         managementActions.updateCron, managementActions.deleteCron,
                         null, Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.PROFILES -> ProfilesScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshProfiles,
+                        onStartSession = { onNewSession(it); destination = WorkspaceDestination.CHAT },
+                        onCreate = managementActions.createProfile,
+                        onRename = managementActions.renameProfile,
+                        onSetActive = managementActions.setActiveProfile,
+                        onDelete = managementActions.deleteProfile,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
                     )
                     else -> ChatSurface(
                         state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
@@ -409,12 +432,24 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
+                    WorkspaceDestination.PROFILES -> ProfilesScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshProfiles,
+                        onStartSession = { onNewSession(it); destination = WorkspaceDestination.CHAT },
+                        onCreate = managementActions.createProfile,
+                        onRename = managementActions.renameProfile,
+                        onSetActive = managementActions.setActiveProfile,
+                        onDelete = managementActions.deleteProfile,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
-                        onNewSession = { onNewSession(); destination = WorkspaceDestination.CHAT },
+                        onNewSession = { onNewSession(null); destination = WorkspaceDestination.CHAT },
                         onSkills = { destination = WorkspaceDestination.SKILLS },
                         onCron = { destination = WorkspaceDestination.CRON },
+                        onProfiles = { destination = WorkspaceDestination.PROFILES },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
                 }
@@ -432,6 +467,7 @@ private fun SessionRail(
     onNewSession: () -> Unit,
     onSkills: () -> Unit,
     onCron: () -> Unit,
+    onProfiles: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
@@ -462,6 +498,11 @@ private fun SessionRail(
                 Icon(Icons.Outlined.Schedule, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Cron")
+            }
+            OutlinedButton(onClick = onProfiles, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Person, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Profiles")
             }
         }
         state.error?.let { ErrorBanner(it, Modifier.padding(12.dp)) }

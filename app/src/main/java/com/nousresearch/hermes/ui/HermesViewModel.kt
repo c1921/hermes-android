@@ -37,7 +37,7 @@ class HermesViewModel @Inject constructor(
 
     fun refresh() = viewModelScope.launch { repository.refreshSessions() }
     fun openSession(session: StoredSession) = viewModelScope.launch { repository.openSession(session) }
-    fun newSession() = viewModelScope.launch { repository.newSession() }
+    fun newSession(profile: String? = null) = viewModelScope.launch { repository.newSession(profile) }
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
     fun steer(text: String) = viewModelScope.launch { repository.steer(text) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
@@ -69,6 +69,13 @@ class HermesViewModel @Inject constructor(
         repository.updateCron(jobId, name, prompt, schedule, deliver)
     }
     fun deleteCron(jobId: String) = viewModelScope.launch { repository.deleteCron(jobId) }
+    fun refreshProfiles() = viewModelScope.launch { repository.refreshProfiles() }
+    fun createProfile(name: String, cloneFrom: String, cloneAll: Boolean, noSkills: Boolean) = viewModelScope.launch {
+        repository.createProfile(name, cloneFrom, cloneAll, noSkills)
+    }
+    fun renameProfile(name: String, newName: String) = viewModelScope.launch { repository.renameProfile(name, newName) }
+    fun setActiveProfile(name: String) = viewModelScope.launch { repository.setActiveProfile(name) }
+    fun deleteProfile(name: String) = viewModelScope.launch { repository.deleteProfile(name) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }
 }
 

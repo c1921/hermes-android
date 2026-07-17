@@ -19,8 +19,10 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.CronJob
+import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SkillInfo
 
 @Composable
@@ -176,6 +179,199 @@ internal fun CronScreen(
             dismissButton = { TextButton(onClick = { deleteJobId = null }) { Text("Cancel") } },
         )
     }
+}
+
+@Composable
+internal fun ProfilesScreen(
+    state: HermesState,
+    onRefresh: () -> Unit,
+    onStartSession: (String) -> Unit,
+    onCreate: (String, String, Boolean, Boolean) -> Unit,
+    onRename: (String, String) -> Unit,
+    onSetActive: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onBack: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    var creating by rememberSaveable { mutableStateOf(false) }
+    var renameProfileName by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteProfileName by rememberSaveable { mutableStateOf<String?>(null) }
+    val renameProfile = state.profiles.firstOrNull { it.name == renameProfileName }
+    val deleteProfile = state.profiles.firstOrNull { it.name == deleteProfileName }
+    LaunchedEffect(Unit) { onRefresh() }
+    Column(modifier.fillMaxSize()) {
+        ManagementHeader("PROFILES", "Isolated Hermes workspaces", state.managementLoading, onRefresh, onBack)
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+        ) {
+            Text(
+                "Running profile: ${state.currentProfile}. Sticky default: ${state.activeProfile}. The sticky default affects future Hermes CLI processes; starting a session here scopes this live connection explicitly.",
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Button(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
+            Icon(Icons.Outlined.Add, null)
+            Spacer(Modifier.width(6.dp))
+            Text("Create profile")
+        }
+        if (state.error != null) ManagementError(state.error)
+        if (!state.managementLoading && state.profiles.isEmpty()) {
+            ManagementEmpty("No profiles were returned by this Hermes backend.")
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(state.profiles, key = ProfileInfo::name) { profile ->
+                    ProfileRow(
+                        profile = profile,
+                        isActive = profile.name == state.activeProfile,
+                        isCurrent = profile.name == state.currentProfile,
+                        onStartSession = { onStartSession(profile.name) },
+                        onRename = { renameProfileName = profile.name },
+                        onSetActive = { onSetActive(profile.name) },
+                        onDelete = { deleteProfileName = profile.name },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    if (creating) {
+        ProfileCreateDialog(
+            onDismiss = { creating = false },
+            onCreate = { name, cloneFrom, cloneAll, noSkills ->
+                creating = false
+                onCreate(name, cloneFrom, cloneAll, noSkills)
+            },
+        )
+    }
+    renameProfile?.let { profile ->
+        ProfileRenameDialog(
+            profile = profile,
+            onDismiss = { renameProfileName = null },
+            onRename = { newName ->
+                renameProfileName = null
+                onRename(profile.name, newName)
+            },
+        )
+    }
+    deleteProfile?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { deleteProfileName = null },
+            title = { Text("DELETE PROFILE?") },
+            text = { Text("${profile.name} and its isolated config, sessions, skills, and memory will be deleted from the Hermes server. This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteProfileName = null
+                        onDelete(profile.name)
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleteProfileName = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun ProfileRow(
+    profile: ProfileInfo,
+    isActive: Boolean,
+    isCurrent: Boolean,
+    onStartSession: () -> Unit,
+    onRename: () -> Unit,
+    onSetActive: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val protected = profile.isDefault || isCurrent
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Person, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(profile.name, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        listOfNotNull(profile.provider, profile.model).joinToString(" / ").ifBlank { "Model not assigned" },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                IconButton(onClick = onStartSession) { Icon(Icons.Outlined.PlayArrow, "Start session in ${profile.name}") }
+                if (!profile.isDefault) IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, "Rename ${profile.name}") }
+                if (!protected) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Delete ${profile.name}") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (profile.isDefault) Text("DEFAULT ROOT", style = MaterialTheme.typography.labelSmall)
+                if (isCurrent) Text("SERVER PROCESS", style = MaterialTheme.typography.labelSmall)
+                Text("${profile.skillCount} SKILLS", style = MaterialTheme.typography.labelSmall)
+                if (isActive) {
+                    Text("STICKY DEFAULT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                } else {
+                    TextButton(onClick = onSetActive) {
+                        Icon(Icons.Outlined.Star, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Make default")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileCreateDialog(
+    onDismiss: () -> Unit,
+    onCreate: (String, String, Boolean, Boolean) -> Unit,
+) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var cloneFrom by rememberSaveable { mutableStateOf("") }
+    var cloneAll by rememberSaveable { mutableStateOf(false) }
+    var noSkills by rememberSaveable { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("CREATE PROFILE") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextField(name, { name = it.take(100) }, label = { Text("Profile name") }, singleLine = true)
+                TextField(
+                    cloneFrom,
+                    { cloneFrom = it.take(100) },
+                    label = { Text("Clone source (optional)") },
+                    supportingText = { Text("Leave empty for a fresh profile. Use an exact existing profile name.") },
+                    singleLine = true,
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Clone sessions and full state", Modifier.weight(1f))
+                    Switch(cloneAll, { cloneAll = it })
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Start without bundled skills", Modifier.weight(1f))
+                    Switch(noSkills, { noSkills = it })
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onCreate(name, cloneFrom, cloneAll, noSkills) }, enabled = name.isNotBlank()) { Text("Create") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ProfileRenameDialog(
+    profile: ProfileInfo,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit,
+) {
+    var name by rememberSaveable(profile.name) { mutableStateOf(profile.name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("RENAME PROFILE") },
+        text = { TextField(name, { name = it.take(100) }, label = { Text("New name") }, singleLine = true) },
+        confirmButton = { TextButton(onClick = { onRename(name) }, enabled = name.isNotBlank() && name != profile.name) { Text("Rename") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

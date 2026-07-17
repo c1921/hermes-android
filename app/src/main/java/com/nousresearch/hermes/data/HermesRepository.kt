@@ -14,6 +14,8 @@ import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.ImageAttachResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.PdfAttachResult
+import com.nousresearch.hermes.protocol.ProfileCreatePayload
+import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionBranchResult
 import com.nousresearch.hermes.protocol.SessionCompressResult
@@ -61,6 +63,9 @@ data class HermesState(
     val pendingModelConfirmation: PendingModelConfirmation? = null,
     val skills: List<SkillInfo> = emptyList(),
     val cronJobs: List<CronJob> = emptyList(),
+    val profiles: List<ProfileInfo> = emptyList(),
+    val activeProfile: String = "default",
+    val currentProfile: String = "default",
     val managementLoading: Boolean = false,
     val error: String? = null,
 ) {
@@ -623,6 +628,81 @@ class HermesRepository @Inject constructor(
                 )
             }
             .onFailure(::fail)
+    }
+
+    suspend fun refreshProfiles() {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(managementLoading = true, error = null)
+        val result = runCatching {
+            restClient.profiles(backend, token) to restClient.activeProfile(backend, token)
+        }
+        result.onSuccess { (profiles, active) ->
+            mutableState.value = mutableState.value.copy(
+                profiles = profiles.profiles.sortedWith(compareByDescending<ProfileInfo> { it.isDefault }.thenBy { it.name }),
+                activeProfile = active.active,
+                currentProfile = active.current,
+                managementLoading = false,
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun createProfile(name: String, cloneFrom: String, cloneAll: Boolean, noSkills: Boolean) {
+        val cleanName = name.trim()
+        require(cleanName.isNotEmpty()) { "Profile name is required" }
+        val (backend, token) = activeCredentials()
+        val result = runCatching {
+            restClient.createProfile(
+                backend,
+                token,
+                ProfileCreatePayload(
+                    name = cleanName,
+                    cloneFrom = cloneFrom.trim().takeIf(String::isNotEmpty),
+                    cloneAll = cloneAll,
+                    noSkills = noSkills,
+                ),
+            )
+        }
+        if (result.isSuccess) {
+            refreshProfiles()
+            refreshSessions()
+        } else {
+            fail(requireNotNull(result.exceptionOrNull()))
+        }
+    }
+
+    suspend fun renameProfile(name: String, newName: String) {
+        val cleanName = newName.trim()
+        require(cleanName.isNotEmpty()) { "New profile name is required" }
+        val (backend, token) = activeCredentials()
+        val result = runCatching { restClient.renameProfile(backend, token, name, cleanName) }
+        if (result.isSuccess) {
+            refreshProfiles()
+            refreshSessions()
+        } else {
+            fail(requireNotNull(result.exceptionOrNull()))
+        }
+    }
+
+    suspend fun setActiveProfile(name: String) {
+        val (backend, token) = activeCredentials()
+        val result = runCatching { restClient.setActiveProfile(backend, token, name) }
+        if (result.isSuccess) refreshProfiles() else fail(requireNotNull(result.exceptionOrNull()))
+    }
+
+    suspend fun deleteProfile(name: String) {
+        val profile = mutableState.value.profiles.firstOrNull { it.name == name } ?: return
+        require(!profile.isDefault && name != mutableState.value.currentProfile) {
+            "The default or currently running Hermes profile cannot be deleted"
+        }
+        val (backend, token) = activeCredentials()
+        val result = runCatching { restClient.deleteProfile(backend, token, name) }
+        if (result.isSuccess) {
+            refreshProfiles()
+            refreshSessions()
+        } else {
+            fail(requireNotNull(result.exceptionOrNull()))
+        }
     }
 
     private fun replaceCronJob(job: CronJob) {
