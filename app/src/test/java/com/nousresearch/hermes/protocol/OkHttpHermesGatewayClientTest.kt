@@ -35,4 +35,25 @@ class OkHttpHermesGatewayClientTest {
             client.disconnect()
         }
     }
+
+    @Test
+    fun `replacing a socket reaches open without publishing an intentional close`() = runTest {
+        FakeHermesBackend(json).use { backend ->
+            backend.start(connectionCount = 2)
+            val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
+            val config = BackendConfig(
+                id = "fake",
+                label = "Fake Hermes",
+                baseUrl = backend.baseUrl,
+                authMode = AuthMode.TOKEN,
+                allowInsecurePrivateNetwork = true,
+            )
+
+            client.connect(config, "test-token")
+            client.connect(config, "test-token")
+
+            assertTrue(client.connectionState.value is GatewayConnectionState.Open)
+            client.disconnect()
+        }
+    }
 }
