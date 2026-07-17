@@ -39,5 +39,6 @@ jobs:
               sha: context.sha,
               state,
               context: 'Hermes Android / CI',
-              description: state === 'success' ? 'Tests, lint and debug APK passed' : 'Android validation failed'
+              description: state === 'success' ? 'Tests, lint and debug APK passed' : 'Android validation failed',
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             })

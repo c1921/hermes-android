@@ -103,17 +103,19 @@ internal fun ModelControls(
                 leadingIcon = { Icon(Icons.Outlined.Bolt, null) },
             )
         }
-        FilterChip(
-            selected = runtime.yolo,
-            onClick = {
-                if (runtime.yolo) onYolo(false) else yoloConfirmation = true
-            },
-            label = { Text("YOLO") },
-            leadingIcon = { Icon(Icons.Outlined.Warning, null) },
-            modifier = Modifier.semantics {
-                stateDescription = if (runtime.yolo) "Approval bypass enabled for this session" else "Approval bypass disabled"
-            },
-        )
+        if (state.supportsSessionYolo) {
+            FilterChip(
+                selected = runtime.yolo,
+                onClick = {
+                    if (runtime.yolo) onYolo(false) else yoloConfirmation = true
+                },
+                label = { Text("YOLO") },
+                leadingIcon = { Icon(Icons.Outlined.Warning, null) },
+                modifier = Modifier.semantics {
+                    stateDescription = if (runtime.yolo) "Approval bypass enabled for this session" else "Approval bypass disabled"
+                },
+            )
+        }
     }
 
     if (pickerOpen) {

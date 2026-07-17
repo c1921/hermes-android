@@ -52,6 +52,7 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -102,7 +103,7 @@ import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.NousBlue
 import com.nousresearch.hermes.ui.theme.Success
-import com.nousresearch.hermes.ui.theme.Warning
+import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
 private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON }
@@ -556,6 +557,7 @@ private fun ChatSurface(
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
         state.error?.let { ErrorBanner(it, Modifier.padding(horizontal = 12.dp)) }
+        state.compatibilityWarning?.let { CompatibilityBanner(it, Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
         if (state.runtimeSessionId != null) {
             ModelControls(
                 state = state,
@@ -572,6 +574,7 @@ private fun ChatSurface(
                 sending = state.sending || state.runtimeInfo.running,
                 attaching = state.attaching,
                 connected = connection is GatewayConnectionState.Open,
+                attachmentEnabled = state.supportsRemoteAttachments,
                 attachments = state.pendingAttachments,
                 onSend = onSend,
                 onSteer = onSteer,
@@ -725,6 +728,7 @@ private fun Composer(
     sending: Boolean,
     attaching: Boolean,
     connected: Boolean,
+    attachmentEnabled: Boolean,
     attachments: List<PendingAttachment>,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
@@ -768,8 +772,10 @@ private fun Composer(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            IconButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, enabled = connected && !attaching) {
-                Icon(Icons.Outlined.AttachFile, "Attach a file")
+            if (attachmentEnabled) {
+                IconButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, enabled = connected && !attaching) {
+                    Icon(Icons.Outlined.AttachFile, "Attach a file")
+                }
             }
             TextField(
                 value = draft,
@@ -866,5 +872,17 @@ private fun ErrorBanner(message: String, modifier: Modifier = Modifier) {
         Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
         Spacer(Modifier.width(8.dp))
         Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+    }
+}
+
+@Composable
+private fun CompatibilityBanner(message: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)).padding(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(Icons.Outlined.Warning, null, tint = WarningColor)
+        Spacer(Modifier.width(8.dp))
+        Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

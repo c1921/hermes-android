@@ -8,7 +8,7 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | OAuth remote backend | `dashboard_auth/routes.py`; `/api/auth/ws-ticket` | Blocked | Native PKCE app link, revocable device session | Browser cookies cannot be transferred safely from Custom Tabs | Native OAuth exchange |
 | Username/password dashboard auth | `/auth/password-login` | Blocked | Credential form followed by native client session | Current result is browser cookie-only | Native OAuth/session exchange |
 | Multiple saved backends | Desktop connection config | Foundation | Backend registry and scoped Keystore secrets | Registry exists; backend picker UI pending | No |
-| Capability/version display | `/api/status` | Foundation | Show server/app/audited protocol details | Status fetched; diagnostics UI pending | Canonical capability document desirable |
+| Capability/version display | `/api/status`; `session.info.desktop_contract` | Foundation | Contract warning and version-gated attachment/YOLO controls | Compatibility warning implemented; full diagnostics UI pending | Canonical capability document desirable |
 | Session list across profiles | `/api/profiles/sessions` | Implemented | Phone atlas; tablet rail | Real REST path | No |
 | Session resume | `session.resume` | Implemented | Durable→runtime identity translation | Reducer tests; real backend pending | No |
 | New session | `session.create` | Implemented | One-tap new conversation | Real RPC path | No |

@@ -63,7 +63,28 @@ data class HermesState(
     val cronJobs: List<CronJob> = emptyList(),
     val managementLoading: Boolean = false,
     val error: String? = null,
-)
+) {
+    val compatibilityWarning: String?
+        get() = when {
+            runtimeSessionId == null -> null
+            runtimeInfo.desktopContract == null ->
+                "This Hermes server does not report a desktop contract version. Version-gated controls are hidden."
+            runtimeInfo.desktopContract < MINIMUM_DESKTOP_CONTRACT ->
+                "This session reports desktop contract v${runtimeInfo.desktopContract}; Android expects v$MINIMUM_DESKTOP_CONTRACT. Update Hermes for full controls."
+            else -> null
+        }
+
+    val supportsRemoteAttachments: Boolean
+        get() = runtimeSessionId != null && (runtimeInfo.desktopContract ?: 0) >= ATTACHMENT_DESKTOP_CONTRACT
+
+    val supportsSessionYolo: Boolean
+        get() = runtimeSessionId != null && (runtimeInfo.desktopContract ?: 0) >= MINIMUM_DESKTOP_CONTRACT
+
+    private companion object {
+        const val ATTACHMENT_DESKTOP_CONTRACT = 2
+        const val MINIMUM_DESKTOP_CONTRACT = 3
+    }
+}
 
 data class ModelSelection(val provider: String, val model: String) {
     fun rpcValue(): String {
