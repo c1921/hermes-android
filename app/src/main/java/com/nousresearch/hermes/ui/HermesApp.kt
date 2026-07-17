@@ -119,10 +119,31 @@ import com.nousresearch.hermes.ui.theme.Warning
 
 private val WideLayout = 840.dp
 
+private data class ModelActions(
+    val refresh: () -> Unit,
+    val select: (String, String) -> Unit,
+    val confirm: () -> Unit,
+    val cancel: () -> Unit,
+    val reasoning: (String) -> Unit,
+    val fast: (Boolean) -> Unit,
+    val yolo: (Boolean) -> Unit,
+)
+
 @Composable
 fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
+    val modelActions = remember(viewModel) {
+        ModelActions(
+            refresh = viewModel::refreshModels,
+            select = viewModel::selectModel,
+            confirm = viewModel::confirmModel,
+            cancel = viewModel::cancelModel,
+            reasoning = viewModel::setReasoning,
+            fast = viewModel::setFast,
+            yolo = viewModel::setYolo,
+        )
+    }
     HermesTheme {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (state.backend == null) {
@@ -145,7 +166,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     onApprove = viewModel::approve,
                     onClarify = viewModel::clarify,
                     onArchive = viewModel::archiveActive,
-                    onDisconnect = viewModel::disconnect,
+                    modelActions = modelActions,
                 )
             }
         }
@@ -283,7 +304,7 @@ private fun HermesWorkspace(
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
     onArchive: () -> Unit,
-    onDisconnect: () -> Unit,
+    modelActions: ModelActions,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
@@ -297,7 +318,7 @@ private fun HermesWorkspace(
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
                 ChatSurface(
                     state, connection, onSend, onAttach, onRemoveAttachment, onInterrupt,
-                    onApprove, onClarify, onArchive, onDisconnect, Modifier.weight(1f),
+                    onApprove, onClarify, onArchive, modelActions, Modifier.weight(1f),
                 )
             }
         } else {
@@ -315,7 +336,7 @@ private fun HermesWorkspace(
                 if (showChat) {
                     ChatSurface(
                         state, connection, onSend, onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, onArchive, onDisconnect,
+                        onApprove, onClarify, onArchive, modelActions,
                         Modifier.fillMaxSize(),
                         onBack = { mobileChat = false },
                     )
@@ -428,7 +449,7 @@ private fun ChatSurface(
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
     onArchive: () -> Unit,
-    onDisconnect: () -> Unit,
+    modelActions: ModelActions,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
@@ -449,8 +470,19 @@ private fun ChatSurface(
         }
         state.error?.let { ErrorBanner(it, Modifier.padding(horizontal = 12.dp)) }
         if (state.runtimeSessionId != null) {
+            ModelControls(
+                state = state,
+                onRefresh = modelActions.refresh,
+                onSelect = modelActions.select,
+                onConfirmModel = modelActions.confirm,
+                onCancelModel = modelActions.cancel,
+                onReasoning = modelActions.reasoning,
+                onFast = modelActions.fast,
+                onYolo = modelActions.yolo,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
             Composer(
-                sending = state.sending,
+                sending = state.sending || state.runtimeInfo.running,
                 attaching = state.attaching,
                 connected = connection is GatewayConnectionState.Open,
                 attachments = state.pendingAttachments,

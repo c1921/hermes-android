@@ -16,6 +16,7 @@ This repository is an independent work in progress and is not currently an offic
 - Dangerous-command approval and clarification responses
 - Stop/interruption
 - SAF file, image and PDF attachments with bounded reads and server-queue cleanup
+- Dynamic Hermes model catalogue with session-scoped model, reasoning, fast-mode and YOLO controls
 - Phone master/detail navigation and two-pane tablet layout
 - Unknown protocol-event tolerance
 

@@ -40,10 +40,13 @@ class FakeHermesBackend(
                             requests += request
                             val id = request.getValue("id").jsonPrimitive.long
                             val method = request.getValue("method").jsonPrimitive.content
-                            val result = when (method) {
-                                "session.list" -> buildJsonObject { put("sessions", JsonArray(emptyList())) }
-                                "session.interrupt" -> buildJsonObject { put("status", "interrupting") }
-                                else -> buildJsonObject { put("ok", true) }
+                        val result = when (method) {
+                            "session.list" -> buildJsonObject { put("sessions", JsonArray(emptyList())) }
+                            "session.interrupt" -> buildJsonObject { put("status", "interrupting") }
+                            "model.options" -> json.parseToJsonElement(
+                                """{"model":"hermes-4","provider":"nous","providers":[{"slug":"nous","name":"Nous Portal","authenticated":true,"models":["hermes-4"],"capabilities":{"hermes-4":{"fast":true,"reasoning":true}}}]}""",
+                            )
+                            else -> buildJsonObject { put("ok", true) }
                             }
                             webSocket.send(
                                 json.encodeToString(

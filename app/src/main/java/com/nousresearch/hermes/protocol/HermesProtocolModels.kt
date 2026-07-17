@@ -96,6 +96,7 @@ data class SessionCreateResult(
     val messages: List<ProtocolMessage> = emptyList(),
     val status: String = "idle",
     val running: Boolean = false,
+    val info: SessionRuntimeInfo = SessionRuntimeInfo(),
 )
 
 @Serializable
@@ -107,25 +108,59 @@ data class SessionResumeResult(
     val status: String = "idle",
     val running: Boolean = false,
     val inflight: JsonElement? = null,
+    val info: SessionRuntimeInfo = SessionRuntimeInfo(),
 )
 
 @Serializable
 data class ModelOptionsResult(
+    val model: String? = null,
+    val provider: String? = null,
     val providers: List<ModelProvider> = emptyList(),
-    val models: List<ModelOption> = emptyList(),
 )
 
 @Serializable
 data class ModelProvider(
-    val id: String,
-    val name: String? = null,
-    val models: List<ModelOption> = emptyList(),
+    val slug: String,
+    val name: String,
+    @SerialName("is_current") val isCurrent: Boolean = false,
+    val models: List<String> = emptyList(),
+    @SerialName("total_models") val totalModels: Int = models.size,
+    val warning: String? = null,
+    val authenticated: Boolean = true,
+    @SerialName("auth_type") val authType: String? = null,
+    @SerialName("key_env") val keyEnvironment: String? = null,
+    @SerialName("is_user_defined") val isUserDefined: Boolean = false,
+    val capabilities: Map<String, ModelCapabilities> = emptyMap(),
 )
 
 @Serializable
-data class ModelOption(
-    val id: String,
-    val name: String? = null,
-    val provider: String? = null,
-    val supportsReasoning: Boolean? = null,
+data class ModelCapabilities(
+    val fast: Boolean = false,
+    val reasoning: Boolean = false,
+)
+
+@Serializable
+data class SessionRuntimeInfo(
+    val model: String = "",
+    val provider: String = "",
+    @SerialName("reasoning_effort") val reasoningEffort: String = "",
+    @SerialName("service_tier") val serviceTier: String = "",
+    val fast: Boolean = false,
+    val yolo: Boolean = false,
+    @SerialName("approval_mode") val approvalMode: String = "manual",
+    val running: Boolean = false,
+    val title: String = "",
+    @SerialName("stored_session_id") val storedSessionId: String = "",
+    @SerialName("desktop_contract") val desktopContract: Int? = null,
+    val usage: JsonElement? = null,
+)
+
+@Serializable
+data class ConfigSetResult(
+    val key: String,
+    val value: String,
+    val warning: String? = null,
+    @SerialName("confirm_required") val confirmRequired: Boolean = false,
+    @SerialName("confirm_message") val confirmMessage: String = "",
+    val scope: String? = null,
 )

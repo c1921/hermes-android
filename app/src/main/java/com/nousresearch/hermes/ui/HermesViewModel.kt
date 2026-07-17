@@ -41,6 +41,13 @@ class HermesViewModel @Inject constructor(
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
     fun removeAttachment(id: String) = viewModelScope.launch { repository.removePendingAttachment(id) }
+    fun refreshModels() = viewModelScope.launch { repository.refreshModelOptions(refresh = true) }
+    fun selectModel(provider: String, model: String) = viewModelScope.launch { repository.selectModel(provider, model) }
+    fun confirmModel() = viewModelScope.launch { repository.confirmModelSelection() }
+    fun cancelModel() = repository.cancelModelSelection()
+    fun setReasoning(effort: String) = viewModelScope.launch { repository.setReasoningEffort(effort) }
+    fun setFast(enabled: Boolean) = viewModelScope.launch { repository.setFastMode(enabled) }
+    fun setYolo(enabled: Boolean) = viewModelScope.launch { repository.setYolo(enabled) }
     fun interrupt() = viewModelScope.launch { repository.interrupt() }
     fun approve(choice: String) = viewModelScope.launch { repository.respondToApproval(choice) }
     fun clarify(answer: String) = viewModelScope.launch { repository.respondToClarification(answer) }

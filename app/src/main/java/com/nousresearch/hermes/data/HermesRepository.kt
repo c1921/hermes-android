@@ -4,13 +4,16 @@ import android.net.Uri
 import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.network.HermesRestClient
+import com.nousresearch.hermes.protocol.ConfigSetResult
 import com.nousresearch.hermes.protocol.FileAttachResult
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.ImageAttachResult
+import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionResumeResult
+import com.nousresearch.hermes.protocol.SessionRuntimeInfo
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.security.SecureTokenStore
@@ -43,7 +46,25 @@ data class HermesState(
     val sending: Boolean = false,
     val attaching: Boolean = false,
     val pendingAttachments: List<PendingAttachment> = emptyList(),
+    val runtimeInfo: SessionRuntimeInfo = SessionRuntimeInfo(),
+    val modelOptions: ModelOptionsResult? = null,
+    val modelsLoading: Boolean = false,
+    val pendingModelConfirmation: PendingModelConfirmation? = null,
     val error: String? = null,
+)
+
+data class ModelSelection(val provider: String, val model: String) {
+    fun rpcValue(): String {
+        require(provider.isSafeModelToken() && model.isSafeModelToken()) {
+            "Hermes returned a model identifier that cannot be switched safely"
+        }
+        return "$model --provider $provider --session"
+    }
+}
+
+data class PendingModelConfirmation(
+    val selection: ModelSelection,
+    val message: String,
 )
 
 data class PendingAttachment(
@@ -91,7 +112,15 @@ class HermesRepository @Inject constructor(
                 val current = mutableState.value
                 val runtimeId = current.runtimeSessionId
                 if (event.sessionId == null || runtimeId == null || event.sessionId == runtimeId) {
+                    val runtimeInfo = if (event.type == "session.info" && event.payload != null) {
+                        runCatching {
+                            json.decodeFromJsonElement(SessionRuntimeInfo.serializer(), event.payload)
+                        }.getOrDefault(current.runtimeInfo)
+                    } else {
+                        current.runtimeInfo
+                    }
                     mutableState.value = current.copy(
+                        runtimeInfo = runtimeInfo,
                         timeline = TimelineReducer.reduce(current.timeline, event),
                     )
                 }
@@ -141,6 +170,7 @@ class HermesRepository @Inject constructor(
         setLoading(true)
         val current = mutableState.value
         mutableState.value = current.copy(activeStoredSession = session, timeline = TimelineState(), error = null)
+        var opened = false
         runCatching {
             val prefetch = restClient.sessionMessages(
                 requireNotNull(mutableState.value.backend),
@@ -163,15 +193,19 @@ class HermesRepository @Inject constructor(
             mutableState.value = mutableState.value.copy(
                 runtimeSessionId = resumed.runtimeSessionId,
                 timeline = TimelineReducer.hydrate(prefetch.messages.ifEmpty { resumed.messages }),
+                runtimeInfo = resumed.info,
                 loading = false,
                 error = null,
             )
+            opened = true
         }.onFailure(::fail)
+        if (opened) refreshModelOptions()
     }
 
     suspend fun newSession(profile: String? = null) {
         activeCredentials()
         setLoading(true)
+        var opened = false
         runCatching {
             val result = gateway.request(
                 "session.create",
@@ -187,9 +221,118 @@ class HermesRepository @Inject constructor(
                 activeStoredSession = null,
                 runtimeSessionId = created.runtimeSessionId,
                 timeline = TimelineReducer.hydrate(created.messages),
+                runtimeInfo = created.info,
                 loading = false,
                 error = null,
             )
+            opened = true
+        }.onFailure(::fail)
+        if (opened) refreshModelOptions()
+    }
+
+    suspend fun refreshModelOptions(refresh: Boolean = false) {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        mutableState.value = mutableState.value.copy(modelsLoading = true, error = null)
+        runCatching {
+            gateway.request(
+                "model.options",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("explicit_only", true)
+                    if (refresh) put("refresh", true)
+                },
+            )
+        }.mapCatching { json.decodeFromJsonElement(ModelOptionsResult.serializer(), it) }
+            .onSuccess { options ->
+                mutableState.value = mutableState.value.copy(
+                    modelOptions = options,
+                    modelsLoading = false,
+                    runtimeInfo = mutableState.value.runtimeInfo.copy(
+                        model = options.model ?: mutableState.value.runtimeInfo.model,
+                        provider = options.provider ?: mutableState.value.runtimeInfo.provider,
+                    ),
+                )
+            }
+            .onFailure { error ->
+                mutableState.value = mutableState.value.copy(modelsLoading = false)
+                fail(error)
+            }
+    }
+
+    suspend fun selectModel(provider: String, model: String, confirmExpensive: Boolean = false) {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        val selection = ModelSelection(provider, model)
+        mutableState.value = mutableState.value.copy(modelsLoading = true, error = null)
+        runCatching {
+            val response = gateway.request(
+                "config.set",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("key", "model")
+                    put("value", selection.rpcValue())
+                    if (confirmExpensive) put("confirm_expensive_model", true)
+                },
+            )
+            json.decodeFromJsonElement(ConfigSetResult.serializer(), response)
+        }.onSuccess { result ->
+            if (result.confirmRequired) {
+                mutableState.value = mutableState.value.copy(
+                    modelsLoading = false,
+                    pendingModelConfirmation = PendingModelConfirmation(
+                        selection,
+                        result.confirmMessage.ifBlank { "Hermes requires confirmation before using this model." },
+                    ),
+                )
+            } else {
+                mutableState.value = mutableState.value.copy(
+                    modelsLoading = false,
+                    pendingModelConfirmation = null,
+                    runtimeInfo = mutableState.value.runtimeInfo.copy(model = model, provider = provider),
+                )
+            }
+        }.onFailure { error ->
+            mutableState.value = mutableState.value.copy(modelsLoading = false)
+            fail(error)
+        }
+    }
+
+    suspend fun confirmModelSelection() {
+        val pending = mutableState.value.pendingModelConfirmation ?: return
+        selectModel(pending.selection.provider, pending.selection.model, confirmExpensive = true)
+    }
+
+    fun cancelModelSelection() {
+        mutableState.value = mutableState.value.copy(pendingModelConfirmation = null)
+    }
+
+    suspend fun setReasoningEffort(effort: String) = setSessionConfig("reasoning", effort)
+
+    suspend fun setFastMode(enabled: Boolean) = setSessionConfig("fast", if (enabled) "fast" else "normal")
+
+    suspend fun setYolo(enabled: Boolean) = setSessionConfig("yolo", if (enabled) "on" else "off", "session")
+
+    private suspend fun setSessionConfig(key: String, value: String, scope: String? = null) {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        runCatching {
+            val response = gateway.request(
+                "config.set",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("key", key)
+                    put("value", value)
+                    scope?.let { put("scope", it) }
+                },
+            )
+            json.decodeFromJsonElement(ConfigSetResult.serializer(), response)
+        }.onSuccess { result ->
+            val current = mutableState.value.runtimeInfo
+            val next = when (key) {
+                "reasoning" -> current.copy(reasoningEffort = result.value)
+                "fast" -> current.copy(fast = result.value == "fast", serviceTier = if (result.value == "fast") "priority" else "")
+                "yolo" -> current.copy(yolo = result.value == "1")
+                else -> current
+            }
+            mutableState.value = mutableState.value.copy(runtimeInfo = next, error = null)
         }.onFailure(::fail)
     }
 
@@ -404,6 +547,8 @@ class HermesRepository @Inject constructor(
         mutableState.value = mutableState.value.copy(
             loading = false,
             sending = false,
+            attaching = false,
+            modelsLoading = false,
             error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
     }
@@ -433,3 +578,6 @@ class HermesRepository @Inject constructor(
         }
     }
 }
+
+private fun String.isSafeModelToken(): Boolean =
+    isNotBlank() && length <= 512 && !startsWith('-') && none { it.isWhitespace() || it.isISOControl() }

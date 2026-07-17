@@ -27,8 +27,8 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Reconnect without duplicates | `session.resume`; events | Foundation; exact in-flight replay blocked | Bounded backoff, then durable-session rehydrate | Replacement-close regression test; no universal stream sequence/replay cursor | Event replay v1 |
 | Draft persistence/queue | Desktop renderer state | Not implemented | Backend/session-scoped DataStore draft | Composer survives config only | No |
 | Slash autocomplete/catalogue | `commands.catalog`, `complete.slash`, `slash.exec` | Not implemented | Inline command palette | Omitted | No |
-| Model/provider catalogue | `model.options`, REST model/provider APIs | Protocol models only | Dynamic picker; never hard-code list | UI absent; response schema needs contract fixtures | Canonical schema |
-| Reasoning effort/fast mode/YOLO | `config.get/set`, Desktop stores | Not implemented | Persistent risk-labelled session controls | Omitted | No |
+| Model/provider catalogue | `model.options`, REST model/provider APIs | Implemented baseline | Searchable dynamic picker; never hard-code catalogue | Pinned `0.18.2` response fixture; provider setup/account management pending | Canonical schema desirable |
+| Reasoning effort/fast mode/YOLO | `config.get/set`, `session.info` | Implemented baseline | Capability-gated effort/fast controls; session-only YOLO with explicit warning | Protocol fixture; Compose/device tests pending | No |
 | File/image/PDF attach | `file.attach`, `image.attach_bytes`, `pdf.attach`, `image.detach` | Implemented baseline | SAF upload, 10 MiB client cap, removable pending chips | Pinned response fixtures; camera/progress/large streaming pending | No for current path |
 | File/artifact preview | REST/desktop filesystem bridge, artifact tools | Not implemented | Safe native viewers; isolated WebView | No preview shipped | General remote artifact descriptor desirable |
 | Voice STT/TTS | `/api/audio/transcribe`, `/api/audio/speak` | Not implemented | Press/lock recording, Media3 playback | Permissions declared only; no controls | No |
