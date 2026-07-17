@@ -492,8 +492,8 @@ private fun BrandGlyphSmall() {
 private fun ConnectionLine(connection: GatewayConnectionState) {
     val (colour, text) = when (connection) {
         GatewayConnectionState.Open -> Success to "LIVE / JSON-RPC"
-        is GatewayConnectionState.Connecting -> Warning to "CONNECTING"
-        is GatewayConnectionState.Reconnecting -> Warning to "RECONNECTING"
+        is GatewayConnectionState.Connecting -> WarningColor to "CONNECTING"
+        is GatewayConnectionState.Reconnecting -> WarningColor to "RECONNECTING"
         is GatewayConnectionState.Failed -> Danger to "CONNECTION FAILED"
         is GatewayConnectionState.Closed -> Danger to "OFFLINE"
         GatewayConnectionState.Idle -> MaterialTheme.colorScheme.outline to "IDLE"
@@ -687,7 +687,7 @@ private fun RichText(text: String) {
 private fun ToolBlock(tool: TimelineItem.Tool) {
     var expanded by rememberSaveable(tool.id) { mutableStateOf(false) }
     val colour = when (tool.state) {
-        ToolState.RUNNING -> Warning
+        ToolState.RUNNING -> WarningColor
         ToolState.COMPLETE -> Success
         ToolState.FAILED -> Danger
     }
