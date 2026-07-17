@@ -24,40 +24,42 @@ class FakeHermesBackend(
     val baseUrl: String
         get() = server.url("/").toString().replace("localhost", "127.0.0.1").trimEnd('/')
 
-    fun start() {
-        server.enqueue(
-            MockResponse().withWebSocketUpgrade(
-                object : WebSocketListener() {
-                    override fun onOpen(webSocket: WebSocket, response: Response) {
-                        webSocket.send(
-                            """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{"skin":"nous"}}}""",
-                        )
-                    }
-
-                    override fun onMessage(webSocket: WebSocket, text: String) {
-                        val request = json.parseToJsonElement(text).jsonObject
-                        requests += request
-                        val id = request.getValue("id").jsonPrimitive.long
-                        val method = request.getValue("method").jsonPrimitive.content
-                        val result = when (method) {
-                            "session.list" -> buildJsonObject { put("sessions", JsonArray(emptyList())) }
-                            "session.interrupt" -> buildJsonObject { put("status", "interrupting") }
-                            else -> buildJsonObject { put("ok", true) }
+    fun start(connectionCount: Int = 1) {
+        repeat(connectionCount) {
+            server.enqueue(
+                MockResponse().withWebSocketUpgrade(
+                    object : WebSocketListener() {
+                        override fun onOpen(webSocket: WebSocket, response: Response) {
+                            webSocket.send(
+                                """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{"skin":"nous"}}}""",
+                            )
                         }
-                        webSocket.send(
-                            json.encodeToString(
-                                JsonObject.serializer(),
-                                buildJsonObject {
-                                    put("jsonrpc", "2.0")
-                                    put("id", id)
-                                    put("result", result)
-                                },
-                            ),
-                        )
-                    }
-                },
-            ),
-        )
+
+                        override fun onMessage(webSocket: WebSocket, text: String) {
+                            val request = json.parseToJsonElement(text).jsonObject
+                            requests += request
+                            val id = request.getValue("id").jsonPrimitive.long
+                            val method = request.getValue("method").jsonPrimitive.content
+                            val result = when (method) {
+                                "session.list" -> buildJsonObject { put("sessions", JsonArray(emptyList())) }
+                                "session.interrupt" -> buildJsonObject { put("status", "interrupting") }
+                                else -> buildJsonObject { put("ok", true) }
+                            }
+                            webSocket.send(
+                                json.encodeToString(
+                                    JsonObject.serializer(),
+                                    buildJsonObject {
+                                        put("jsonrpc", "2.0")
+                                        put("id", id)
+                                        put("result", result)
+                                    },
+                                ),
+                            )
+                        }
+                    },
+                ),
+            )
+        }
         server.start()
     }
 
