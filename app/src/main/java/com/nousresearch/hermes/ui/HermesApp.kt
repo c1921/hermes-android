@@ -256,12 +256,13 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
 private fun OnboardingScreen(
     busy: Boolean,
     error: String?,
-    onConnect: (String, String, String, Boolean) -> Unit,
+    onConnect: (String, String, String, String, Boolean) -> Unit,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     var label by rememberSaveable { mutableStateOf("My Hermes") }
     var url by rememberSaveable { mutableStateOf("") }
-    var token by rememberSaveable { mutableStateOf("") }
+    var username by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var privateHttp by rememberSaveable { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -293,7 +294,8 @@ private fun OnboardingScreen(
                     }
                     HermesField(label, { label = it }, "Connection name")
                     HermesField(url, { url = it }, "https://hermes.example.com", KeyboardType.Uri)
-                    HermesField(token, { token = it }, "Dashboard session token", KeyboardType.Password, secret = true)
+                    HermesField(username, { username = it }, "Dashboard username")
+                    HermesField(password, { password = it }, "Dashboard password", KeyboardType.Password, secret = true)
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Switch) { privateHttp = !privateHttp }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -307,14 +309,18 @@ private fun OnboardingScreen(
                     }
                     error?.let { ErrorBanner(it) }
                     Button(
-                        enabled = !busy && url.isNotBlank() && token.isNotBlank(),
-                        onClick = { onConnect(label, url, token, privateHttp) },
+                        enabled = !busy && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
+                        onClick = {
+                            val submittedPassword = password
+                            password = ""
+                            onConnect(label, url, username, submittedPassword, privateHttp)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Test HTTP + WebSocket and save")
                     }
                     Text(
-                        "Tokens are encrypted with Android Keystore. They are excluded from backup, diagnostics and UI state.",
+                        "Only the returned Dashboard session cookie is encrypted with Android Keystore. Your password is never saved or restored as UI state.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -386,7 +392,7 @@ private fun HermesWorkspace(
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
     managementActions: ManagementActions,
-    onConnectBackend: (String, String, String, Boolean) -> Unit,
+    onConnectBackend: (String, String, String, String, Boolean) -> Unit,
     onSelectBackend: (String) -> Unit,
     onForgetBackend: (String) -> Unit,
 ) {

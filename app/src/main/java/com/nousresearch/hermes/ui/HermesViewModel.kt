@@ -22,17 +22,17 @@ class HermesViewModel @Inject constructor(
     val state = repository.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), repository.state.value)
     val connectionState = repository.connectionState
 
-    fun connect(label: String, baseUrl: String, token: String, allowPrivateHttp: Boolean) {
+    fun connect(label: String, baseUrl: String, username: String, password: String, allowPrivateHttp: Boolean) {
         viewModelScope.launch {
             val normalized = baseUrl.trim().trimEnd('/')
             val config = BackendConfig(
                 id = normalized.sha256().take(20),
                 label = label.trim().ifBlank { "Hermes" },
                 baseUrl = normalized,
-                authMode = AuthMode.TOKEN,
+                authMode = AuthMode.DASHBOARD_SESSION,
                 allowInsecurePrivateNetwork = allowPrivateHttp,
             )
-            runCatching { repository.testAndSave(config, token.trim()) }
+            runCatching { repository.testAndSave(config, username.trim(), password) }
         }
     }
 

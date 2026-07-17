@@ -5,6 +5,8 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.nousresearch.hermes.data.SessionCredentialStore
+import com.nousresearch.hermes.network.DashboardSessionCookie
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -17,23 +19,23 @@ import javax.inject.Singleton
 @Singleton
 class SecureTokenStore @Inject constructor(
     @ApplicationContext context: Context,
-) {
+) : SessionCredentialStore {
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
-    fun put(backendId: String, token: String) {
+    override fun put(backendId: String, cookie: DashboardSessionCookie) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val ciphertext = cipher.doFinal(token.toByteArray(StandardCharsets.UTF_8))
+        val ciphertext = cipher.doFinal(cookie.headerValue.toByteArray(StandardCharsets.UTF_8))
         val encoded = listOf(cipher.iv, ciphertext).joinToString(SEPARATOR) {
             Base64.encodeToString(it, Base64.NO_WRAP)
         }
-        check(preferences.edit().putString(secretKey(backendId), encoded).commit()) {
+        check(preferences.edit().putString(secretKey(backendId), encoded).remove(legacySecretKey(backendId)).commit()) {
             "Could not persist the encrypted Hermes credential"
         }
     }
 
-    fun get(backendId: String): String? {
+    override fun get(backendId: String): DashboardSessionCookie? {
         val encoded = preferences.getString(secretKey(backendId), null) ?: return null
         return runCatching {
             val (iv, ciphertext) = encoded.split(SEPARATOR, limit = 2).map {
@@ -41,12 +43,14 @@ class SecureTokenStore @Inject constructor(
             }
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-            String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+            val header = String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+            val separator = header.indexOf('=')
+            DashboardSessionCookie(header.substring(0, separator), header.substring(separator + 1))
         }.getOrNull()
     }
 
-    fun remove(backendId: String) {
-        preferences.edit().remove(secretKey(backendId)).apply()
+    override fun remove(backendId: String) {
+        preferences.edit().remove(secretKey(backendId)).remove(legacySecretKey(backendId)).apply()
     }
 
     private fun getOrCreateKey(): SecretKey {
@@ -66,14 +70,14 @@ class SecureTokenStore @Inject constructor(
         return generator.generateKey()
     }
 
-    private fun secretKey(backendId: String) = "backend.$backendId.token"
+    private fun secretKey(backendId: String) = "backend.$backendId.dashboard_session.v2"
+    private fun legacySecretKey(backendId: String) = "backend.$backendId.token"
 
     private companion object {
         const val KEYSTORE = "AndroidKeyStore"
-        const val ALIAS = "hermes.backend.tokens.v1"
+        const val ALIAS = "hermes.backend.sessions.v2"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val PREFERENCES = "hermes_secrets"
         const val SEPARATOR = "."
     }
 }
-

@@ -33,7 +33,6 @@ import com.nousresearch.hermes.protocol.SkillHubScanResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.security.DiagnosticRedactor
-import com.nousresearch.hermes.security.SecureTokenStore
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -84,6 +83,7 @@ data class HermesState(
     val providerEnv: Map<String, EnvVarInfo> = emptyMap(),
     val providersLoading: Boolean = false,
     val providerNotice: String? = null,
+    val reconnectRequiredBackendId: String? = null,
     val error: String? = null,
 ) {
     val compatibilityWarning: String?
@@ -153,9 +153,10 @@ data class PendingAttachment(
 @Singleton
 class HermesRepository @Inject constructor(
     private val backendRegistry: BackendRegistry,
-    private val tokenStore: SecureTokenStore,
+    private val tokenStore: SessionCredentialStore,
     private val restClient: HermesRestClient,
     private val gateway: HermesGatewayClient,
+    private val dashboardConnector: DashboardBackendConnector,
     private val json: Json,
     private val attachmentReader: AttachmentReader,
 ) {
@@ -226,18 +227,10 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    suspend fun testAndSave(config: BackendConfig, token: String): StatusResponse {
+    suspend fun testAndSave(config: BackendConfig, username: String, password: String): StatusResponse {
         mutableState.value = mutableState.value.copy(loading = true, error = null)
         return try {
-            val status = restClient.status(config, token)
-            require(status.status == "ok" || status.status == "ready" || status.hermesVersion != null || status.version != null) {
-                "The server answered, but did not identify itself as a ready Hermes backend"
-            }
-            gateway.connect(config, token)
-            gateway.disconnect()
-            tokenStore.put(config.id, token)
-            backendRegistry.save(config.copy(lastHermesVersion = status.hermesVersion ?: status.version))
-            status
+            dashboardConnector.loginValidateAndSave(config, username, password)
         } catch (error: Throwable) {
             fail(error)
             throw error
@@ -261,7 +254,7 @@ class HermesRepository @Inject constructor(
         runCatching {
             val prefetch = restClient.sessionMessages(
                 requireNotNull(mutableState.value.backend),
-                requireNotNull(tokenStore.get(requireNotNull(mutableState.value.backend).id)),
+                requireNotNull(tokenStore.get(requireNotNull(mutableState.value.backend).id)).headerValue,
                 session.durableId,
                 session.profile,
             )
@@ -1158,20 +1151,32 @@ class HermesRepository @Inject constructor(
 
     private suspend fun connect(backend: BackendConfig) {
         intentionalDisconnect = false
-        val token = tokenStore.get(backend.id)
-        if (token.isNullOrBlank()) {
-            mutableState.value = HermesState(backend = backend, error = "Saved credentials are unavailable. Reconnect this backend.")
+        if (backend.authMode != AuthMode.DASHBOARD_SESSION) {
+            mutableState.value = HermesState(
+                savedBackends = mutableState.value.savedBackends,
+                reconnectRequiredBackendId = backend.id,
+                error = "This legacy token-only backend must reconnect with its dashboard username and password.",
+            )
+            return
+        }
+        val cookie = tokenStore.get(backend.id)
+        if (cookie == null) {
+            mutableState.value = HermesState(
+                savedBackends = mutableState.value.savedBackends,
+                reconnectRequiredBackendId = backend.id,
+                error = "Saved dashboard session is unavailable. Reconnect this backend.",
+            )
             return
         }
         mutableState.value = HermesState(
             backend = backend,
             savedBackends = mutableState.value.savedBackends,
             loading = true,
+            reconnectRequiredBackendId = null,
         )
         runCatching {
-            val status = restClient.status(backend, token)
-            gateway.connect(backend, token)
-            val sessions = restClient.sessions(backend, token).sessions
+            val status = dashboardConnector.validateSaved(backend, cookie)
+            val sessions = restClient.sessions(backend, cookie.headerValue).sessions
             status to sessions
         }.onSuccess { (status, sessions) ->
             mutableState.value = mutableState.value.copy(status = status, sessions = sessions, loading = false, error = null)
@@ -1180,9 +1185,12 @@ class HermesRepository @Inject constructor(
 
     private suspend fun activeCredentials(): Pair<BackendConfig, String> {
         val backend = mutableState.value.backend ?: error("No Hermes backend is selected")
-        val token = tokenStore.get(backend.id) ?: error("Hermes credentials are unavailable")
-        if (gateway.connectionState.value !is GatewayConnectionState.Open) gateway.connect(backend, token)
-        return backend to token
+        if (backend.authMode != AuthMode.DASHBOARD_SESSION) throw ReconnectRequiredException(
+            "Legacy backend credentials cannot be used; reconnect is required.",
+        )
+        val cookie = tokenStore.get(backend.id) ?: throw ReconnectRequiredException("Dashboard session is unavailable; reconnect is required.")
+        if (gateway.connectionState.value !is GatewayConnectionState.Open) gateway.connect(backend, cookie)
+        return backend to cookie.headerValue
     }
 
     private fun setLoading(value: Boolean) {
@@ -1190,7 +1198,16 @@ class HermesRepository @Inject constructor(
     }
 
     private fun fail(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException || (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        val reconnectBackendId = mutableState.value.backend?.id
+        if (reconnect) {
+            intentionalDisconnect = true
+            reconnectJob?.cancel()
+            reconnectBackendId?.let(tokenStore::remove)
+            scope.launch { gateway.disconnect() }
+        }
         mutableState.value = mutableState.value.copy(
+            backend = if (reconnect) null else mutableState.value.backend,
             loading = false,
             sending = false,
             attaching = false,
@@ -1198,7 +1215,9 @@ class HermesRepository @Inject constructor(
             managementLoading = false,
             providersLoading = false,
             skillHubLoading = false,
-            error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
+            reconnectRequiredBackendId = if (reconnect) reconnectBackendId else mutableState.value.reconnectRequiredBackendId,
+            error = if (reconnect) "Dashboard session expired or was rejected. Reconnect with your username and password." else
+                error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
     }
 
@@ -1206,12 +1225,12 @@ class HermesRepository @Inject constructor(
         if (reconnectJob?.isActive == true) return
         reconnectJob = scope.launch {
             val backend = mutableState.value.backend ?: return@launch
-            val token = tokenStore.get(backend.id) ?: return@launch
+            val cookie = tokenStore.get(backend.id) ?: return@launch
             val delays = listOf(1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 30_000L)
             for ((index, retryDelay) in delays.withIndex()) {
                 if (intentionalDisconnect || mutableState.value.backend?.id != backend.id) return@launch
                 delay(retryDelay)
-                val connected = runCatching { gateway.connect(backend, token) }.isSuccess
+                val connected = runCatching { gateway.connect(backend, cookie) }.isSuccess
                 if (connected) {
                     val active = mutableState.value.activeStoredSession
                     if (active != null) runCatching { openSession(active) }

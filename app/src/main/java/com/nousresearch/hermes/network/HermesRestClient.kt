@@ -45,6 +45,9 @@ class HermesRestClient(
     suspend fun status(config: BackendConfig, token: String?): StatusResponse =
         get(config, token, "/api/status", StatusResponse.serializer())
 
+    suspend fun status(config: BackendConfig, cookie: DashboardSessionCookie): StatusResponse =
+        get(config, cookie.headerValue, "/api/status", StatusResponse.serializer())
+
     suspend fun sessions(
         config: BackendConfig,
         token: String,
@@ -442,7 +445,15 @@ class HermesRestClient(
             .method(method, requestBody)
             .header("Accept", "application/json")
             .header("User-Agent", "Hermes-Android/0.1")
-            .apply { if (!token.isNullOrBlank()) header("Authorization", "Bearer $token") }
+            .apply {
+                if (!token.isNullOrBlank()) {
+                    if (config.authMode == com.nousresearch.hermes.data.AuthMode.DASHBOARD_SESSION) {
+                        header("Cookie", token)
+                    } else {
+                        header("Authorization", "Bearer $token")
+                    }
+                }
+            }
             .build()
 
         client.newCall(request).execute().use { response ->

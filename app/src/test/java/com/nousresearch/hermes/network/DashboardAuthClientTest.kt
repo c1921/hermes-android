@@ -39,6 +39,7 @@ class DashboardAuthClientTest {
             assertTrue(body.contains("\"username\":\"dashboard-user\""))
             assertTrue(body.contains("\"password\":\"password-value\""))
             assertFalse(cookie.headerValue.contains("password-value"))
+            assertFalse(cookie.toString().contains("session-value"))
         }
     }
 
@@ -65,10 +66,10 @@ class DashboardAuthClientTest {
             server.start()
             val client = DashboardAuthClient(OkHttpClient(), json)
 
-            val failure = runCatching { client.login(config(server), "user", "wrong") }.exceptionOrNull()
+            val failure = runCatching { client.login(config(server), "alice@example.test", "wrong") }.exceptionOrNull()
 
             assertTrue(failure is DashboardAuthenticationException)
-            assertFalse(failure?.message.orEmpty().contains("user"))
+            assertFalse(failure?.message.orEmpty().contains("alice@example.test"))
         }
     }
 
@@ -76,7 +77,7 @@ class DashboardAuthClientTest {
         id = "fake",
         label = "Fake Dashboard",
         baseUrl = server.url("/").toString().trimEnd('/'),
-        authMode = AuthMode.TOKEN,
+        authMode = AuthMode.DASHBOARD_SESSION,
         allowInsecurePrivateNetwork = true,
     )
 }

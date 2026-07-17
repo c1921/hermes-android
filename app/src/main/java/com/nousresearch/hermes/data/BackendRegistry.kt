@@ -18,7 +18,7 @@ private val Context.backendDataStore by preferencesDataStore("hermes_backends")
 class BackendRegistry @Inject constructor(
     @ApplicationContext private val context: Context,
     private val json: Json,
-) {
+) : BackendSaver {
     val backends: Flow<List<BackendConfig>> = context.backendDataStore.data.map { preferences ->
         preferences[BACKENDS]?.let { raw ->
             runCatching { json.decodeFromString(ListSerializer(BackendConfig.serializer()), raw) }
@@ -28,7 +28,7 @@ class BackendRegistry @Inject constructor(
 
     val activeBackendId: Flow<String?> = context.backendDataStore.data.map { it[ACTIVE] }
 
-    suspend fun save(config: BackendConfig) {
+    override suspend fun save(config: BackendConfig) {
         context.backendDataStore.edit { preferences ->
             val current = preferences[BACKENDS]?.let { raw ->
                 runCatching { json.decodeFromString(ListSerializer(BackendConfig.serializer()), raw) }
@@ -63,4 +63,3 @@ class BackendRegistry @Inject constructor(
         val ACTIVE = stringPreferencesKey("active_backend.v1")
     }
 }
-

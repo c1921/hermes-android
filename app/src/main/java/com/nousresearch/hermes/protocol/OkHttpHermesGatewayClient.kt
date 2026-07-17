@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.protocol
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.network.TransportPolicy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -50,6 +51,9 @@ class OkHttpHermesGatewayClient @Inject constructor(
         val request = Request.Builder()
             .url(gatewayUrl(config, token))
             .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == AuthMode.DASHBOARD_SESSION) header("Cookie", token)
+            }
             .build()
         val nextSocket = client.newWebSocket(request, listener(opened))
         socket = nextSocket
@@ -141,10 +145,9 @@ class OkHttpHermesGatewayClient @Inject constructor(
     private fun gatewayUrl(config: BackendConfig, token: String): HttpUrl {
         val uri = TransportPolicy.validate(config).getOrThrow()
         val base = uri.toString().trimEnd('/').toHttpUrl()
-        return base.newBuilder()
-            .addPathSegments("api/ws")
-            .addQueryParameter("token", token)
-            .build()
+        return base.newBuilder().addPathSegments("api/ws").apply {
+            if (config.authMode != AuthMode.DASHBOARD_SESSION) addQueryParameter("token", token)
+        }.build()
     }
 
     private fun failPending(error: Throwable) {

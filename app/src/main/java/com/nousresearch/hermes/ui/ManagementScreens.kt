@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,13 +63,14 @@ import com.nousresearch.hermes.protocol.StoredSession
 @Composable
 internal fun BackendsScreen(
     state: HermesState,
-    onConnect: (String, String, String, Boolean) -> Unit,
+    onConnect: (String, String, String, String, Boolean) -> Unit,
     onSelect: (String) -> Unit,
     onForget: (String) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var adding by rememberSaveable { mutableStateOf(false) }
+    var reconnectId by rememberSaveable { mutableStateOf<String?>(null) }
     var forgetId by rememberSaveable { mutableStateOf<String?>(null) }
     val forgetBackend = state.savedBackends.firstOrNull { it.id == forgetId }
     Column(modifier.fillMaxSize()) {
@@ -79,12 +81,12 @@ internal fun BackendsScreen(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         ) {
             Text(
-                "Connection metadata is stored in app-private preferences. Tokens are encrypted separately with Android Keystore and are never displayed here.",
+                "Connection metadata is stored in app-private preferences. Dashboard session cookies are encrypted separately with Android Keystore and are never displayed here.",
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        Button(onClick = { adding = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
+        Button(onClick = { reconnectId = null; adding = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
             Icon(Icons.Outlined.Add, null)
             Spacer(Modifier.width(6.dp))
             Text("Add backend")
@@ -107,7 +109,18 @@ internal fun BackendsScreen(
                             if (selected) {
                                 Text("CONNECTED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             } else {
-                                TextButton(onClick = { onSelect(backend.id) }) { Text("Connect") }
+                                val reconnectRequired = backend.authMode != com.nousresearch.hermes.data.AuthMode.DASHBOARD_SESSION ||
+                                    state.reconnectRequiredBackendId == backend.id
+                                TextButton(
+                                    onClick = {
+                                        if (reconnectRequired) {
+                                            reconnectId = backend.id
+                                            adding = true
+                                        } else {
+                                            onSelect(backend.id)
+                                        }
+                                    },
+                                ) { Text(if (reconnectRequired) "Reconnect" else "Connect") }
                             }
                             IconButton(onClick = { forgetId = backend.id }) { Icon(Icons.Outlined.Delete, "Forget ${backend.label}") }
                         }
@@ -127,10 +140,12 @@ internal fun BackendsScreen(
 
     if (adding) {
         BackendConnectionDialog(
-            onDismiss = { adding = false },
-            onConnect = { label, url, token, allowPrivate ->
+            initial = state.savedBackends.firstOrNull { it.id == reconnectId },
+            onDismiss = { adding = false; reconnectId = null },
+            onConnect = { label, url, username, password, allowPrivate ->
                 adding = false
-                onConnect(label, url, token, allowPrivate)
+                reconnectId = null
+                onConnect(label, url, username, password, allowPrivate)
             },
         )
     }
@@ -138,7 +153,7 @@ internal fun BackendsScreen(
         AlertDialog(
             onDismissRequest = { forgetId = null },
             title = { Text("FORGET BACKEND?") },
-            text = { Text("${backend.label} will be removed from this device and its Keystore token deleted. Nothing is deleted from the Hermes server.") },
+            text = { Text("${backend.label} will be removed from this device and its encrypted Dashboard session deleted. Nothing is deleted from the Hermes server.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -154,24 +169,32 @@ internal fun BackendsScreen(
 
 @Composable
 private fun BackendConnectionDialog(
+    initial: BackendConfig?,
     onDismiss: () -> Unit,
-    onConnect: (String, String, String, Boolean) -> Unit,
+    onConnect: (String, String, String, String, Boolean) -> Unit,
 ) {
-    var label by rememberSaveable { mutableStateOf("") }
-    var url by rememberSaveable { mutableStateOf("") }
-    var token by rememberSaveable { mutableStateOf("") }
-    var allowPrivate by rememberSaveable { mutableStateOf(false) }
+    var label by rememberSaveable(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
+    var url by rememberSaveable(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
+    var username by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var allowPrivate by rememberSaveable(initial?.id) { mutableStateOf(initial?.allowInsecurePrivateNetwork == true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ADD HERMES BACKEND") },
+        title = { Text(if (initial == null) "ADD HERMES BACKEND" else "RECONNECT HERMES BACKEND") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 TextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
                 TextField(url, { url = it }, label = { Text("HTTPS URL") }, singleLine = true)
                 TextField(
-                    token,
-                    { token = it },
-                    label = { Text("Dashboard token") },
+                    username,
+                    { username = it },
+                    label = { Text("Dashboard username") },
+                    singleLine = true,
+                )
+                TextField(
+                    password,
+                    { password = it },
+                    label = { Text("Dashboard password") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                 )
@@ -186,8 +209,12 @@ private fun BackendConnectionDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConnect(label, url, token, allowPrivate) },
-                enabled = url.isNotBlank() && token.isNotBlank(),
+                onClick = {
+                    val submittedPassword = password
+                    password = ""
+                    onConnect(label, url, username, submittedPassword, allowPrivate)
+                },
+                enabled = url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
             ) { Text("Test and save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

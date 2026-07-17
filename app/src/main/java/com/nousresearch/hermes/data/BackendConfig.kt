@@ -16,9 +16,9 @@ data class BackendConfig(
 enum class AuthMode {
     TOKEN,
     OAUTH,
+    DASHBOARD_SESSION,
 }
 
-data class BackendCredentials(
-    val token: String,
-)
-
+interface BackendSaver {
+    suspend fun save(config: BackendConfig)
+}
