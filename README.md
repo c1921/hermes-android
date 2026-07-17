@@ -15,6 +15,7 @@ This repository is an independent work in progress and is not currently an offic
 - Structured tool start/completion cards
 - Dangerous-command approval and clarification responses
 - Stop/interruption
+- SAF file, image and PDF attachments with bounded reads and server-queue cleanup
 - Phone master/detail navigation and two-pane tablet layout
 - Unknown protocol-event tolerance
 
@@ -49,4 +50,3 @@ The initial audit is pinned to Hermes Agent commit `0f102fa4dc04b7dfdab048169aaa
 ## Licence
 
 MIT. See [`LICENSE`](LICENSE).
-
