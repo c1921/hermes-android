@@ -171,6 +171,10 @@ private class FakeDashboard(
                     if (!webSocketAccepted) MockResponse().setResponseCode(401)
                     else MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                         override fun onOpen(webSocket: WebSocket, response: Response) = Unit
+
+                        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                            webSocket.close(code, reason)
+                        }
                     })
                 }
                 else -> MockResponse().setResponseCode(404)
