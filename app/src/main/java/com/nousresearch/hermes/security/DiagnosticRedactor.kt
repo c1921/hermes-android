@@ -10,7 +10,7 @@ object DiagnosticRedactor {
         setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
     )
     private val bearer = Regex("(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,;]+")
-    private val urlCredential = Regex("(?i)(://[^:/\\s]+:)[^@/\\s]+@")
+    private val urlCredential = Regex("(?i)(://)[^@/\\s]+@")
     private val querySecret = Regex("(?i)([?&](?:access_token|refresh_token|token|api_key|key)=)[^&\\s]+")
     private val namedSecret = Regex(
         "(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|password|passwd|client[_-]?secret|secret)" +
