@@ -5,6 +5,39 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
+data class ImageAttachResult(
+    val attached: Boolean,
+    val path: String,
+    val text: String? = null,
+    val bytes: Long? = null,
+)
+
+@Serializable
+data class PdfAttachPage(
+    val path: String,
+    val page: Int,
+)
+
+@Serializable
+data class PdfAttachResult(
+    val attached: Boolean,
+    val filename: String,
+    @SerialName("pages_attached") val pagesAttached: Int,
+    val pages: List<PdfAttachPage>,
+    val text: String? = null,
+)
+
+@Serializable
+data class FileAttachResult(
+    val attached: Boolean,
+    val name: String,
+    val path: String,
+    @SerialName("ref_path") val refPath: String,
+    @SerialName("ref_text") val refText: String,
+    val uploaded: Boolean,
+)
+
+@Serializable
 data class StatusResponse(
     val status: String = "unknown",
     val version: String? = null,
@@ -96,4 +129,3 @@ data class ModelOption(
     val provider: String? = null,
     val supportsReasoning: Boolean? = null,
 )
-
