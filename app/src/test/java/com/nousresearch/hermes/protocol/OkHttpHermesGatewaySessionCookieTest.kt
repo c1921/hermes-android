@@ -23,6 +23,10 @@ class OkHttpHermesGatewaySessionCookieTest {
                 MockResponse().withWebSocketUpgrade(
                     object : WebSocketListener() {
                         override fun onOpen(webSocket: WebSocket, response: Response) = Unit
+
+                        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                            webSocket.close(code, reason)
+                        }
                     },
                 ),
             )
