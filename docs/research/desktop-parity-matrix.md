@@ -20,10 +20,10 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Clarification | `clarify.request/respond` | Implemented | Choice/text blocking prompt | Real RPC path; accessibility UI test pending | Push for background |
 | Sudo/secret request | `sudo.request/respond`, `secret.request/respond` | Not implemented | Secure masked prompt that cannot persist | Omitted from UI | No |
 | Stop/interruption | `session.interrupt` | Implemented | Stop replaces send during active submission | Real RPC path | No |
-| Steer/redirect | `session.steer` | Not implemented | Edit/redirect active run | Omitted | No |
-| Retry/undo/compress/reset | session/slash RPC methods | Not implemented | Message action sheet | Omitted | No |
-| Branch | `session.branch` | Not implemented | Branch from message/action | Omitted | No |
-| Session rename/archive/delete/search | REST session routes | Archive implemented; others foundation | Swipe/menu/search | REST methods partly present; UI/tests incomplete | No |
+| Steer/redirect | `session.steer` | Implemented | Composer switches to explicit steer while a run is active; stop remains separate | RPC path; real backend test pending | No |
+| Retry/undo/compress/reset | session/slash RPC methods | Undo and compress implemented; retry/reset absent | Confirmed session action with optional compression focus | Pinned result fixtures; message-level retry not yet exposed | No |
+| Branch | `session.branch` | Implemented baseline | Confirmed session action preserving the visible transcript | Branch identity fixture; real backend test pending | No |
+| Session rename/archive/delete/search | `session.title`; REST session routes | Rename/archive implemented; delete/search absent | Session action menu | Rename handles pre-first-turn rows; delete/search omitted | No |
 | Reconnect without duplicates | `session.resume`; events | Foundation; exact in-flight replay blocked | Bounded backoff, then durable-session rehydrate | Replacement-close regression test; no universal stream sequence/replay cursor | Event replay v1 |
 | Draft persistence/queue | Desktop renderer state | Not implemented | Backend/session-scoped DataStore draft | Composer survives config only | No |
 | Slash autocomplete/catalogue | `commands.catalog`, `complete.slash`, `slash.exec` | Not implemented | Inline command palette | Omitted | No |

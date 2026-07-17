@@ -39,6 +39,7 @@ class HermesViewModel @Inject constructor(
     fun openSession(session: StoredSession) = viewModelScope.launch { repository.openSession(session) }
     fun newSession() = viewModelScope.launch { repository.newSession() }
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
+    fun steer(text: String) = viewModelScope.launch { repository.steer(text) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
     fun removeAttachment(id: String) = viewModelScope.launch { repository.removePendingAttachment(id) }
     fun refreshModels() = viewModelScope.launch { repository.refreshModelOptions(refresh = true) }
@@ -52,6 +53,10 @@ class HermesViewModel @Inject constructor(
     fun approve(choice: String) = viewModelScope.launch { repository.respondToApproval(choice) }
     fun clarify(answer: String) = viewModelScope.launch { repository.respondToClarification(answer) }
     fun archiveActive() = viewModelScope.launch { repository.archiveActive() }
+    fun renameActive(title: String) = viewModelScope.launch { repository.renameActive(title) }
+    fun branchActive(name: String) = viewModelScope.launch { repository.branchActive(name) }
+    fun undoLastTurn() = viewModelScope.launch { repository.undoLastTurn() }
+    fun compressActive(focusTopic: String) = viewModelScope.launch { repository.compressActive(focusTopic) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }
 }
 

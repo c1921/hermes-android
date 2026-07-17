@@ -164,3 +164,43 @@ data class ConfigSetResult(
     @SerialName("confirm_message") val confirmMessage: String = "",
     val scope: String? = null,
 )
+
+@Serializable
+data class SessionTitleResult(
+    val title: String,
+    @SerialName("session_key") val sessionKey: String? = null,
+)
+
+@Serializable
+data class SessionBranchResult(
+    @SerialName("session_id") val runtimeSessionId: String,
+    val title: String,
+    val parent: String,
+)
+
+@Serializable
+data class SessionUndoResult(
+    val removed: Int,
+)
+
+@Serializable
+data class SessionHistoryResult(
+    val count: Int,
+    val messages: List<ProtocolMessage> = emptyList(),
+)
+
+@Serializable
+data class SessionCompressResult(
+    val status: String,
+    val removed: Int = 0,
+    @SerialName("before_messages") val beforeMessages: Int = 0,
+    @SerialName("after_messages") val afterMessages: Int = 0,
+    val messages: List<ProtocolMessage> = emptyList(),
+    val info: SessionRuntimeInfo? = null,
+)
+
+@Serializable
+data class SessionSteerResult(
+    val status: String,
+    val text: String,
+)

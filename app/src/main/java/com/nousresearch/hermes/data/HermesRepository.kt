@@ -12,8 +12,14 @@ import com.nousresearch.hermes.protocol.ImageAttachResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.SessionCreateResult
+import com.nousresearch.hermes.protocol.SessionBranchResult
+import com.nousresearch.hermes.protocol.SessionCompressResult
+import com.nousresearch.hermes.protocol.SessionHistoryResult
 import com.nousresearch.hermes.protocol.SessionResumeResult
 import com.nousresearch.hermes.protocol.SessionRuntimeInfo
+import com.nousresearch.hermes.protocol.SessionSteerResult
+import com.nousresearch.hermes.protocol.SessionTitleResult
+import com.nousresearch.hermes.protocol.SessionUndoResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.security.SecureTokenStore
@@ -29,7 +35,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -119,8 +124,20 @@ class HermesRepository @Inject constructor(
                     } else {
                         current.runtimeInfo
                     }
+                    val activeStoredSession = if (
+                        runtimeInfo.storedSessionId.isNotBlank() &&
+                        current.activeStoredSession?.durableId.isNullOrBlank()
+                    ) {
+                        (current.activeStoredSession ?: StoredSession()).copy(
+                            sessionId = runtimeInfo.storedSessionId,
+                            title = runtimeInfo.title.ifBlank { current.activeStoredSession?.title.orEmpty() },
+                        )
+                    } else {
+                        current.activeStoredSession
+                    }
                     mutableState.value = current.copy(
                         runtimeInfo = runtimeInfo,
+                        activeStoredSession = activeStoredSession,
                         timeline = TimelineReducer.reduce(current.timeline, event),
                     )
                 }
@@ -364,6 +381,117 @@ class HermesRepository @Inject constructor(
             )
         }.onSuccess {
             mutableState.value = mutableState.value.copy(sending = false, pendingAttachments = emptyList())
+        }.onFailure(::fail)
+    }
+
+    suspend fun steer(text: String) {
+        val cleaned = text.trim()
+        require(cleaned.isNotEmpty())
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        runCatching {
+            val response = gateway.request(
+                "session.steer",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("text", cleaned)
+                },
+            )
+            json.decodeFromJsonElement(SessionSteerResult.serializer(), response).also {
+                require(it.status == "queued") { "Hermes rejected the steering message" }
+            }
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(error = null)
+        }.onFailure(::fail)
+    }
+
+    suspend fun renameActive(title: String) {
+        val cleaned = title.trim()
+        require(cleaned.isNotEmpty() && cleaned.length <= 200) { "Session titles must be 1–200 characters" }
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        runCatching {
+            val response = gateway.request(
+                "session.title",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("title", cleaned)
+                },
+            )
+            json.decodeFromJsonElement(SessionTitleResult.serializer(), response)
+        }.onSuccess { result ->
+            val active = mutableState.value.activeStoredSession
+            val durableId = result.sessionKey ?: active?.durableId
+            mutableState.value = mutableState.value.copy(
+                activeStoredSession = (active ?: StoredSession()).copy(title = result.title),
+                runtimeInfo = mutableState.value.runtimeInfo.copy(title = result.title),
+                sessions = mutableState.value.sessions.map {
+                    if (it.durableId == durableId) it.copy(title = result.title) else it
+                },
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun branchActive(name: String = "") {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        val profile = mutableState.value.activeStoredSession?.profile
+        runCatching {
+            val response = gateway.request(
+                "session.branch",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    name.trim().takeIf(String::isNotBlank)?.let { put("name", it.take(200)) }
+                },
+            )
+            json.decodeFromJsonElement(SessionBranchResult.serializer(), response)
+        }.onSuccess { branch ->
+            mutableState.value = mutableState.value.copy(
+                runtimeSessionId = branch.runtimeSessionId,
+                activeStoredSession = StoredSession(title = branch.title, profile = profile, source = "android"),
+                runtimeInfo = mutableState.value.runtimeInfo.copy(title = branch.title, storedSessionId = "", running = false),
+                error = null,
+            )
+            refreshModelOptions()
+        }.onFailure(::fail)
+    }
+
+    suspend fun undoLastTurn() {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        runCatching {
+            val undo = gateway.request("session.undo", buildJsonObject { put("session_id", sessionId) })
+            val removed = json.decodeFromJsonElement(SessionUndoResult.serializer(), undo)
+            val history = gateway.request("session.history", buildJsonObject { put("session_id", sessionId) })
+            removed to json.decodeFromJsonElement(SessionHistoryResult.serializer(), history)
+        }.onSuccess { (undo, history) ->
+            mutableState.value = mutableState.value.copy(
+                timeline = TimelineReducer.hydrate(history.messages),
+                error = if (undo.removed == 0) "Hermes had no completed turn to undo." else null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun compressActive(focusTopic: String = "") {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        setLoading(true)
+        runCatching {
+            val response = gateway.request(
+                "session.compress",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    focusTopic.trim().takeIf(String::isNotBlank)?.let { put("focus_topic", it.take(500)) }
+                },
+            )
+            json.decodeFromJsonElement(SessionCompressResult.serializer(), response)
+        }.onSuccess { compressed ->
+            mutableState.value = mutableState.value.copy(
+                timeline = if (compressed.messages.isEmpty()) {
+                    mutableState.value.timeline
+                } else {
+                    TimelineReducer.hydrate(compressed.messages)
+                },
+                runtimeInfo = compressed.info ?: mutableState.value.runtimeInfo,
+                loading = false,
+                error = if (compressed.status == "aborted") "Hermes left the context unchanged because compression was not useful." else null,
+            )
         }.onFailure(::fail)
     }
 

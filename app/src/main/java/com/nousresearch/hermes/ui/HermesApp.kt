@@ -5,8 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,7 +12,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,7 +23,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +30,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -47,33 +42,25 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -88,7 +75,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -103,7 +89,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.nousresearch.hermes.BuildConfig
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.data.PendingAttachment
 import com.nousresearch.hermes.domain.MessageRole
@@ -129,6 +114,14 @@ private data class ModelActions(
     val yolo: (Boolean) -> Unit,
 )
 
+private data class SessionActionCallbacks(
+    val rename: (String) -> Unit,
+    val branch: (String) -> Unit,
+    val undo: () -> Unit,
+    val compress: (String) -> Unit,
+    val archive: () -> Unit,
+)
+
 @Composable
 fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -142,6 +135,15 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             reasoning = viewModel::setReasoning,
             fast = viewModel::setFast,
             yolo = viewModel::setYolo,
+        )
+    }
+    val sessionActions = remember(viewModel) {
+        SessionActionCallbacks(
+            rename = viewModel::renameActive,
+            branch = viewModel::branchActive,
+            undo = viewModel::undoLastTurn,
+            compress = viewModel::compressActive,
+            archive = viewModel::archiveActive,
         )
     }
     HermesTheme {
@@ -160,13 +162,14 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     onSession = viewModel::openSession,
                     onNewSession = viewModel::newSession,
                     onSend = viewModel::send,
+                    onSteer = viewModel::steer,
                     onAttach = viewModel::attach,
                     onRemoveAttachment = viewModel::removeAttachment,
                     onInterrupt = viewModel::interrupt,
                     onApprove = viewModel::approve,
                     onClarify = viewModel::clarify,
-                    onArchive = viewModel::archiveActive,
                     modelActions = modelActions,
+                    sessionActions = sessionActions,
                 )
             }
         }
@@ -298,13 +301,14 @@ private fun HermesWorkspace(
     onSession: (StoredSession) -> Unit,
     onNewSession: () -> Unit,
     onSend: (String) -> Unit,
+    onSteer: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
-    onArchive: () -> Unit,
     modelActions: ModelActions,
+    sessionActions: SessionActionCallbacks,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
@@ -317,8 +321,8 @@ private fun HermesWorkspace(
                 SessionRail(state, connection, onRefresh, onSession, onNewSession, Modifier.width(330.dp).fillMaxHeight())
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
                 ChatSurface(
-                    state, connection, onSend, onAttach, onRemoveAttachment, onInterrupt,
-                    onApprove, onClarify, onArchive, modelActions, Modifier.weight(1f),
+                    state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
+                    onApprove, onClarify, modelActions, sessionActions, Modifier.weight(1f),
                 )
             }
         } else {
@@ -335,8 +339,8 @@ private fun HermesWorkspace(
             ) { showChat ->
                 if (showChat) {
                     ChatSurface(
-                        state, connection, onSend, onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, onArchive, modelActions,
+                        state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
+                        onApprove, onClarify, modelActions, sessionActions,
                         Modifier.fillMaxSize(),
                         onBack = { mobileChat = false },
                     )
@@ -443,18 +447,19 @@ private fun ChatSurface(
     state: HermesState,
     connection: GatewayConnectionState,
     onSend: (String) -> Unit,
+    onSteer: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
-    onArchive: () -> Unit,
     modelActions: ModelActions,
+    sessionActions: SessionActionCallbacks,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
     Column(modifier.statusBarsPadding()) {
-        ChatHeader(state, connection, onBack, onArchive)
+        ChatHeader(state, onBack, sessionActions)
         Box(Modifier.weight(1f)) {
             if (state.runtimeSessionId == null) {
                 Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -487,6 +492,7 @@ private fun ChatSurface(
                 connected = connection is GatewayConnectionState.Open,
                 attachments = state.pendingAttachments,
                 onSend = onSend,
+                onSteer = onSteer,
                 onAttach = onAttach,
                 onRemoveAttachment = onRemoveAttachment,
                 onInterrupt = onInterrupt,
@@ -505,20 +511,31 @@ private fun ChatSurface(
 @Composable
 private fun ChatHeader(
     state: HermesState,
-    connection: GatewayConnectionState,
     onBack: (() -> Unit)?,
-    onArchive: () -> Unit,
+    sessionActions: SessionActionCallbacks,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         onBack?.let { IconButton(onClick = it) { Icon(Icons.Outlined.ArrowBack, "Back to sessions") } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            Text(state.activeStoredSession?.displayTitle ?: "New session", style = MaterialTheme.typography.titleMedium, maxLines = 1)
             Text(
-                listOfNotNull(state.activeStoredSession?.profile, state.activeStoredSession?.model).joinToString(" / ").ifBlank { "Hermes Agent" },
+                state.activeStoredSession?.displayTitle ?: state.runtimeInfo.title.ifBlank { "New session" },
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+            )
+            Text(
+                listOf(state.activeStoredSession?.profile, state.runtimeInfo.provider, state.runtimeInfo.model)
+                    .filterNotNull().filter(String::isNotBlank).joinToString(" / ").ifBlank { "Hermes Agent" },
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        if (state.activeStoredSession != null) IconButton(onClick = onArchive) { Icon(Icons.Outlined.Archive, "Archive session") }
+        SessionActions(
+            state = state,
+            onRename = sessionActions.rename,
+            onBranch = sessionActions.branch,
+            onUndo = sessionActions.undo,
+            onCompress = sessionActions.compress,
+            onArchive = sessionActions.archive,
+        )
     }
     HorizontalDivider()
 }
@@ -628,6 +645,7 @@ private fun Composer(
     connected: Boolean,
     attachments: List<PendingAttachment>,
     onSend: (String) -> Unit,
+    onSteer: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
@@ -636,7 +654,7 @@ private fun Composer(
     val focus = LocalFocusManager.current
     fun submit() {
         if (draft.isBlank()) return
-        onSend(draft)
+        if (sending) onSteer(draft) else onSend(draft)
         draft = ""
         focus.clearFocus()
     }
@@ -674,7 +692,15 @@ private fun Composer(
             TextField(
                 value = draft,
                 onValueChange = { draft = it },
-                placeholder = { Text(if (connected) "Message Hermes" else "Reconnect to send") },
+                placeholder = {
+                    Text(
+                        when {
+                            !connected -> "Reconnect to send"
+                            sending -> "Steer the current run"
+                            else -> "Message Hermes"
+                        },
+                    )
+                },
                 modifier = Modifier.weight(1f),
                 enabled = connected,
                 maxLines = 6,
@@ -690,6 +716,9 @@ private fun Composer(
             if (sending) {
                 IconButton(onClick = onInterrupt, modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" }) {
                     Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
+                }
+                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) {
+                    Icon(Icons.Outlined.Send, "Steer the current run")
                 }
             } else {
                 IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.Outlined.Send, "Send message") }

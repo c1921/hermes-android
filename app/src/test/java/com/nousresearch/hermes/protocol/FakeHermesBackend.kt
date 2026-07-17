@@ -43,6 +43,10 @@ class FakeHermesBackend(
                         val result = when (method) {
                             "session.list" -> buildJsonObject { put("sessions", JsonArray(emptyList())) }
                             "session.interrupt" -> buildJsonObject { put("status", "interrupting") }
+                            "session.steer" -> buildJsonObject {
+                                put("status", "queued")
+                                put("text", request["params"]?.jsonObject?.get("text") ?: json.parseToJsonElement("\"\""))
+                            }
                             "model.options" -> json.parseToJsonElement(
                                 """{"model":"hermes-4","provider":"nous","providers":[{"slug":"nous","name":"Nous Portal","authenticated":true,"models":["hermes-4"],"capabilities":{"hermes-4":{"fast":true,"reasoning":true}}}]}""",
                             )
