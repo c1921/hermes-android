@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nousresearch.hermes.data.AuthMode
@@ -38,6 +39,8 @@ class HermesViewModel @Inject constructor(
     fun openSession(session: StoredSession) = viewModelScope.launch { repository.openSession(session) }
     fun newSession() = viewModelScope.launch { repository.newSession() }
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
+    fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
+    fun removeAttachment(id: String) = viewModelScope.launch { repository.removePendingAttachment(id) }
     fun interrupt() = viewModelScope.launch { repository.interrupt() }
     fun approve(choice: String) = viewModelScope.launch { repository.respondToApproval(choice) }
     fun clarify(answer: String) = viewModelScope.launch { repository.respondToClarification(answer) }
@@ -48,4 +51,3 @@ class HermesViewModel @Inject constructor(
 private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
     .digest(toByteArray())
     .joinToString("") { "%02x".format(it) }
-
