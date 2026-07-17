@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Person
@@ -52,6 +53,7 @@ import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SkillInfo
+import com.nousresearch.hermes.protocol.StoredSession
 
 @Composable
 internal fun SkillsScreen(
@@ -94,6 +96,8 @@ internal fun CronScreen(
     onRefresh: () -> Unit,
     onSetEnabled: (String, Boolean) -> Unit,
     onTrigger: (String) -> Unit,
+    onLoadRuns: (String) -> Unit,
+    onOpenRun: (StoredSession) -> Unit,
     onCreate: (String, String, String, String) -> Unit,
     onUpdate: (String, String, String, String, String) -> Unit,
     onDelete: (String) -> Unit,
@@ -103,6 +107,7 @@ internal fun CronScreen(
     var editorJobId by rememberSaveable { mutableStateOf<String?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var deleteJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var expandedJobId by rememberSaveable { mutableStateOf<String?>(null) }
     val editorJob = state.cronJobs.firstOrNull { it.id == editorJobId }
     val deleteJob = state.cronJobs.firstOrNull { it.id == deleteJobId }
     LaunchedEffect(Unit) { onRefresh() }
@@ -134,6 +139,14 @@ internal fun CronScreen(
                         job,
                         onSetEnabled,
                         onTrigger,
+                        runs = state.cronRuns[job.id],
+                        expanded = expandedJobId == job.id,
+                        onHistory = {
+                            val expanding = expandedJobId != job.id
+                            expandedJobId = if (expanding) job.id else null
+                            if (expanding) onLoadRuns(job.id)
+                        },
+                        onOpenRun = onOpenRun,
                         onEdit = { editorJobId = job.id },
                         onDelete = { deleteJobId = job.id },
                         modifier = Modifier.padding(horizontal = 12.dp),
@@ -420,6 +433,10 @@ private fun CronRow(
     job: CronJob,
     onSetEnabled: (String, Boolean) -> Unit,
     onTrigger: (String) -> Unit,
+    runs: List<StoredSession>?,
+    expanded: Boolean,
+    onHistory: () -> Unit,
+    onOpenRun: (StoredSession) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
@@ -452,6 +469,40 @@ private fun CronRow(
                 job.deliver?.let { Text("DELIVER $it", style = MaterialTheme.typography.labelSmall) }
             }
             job.lastError?.let { Text("Last failure: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            TextButton(onClick = onHistory) {
+                Icon(Icons.Outlined.History, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (expanded) "Hide runs" else "Recent runs")
+            }
+            if (expanded) {
+                when {
+                    runs == null -> Text("Loading run history…", style = MaterialTheme.typography.bodySmall)
+                    runs.isEmpty() -> Text("No executions have produced sessions for this job.", style = MaterialTheme.typography.bodySmall)
+                    else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        runs.forEach { run ->
+                            Surface(
+                                onClick = { onOpenRun(run) },
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(run.displayTitle, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(
+                                            listOfNotNull(run.profile, run.model).joinToString(" / ").ifBlank { run.durableId },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    if (run.isActive) Text("ACTIVE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

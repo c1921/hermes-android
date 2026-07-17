@@ -60,6 +60,7 @@ class HermesViewModel @Inject constructor(
     fun refreshSkills() = viewModelScope.launch { repository.refreshSkills() }
     fun toggleSkill(name: String, enabled: Boolean) = viewModelScope.launch { repository.toggleSkill(name, enabled) }
     fun refreshCron() = viewModelScope.launch { repository.refreshCronJobs() }
+    fun refreshCronRuns(jobId: String) = viewModelScope.launch { repository.refreshCronRuns(jobId) }
     fun setCronEnabled(jobId: String, enabled: Boolean) = viewModelScope.launch { repository.setCronEnabled(jobId, enabled) }
     fun triggerCron(jobId: String) = viewModelScope.launch { repository.triggerCron(jobId) }
     fun createCron(name: String, prompt: String, schedule: String, deliver: String) = viewModelScope.launch {

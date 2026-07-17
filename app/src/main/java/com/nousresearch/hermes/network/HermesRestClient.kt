@@ -4,6 +4,7 @@ import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
+import com.nousresearch.hermes.protocol.CronRunPage
 import com.nousresearch.hermes.protocol.ActiveProfileResponse
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfilesResponse
@@ -127,6 +128,18 @@ class HermesRestClient(
 
     suspend fun cronJobs(config: BackendConfig, token: String): List<CronJob> =
         get(config, token, "/api/cron/jobs", ListSerializer(CronJob.serializer()))
+
+    suspend fun cronRuns(
+        config: BackendConfig,
+        token: String,
+        jobId: String,
+        limit: Int = 20,
+    ): CronRunPage = get(
+        config,
+        token,
+        "/api/cron/jobs/${encodePathSegment(jobId)}/runs?limit=${limit.coerceIn(1, 100)}",
+        CronRunPage.serializer(),
+    )
 
     suspend fun setCronEnabled(
         config: BackendConfig,

@@ -36,7 +36,7 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Skills installed/hub/manage | REST skills/hub APIs, `skills.manage` | Installed list/search/toggle implemented; hub install flow absent | Dedicated capability surface with provenance and usage | Typed REST contract test; source review/install/update/remove pending | No |
 | MCP catalogue/config/reload | REST MCP APIs, `reload.mcp` | Not implemented | Structured editor plus advanced raw diff | Omitted | No |
 | Toolsets/providers/config | REST config/schema/toolset APIs | Not implemented | Schema-driven forms | Omitted | Formal schema improves durability |
-| Cron/jobs/runs | REST cron routes | List/create/edit/delete/pause/resume/run-now implemented; run history absent | Exact schedule editor explicitly labels server-side execution/timezone | Typed REST route test; natural-language helper and run history pending | Push delivery for mobile result notifications |
+| Cron/jobs/runs | REST cron routes | List/create/edit/delete/pause/resume/run-now and bounded run history implemented | Exact schedule editor labels server-side execution/timezone; run rows open their session | Typed REST route test; natural-language schedule helper pending | Push delivery for mobile result notifications |
 | Messaging management | REST messaging platform routes | Not implemented | Status/setup/diagnostics | Omitted | No |
 | Agents/Command Center | Desktop agents/command-center; delegation RPCs | Not implemented | Run tree and intervention surface | Omitted; no empty screen shipped | Replay/push beneficial |
 | Usage/token accounting | session usage + analytics REST | Not implemented | Accessible summaries | Omitted | No |

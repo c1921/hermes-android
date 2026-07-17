@@ -63,6 +63,7 @@ data class HermesState(
     val pendingModelConfirmation: PendingModelConfirmation? = null,
     val skills: List<SkillInfo> = emptyList(),
     val cronJobs: List<CronJob> = emptyList(),
+    val cronRuns: Map<String, List<StoredSession>> = emptyMap(),
     val profiles: List<ProfileInfo> = emptyList(),
     val activeProfile: String = "default",
     val currentProfile: String = "default",
@@ -565,6 +566,20 @@ class HermesRepository @Inject constructor(
             .onFailure(::fail)
     }
 
+    suspend fun refreshCronRuns(jobId: String) {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(managementLoading = true, error = null)
+        runCatching { restClient.cronRuns(backend, token, jobId).runs }
+            .onSuccess { runs ->
+                mutableState.value = mutableState.value.copy(
+                    cronRuns = mutableState.value.cronRuns + (jobId to runs),
+                    managementLoading = false,
+                    error = null,
+                )
+            }
+            .onFailure(::fail)
+    }
+
     suspend fun setCronEnabled(jobId: String, enabled: Boolean) {
         val (backend, token) = activeCredentials()
         runCatching { restClient.setCronEnabled(backend, token, jobId, enabled) }
@@ -624,6 +639,7 @@ class HermesRepository @Inject constructor(
             .onSuccess {
                 mutableState.value = mutableState.value.copy(
                     cronJobs = mutableState.value.cronJobs.filterNot { it.id == jobId },
+                    cronRuns = mutableState.value.cronRuns - jobId,
                     error = null,
                 )
             }

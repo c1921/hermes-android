@@ -131,6 +131,7 @@ private data class ManagementActions(
     val refreshSkills: () -> Unit,
     val toggleSkill: (String, Boolean) -> Unit,
     val refreshCron: () -> Unit,
+    val refreshCronRuns: (String) -> Unit,
     val setCronEnabled: (String, Boolean) -> Unit,
     val triggerCron: (String) -> Unit,
     val createCron: (String, String, String, String) -> Unit,
@@ -172,6 +173,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             refreshSkills = viewModel::refreshSkills,
             toggleSkill = viewModel::toggleSkill,
             refreshCron = viewModel::refreshCron,
+            refreshCronRuns = viewModel::refreshCronRuns,
             setCronEnabled = viewModel::setCronEnabled,
             triggerCron = viewModel::triggerCron,
             createCron = viewModel::createCron,
@@ -380,7 +382,9 @@ private fun HermesWorkspace(
                     )
                     WorkspaceDestination.CRON -> CronScreen(
                         state, managementActions.refreshCron, managementActions.setCronEnabled,
-                        managementActions.triggerCron, managementActions.createCron,
+                        managementActions.triggerCron, managementActions.refreshCronRuns,
+                        { onSession(it); destination = WorkspaceDestination.CHAT },
+                        managementActions.createCron,
                         managementActions.updateCron, managementActions.deleteCron,
                         null, Modifier.weight(1f),
                     )
@@ -427,7 +431,9 @@ private fun HermesWorkspace(
                     )
                     WorkspaceDestination.CRON -> CronScreen(
                         state, managementActions.refreshCron, managementActions.setCronEnabled,
-                        managementActions.triggerCron, managementActions.createCron,
+                        managementActions.triggerCron, managementActions.refreshCronRuns,
+                        { onSession(it); destination = WorkspaceDestination.CHAT },
+                        managementActions.createCron,
                         managementActions.updateCron, managementActions.deleteCron,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),

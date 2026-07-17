@@ -62,6 +62,12 @@ data class CronJobUpdates(
 )
 
 @Serializable
+data class CronRunPage(
+    val runs: List<StoredSession> = emptyList(),
+    val limit: Int = runs.size,
+)
+
+@Serializable
 data class ProfileInfo(
     @SerialName("has_env") val hasEnv: Boolean = false,
     @SerialName("is_default") val isDefault: Boolean = false,
