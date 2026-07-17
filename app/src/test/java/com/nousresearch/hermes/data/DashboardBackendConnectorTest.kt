@@ -4,7 +4,7 @@ import com.nousresearch.hermes.network.DashboardAuthClient
 import com.nousresearch.hermes.network.DashboardSessionCookie
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.OkHttpHermesGatewayClient
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -23,7 +23,7 @@ class DashboardBackendConnectorTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @Test
-    fun `successful login REST and websocket validation save only session cookie`() = runTest {
+    fun `successful login REST and websocket validation save only session cookie`() = runBlocking {
         FakeDashboard().use { dashboard ->
             dashboard.start()
             val credentials = RecordingSessionCredentialStore()
@@ -42,7 +42,7 @@ class DashboardBackendConnectorTest {
     }
 
     @Test
-    fun `REST validation failure does not save backend or cookie`() = runTest {
+    fun `REST validation failure does not save backend or cookie`() = runBlocking {
         FakeDashboard(statusCode = 500).use { dashboard ->
             dashboard.start()
             val credentials = RecordingSessionCredentialStore()
@@ -59,7 +59,7 @@ class DashboardBackendConnectorTest {
     }
 
     @Test
-    fun `websocket validation failure does not save backend or cookie`() = runTest {
+    fun `websocket validation failure does not save backend or cookie`() = runBlocking {
         FakeDashboard(webSocketAccepted = false).use { dashboard ->
             dashboard.start()
             val credentials = RecordingSessionCredentialStore()
@@ -76,7 +76,7 @@ class DashboardBackendConnectorTest {
     }
 
     @Test
-    fun `expired saved cookie becomes reconnect required`() = runTest {
+    fun `expired saved cookie becomes reconnect required`() = runBlocking {
         FakeDashboard(statusCode = 401).use { dashboard ->
             dashboard.start()
             val credentials = RecordingSessionCredentialStore()
@@ -93,7 +93,7 @@ class DashboardBackendConnectorTest {
     }
 
     @Test
-    fun `legacy token backend requires reconnect and is never reinterpreted`() = runTest {
+    fun `legacy token backend requires reconnect and is never reinterpreted`() = runBlocking {
         FakeDashboard().use { dashboard ->
             dashboard.start()
             val connector = connector(dashboard, RecordingSessionCredentialStore(), RecordingBackendSaver())

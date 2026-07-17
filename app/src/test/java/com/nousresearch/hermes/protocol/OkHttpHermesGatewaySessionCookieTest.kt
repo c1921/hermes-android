@@ -3,7 +3,7 @@ package com.nousresearch.hermes.protocol
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.network.DashboardSessionCookie
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -17,7 +17,7 @@ import org.junit.Test
 
 class OkHttpHermesGatewaySessionCookieTest {
     @Test
-    fun `websocket handshake reuses cookie and has no legacy token query`() = runTest {
+    fun `websocket handshake reuses cookie and has no legacy token query`() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(
                 MockResponse().withWebSocketUpgrade(
