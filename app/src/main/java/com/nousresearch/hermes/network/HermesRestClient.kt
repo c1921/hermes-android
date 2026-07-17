@@ -3,6 +3,7 @@ package com.nousresearch.hermes.network
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.protocol.ActionResponse
 import com.nousresearch.hermes.protocol.ActionStatusResponse
+import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
@@ -10,6 +11,8 @@ import com.nousresearch.hermes.protocol.CronRunPage
 import com.nousresearch.hermes.protocol.ActiveProfileResponse
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfilesResponse
+import com.nousresearch.hermes.protocol.ProviderValidationResult
+import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
 import com.nousresearch.hermes.protocol.SkillInfo
@@ -20,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -276,6 +281,73 @@ class HermesRestClient(
             token,
             "/api/actions/$name/status?lines=${lines.coerceIn(1, 2_000)}",
             ActionStatusResponse.serializer(),
+        )
+    }
+
+    suspend fun globalModelOptions(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        refresh: Boolean = false,
+    ): ModelOptionsResult = get(
+        config,
+        token,
+        "/api/model/options?explicit_only=1&include_unconfigured=1&refresh=${if (refresh) 1 else 0}&profile=${encodePathSegment(profile)}",
+        ModelOptionsResult.serializer(),
+    )
+
+    suspend fun envVars(config: BackendConfig, token: String, profile: String): Map<String, EnvVarInfo> = get(
+        config,
+        token,
+        "/api/env?profile=${encodePathSegment(profile)}",
+        MapSerializer(String.serializer(), EnvVarInfo.serializer()),
+    )
+
+    suspend fun validateProviderCredential(
+        config: BackendConfig,
+        token: String,
+        key: String,
+        value: String,
+        apiKey: String = "",
+    ): ProviderValidationResult = json.decodeFromJsonElement(
+        ProviderValidationResult.serializer(),
+        request(
+            config,
+            token,
+            "/api/providers/validate",
+            method = "POST",
+            body = buildJsonObject {
+                put("key", key)
+                put("value", value)
+                put("api_key", apiKey)
+            },
+        ),
+    )
+
+    suspend fun setEnvVar(config: BackendConfig, token: String, profile: String, key: String, value: String) {
+        request(
+            config,
+            token,
+            "/api/env",
+            method = "PUT",
+            body = buildJsonObject {
+                put("key", key)
+                put("value", value)
+                put("profile", profile)
+            },
+        )
+    }
+
+    suspend fun deleteEnvVar(config: BackendConfig, token: String, profile: String, key: String) {
+        request(
+            config,
+            token,
+            "/api/env",
+            method = "DELETE",
+            body = buildJsonObject {
+                put("key", key)
+                put("profile", profile)
+            },
         )
     }
 

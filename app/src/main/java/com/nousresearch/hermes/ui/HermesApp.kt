@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Send
@@ -109,7 +110,7 @@ import com.nousresearch.hermes.ui.theme.Success
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, DIAGNOSTICS }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, DIAGNOSTICS, PROVIDERS }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -145,6 +146,9 @@ private data class ManagementActions(
     val setActiveProfile: (String) -> Unit,
     val deleteProfile: (String) -> Unit,
     val runDiagnostic: (DiagnosticAction) -> Unit,
+    val refreshProviders: () -> Unit,
+    val saveProviderSetting: (String, String, String) -> Unit,
+    val deleteProviderSetting: (String) -> Unit,
 )
 
 @Composable
@@ -188,6 +192,9 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             setActiveProfile = viewModel::setActiveProfile,
             deleteProfile = viewModel::deleteProfile,
             runDiagnostic = viewModel::runDiagnostic,
+            refreshProviders = viewModel::refreshProviders,
+            saveProviderSetting = viewModel::saveProviderSetting,
+            deleteProviderSetting = viewModel::deleteProviderSetting,
         )
     }
     HermesTheme {
@@ -394,6 +401,7 @@ private fun HermesWorkspace(
                     onProfiles = { destination = WorkspaceDestination.PROFILES },
                     onBackends = { destination = WorkspaceDestination.BACKENDS },
                     onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
+                    onProviders = { destination = WorkspaceDestination.PROVIDERS },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -432,6 +440,14 @@ private fun HermesWorkspace(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.PROVIDERS -> ProvidersScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshProviders,
+                        onSave = managementActions.saveProviderSetting,
+                        onDelete = managementActions.deleteProviderSetting,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -500,6 +516,14 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
+                    WorkspaceDestination.PROVIDERS -> ProvidersScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshProviders,
+                        onSave = managementActions.saveProviderSetting,
+                        onDelete = managementActions.deleteProviderSetting,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
@@ -509,6 +533,7 @@ private fun HermesWorkspace(
                         onProfiles = { destination = WorkspaceDestination.PROFILES },
                         onBackends = { destination = WorkspaceDestination.BACKENDS },
                         onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
+                        onProviders = { destination = WorkspaceDestination.PROVIDERS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
                 }
@@ -529,6 +554,7 @@ private fun SessionRail(
     onProfiles: () -> Unit,
     onBackends: () -> Unit,
     onDiagnostics: () -> Unit,
+    onProviders: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
@@ -543,7 +569,6 @@ private fun SessionRail(
                 Text(state.backend?.label.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh sessions") }
-            IconButton(onClick = onDiagnostics) { Icon(Icons.Outlined.Info, "Diagnostics") }
             IconButton(onClick = onNewSession) { Icon(Icons.Outlined.Add, "New session") }
         }
         ConnectionLine(connection)
@@ -565,6 +590,21 @@ private fun SessionRail(
                 Icon(Icons.Outlined.Person, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Profiles")
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = onProviders, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Key, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Providers")
+            }
+            OutlinedButton(onClick = onDiagnostics, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Info, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Diagnostics")
             }
         }
         state.error?.let { ErrorBanner(it, Modifier.padding(12.dp)) }

@@ -112,3 +112,27 @@ data class ActionStatusResponse(
     val pid: Long? = null,
     val running: Boolean,
 )
+
+@Serializable
+data class EnvVarInfo(
+    val advanced: Boolean = false,
+    val category: String = "",
+    @SerialName("channel_managed") val channelManaged: Boolean = false,
+    val custom: Boolean = false,
+    val description: String = "",
+    @SerialName("is_password") val isPassword: Boolean = true,
+    @SerialName("is_set") val isSet: Boolean = false,
+    val provider: String = "",
+    @SerialName("provider_label") val providerLabel: String = "",
+    @SerialName("redacted_value") val redactedValue: String? = null,
+    val tools: List<String> = emptyList(),
+    val url: String? = null,
+)
+
+@Serializable
+data class ProviderValidationResult(
+    val ok: Boolean,
+    val reachable: Boolean,
+    val message: String = "",
+    val models: List<String> = emptyList(),
+)

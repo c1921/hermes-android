@@ -9,6 +9,7 @@ import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
 import com.nousresearch.hermes.protocol.FileAttachResult
+import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.ImageAttachResult
@@ -72,6 +73,10 @@ data class HermesState(
     val currentProfile: String = "default",
     val managementLoading: Boolean = false,
     val diagnostics: Map<DiagnosticAction, DiagnosticRunState> = emptyMap(),
+    val providerOptions: ModelOptionsResult? = null,
+    val providerEnv: Map<String, EnvVarInfo> = emptyMap(),
+    val providersLoading: Boolean = false,
+    val providerNotice: String? = null,
     val error: String? = null,
 ) {
     val compatibilityWarning: String?
@@ -722,7 +727,16 @@ class HermesRepository @Inject constructor(
     suspend fun setActiveProfile(name: String) {
         val (backend, token) = activeCredentials()
         val result = runCatching { restClient.setActiveProfile(backend, token, name) }
-        if (result.isSuccess) refreshProfiles() else fail(requireNotNull(result.exceptionOrNull()))
+        if (result.isSuccess) {
+            mutableState.value = mutableState.value.copy(
+                providerOptions = null,
+                providerEnv = emptyMap(),
+                providerNotice = null,
+            )
+            refreshProfiles()
+        } else {
+            fail(requireNotNull(result.exceptionOrNull()))
+        }
     }
 
     suspend fun deleteProfile(name: String) {
@@ -787,6 +801,72 @@ class HermesRepository @Inject constructor(
                 ),
             )
         }
+    }
+
+    suspend fun refreshProviders(refresh: Boolean = false) {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(providersLoading = true, error = null)
+        runCatching {
+            val active = restClient.activeProfile(backend, token)
+            val options = restClient.globalModelOptions(backend, token, active.active, refresh)
+            Triple(active, options, restClient.envVars(backend, token, active.active))
+        }.onSuccess { (active, options, env) ->
+            mutableState.value = mutableState.value.copy(
+                activeProfile = active.active,
+                currentProfile = active.current,
+                providerOptions = options,
+                providerEnv = env.filterValues { !it.channelManaged && (it.category == "provider" || it.provider.isNotBlank()) },
+                providersLoading = false,
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun saveProviderSetting(key: String, value: String, apiKey: String = "") {
+        val info = mutableState.value.providerEnv[key] ?: error("Hermes did not advertise this provider setting")
+        require(!info.channelManaged && (info.category == "provider" || info.provider.isNotBlank())) {
+            "This setting is not managed by the provider surface"
+        }
+        val clean = value.trim()
+        require(clean.isNotEmpty() && clean.length <= 32_768) { "Provider value must be between 1 and 32,768 characters" }
+        mutableState.value = mutableState.value.copy(providersLoading = true, providerNotice = null, error = null)
+        val (backend, token) = activeCredentials()
+        val validation = runCatching { restClient.validateProviderCredential(backend, token, key, clean, apiKey) }
+            .getOrElse { error -> fail(error); return }
+        if (!validation.ok) {
+            mutableState.value = mutableState.value.copy(
+                providersLoading = false,
+                error = validation.message.ifBlank {
+                    if (validation.reachable) "Hermes rejected this provider value." else "Hermes could not validate this provider value."
+                },
+            )
+            return
+        }
+        runCatching { restClient.setEnvVar(backend, token, mutableState.value.activeProfile, key, clean) }
+            .onSuccess {
+                mutableState.value = mutableState.value.copy(
+                    providerNotice = validation.message.ifBlank {
+                        if (validation.reachable) "Provider credential validated and saved on Hermes." else "Provider setting saved; this provider has no live validation probe."
+                    },
+                )
+                refreshProviders(refresh = true)
+            }
+            .onFailure(::fail)
+    }
+
+    suspend fun deleteProviderSetting(key: String) {
+        val info = mutableState.value.providerEnv[key] ?: return
+        require(!info.channelManaged && (info.category == "provider" || info.provider.isNotBlank())) {
+            "This setting is not managed by the provider surface"
+        }
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(providersLoading = true, providerNotice = null, error = null)
+        runCatching { restClient.deleteEnvVar(backend, token, mutableState.value.activeProfile, key) }
+            .onSuccess {
+                mutableState.value = mutableState.value.copy(providerNotice = "Provider setting removed from Hermes.")
+                refreshProviders(refresh = true)
+            }
+            .onFailure(::fail)
     }
 
     private fun updateDiagnostic(action: DiagnosticAction, run: DiagnosticRunState) {
@@ -1005,6 +1085,7 @@ class HermesRepository @Inject constructor(
             attaching = false,
             modelsLoading = false,
             managementLoading = false,
+            providersLoading = false,
             error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
     }
