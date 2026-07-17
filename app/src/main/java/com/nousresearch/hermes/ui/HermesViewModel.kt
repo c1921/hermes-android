@@ -57,6 +57,18 @@ class HermesViewModel @Inject constructor(
     fun branchActive(name: String) = viewModelScope.launch { repository.branchActive(name) }
     fun undoLastTurn() = viewModelScope.launch { repository.undoLastTurn() }
     fun compressActive(focusTopic: String) = viewModelScope.launch { repository.compressActive(focusTopic) }
+    fun refreshSkills() = viewModelScope.launch { repository.refreshSkills() }
+    fun toggleSkill(name: String, enabled: Boolean) = viewModelScope.launch { repository.toggleSkill(name, enabled) }
+    fun refreshCron() = viewModelScope.launch { repository.refreshCronJobs() }
+    fun setCronEnabled(jobId: String, enabled: Boolean) = viewModelScope.launch { repository.setCronEnabled(jobId, enabled) }
+    fun triggerCron(jobId: String) = viewModelScope.launch { repository.triggerCron(jobId) }
+    fun createCron(name: String, prompt: String, schedule: String, deliver: String) = viewModelScope.launch {
+        repository.createCron(name, prompt, schedule, deliver)
+    }
+    fun updateCron(jobId: String, name: String, prompt: String, schedule: String, deliver: String) = viewModelScope.launch {
+        repository.updateCron(jobId, name, prompt, schedule, deliver)
+    }
+    fun deleteCron(jobId: String) = viewModelScope.launch { repository.deleteCron(jobId) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }
 }
 

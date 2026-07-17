@@ -42,11 +42,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.Terminal
@@ -103,6 +105,7 @@ import com.nousresearch.hermes.ui.theme.Success
 import com.nousresearch.hermes.ui.theme.Warning
 
 private val WideLayout = 840.dp
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -120,6 +123,17 @@ private data class SessionActionCallbacks(
     val undo: () -> Unit,
     val compress: (String) -> Unit,
     val archive: () -> Unit,
+)
+
+private data class ManagementActions(
+    val refreshSkills: () -> Unit,
+    val toggleSkill: (String, Boolean) -> Unit,
+    val refreshCron: () -> Unit,
+    val setCronEnabled: (String, Boolean) -> Unit,
+    val triggerCron: (String) -> Unit,
+    val createCron: (String, String, String, String) -> Unit,
+    val updateCron: (String, String, String, String, String) -> Unit,
+    val deleteCron: (String) -> Unit,
 )
 
 @Composable
@@ -146,6 +160,18 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             archive = viewModel::archiveActive,
         )
     }
+    val managementActions = remember(viewModel) {
+        ManagementActions(
+            refreshSkills = viewModel::refreshSkills,
+            toggleSkill = viewModel::toggleSkill,
+            refreshCron = viewModel::refreshCron,
+            setCronEnabled = viewModel::setCronEnabled,
+            triggerCron = viewModel::triggerCron,
+            createCron = viewModel::createCron,
+            updateCron = viewModel::updateCron,
+            deleteCron = viewModel::deleteCron,
+        )
+    }
     HermesTheme {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             if (state.backend == null) {
@@ -170,6 +196,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     onClarify = viewModel::clarify,
                     modelActions = modelActions,
                     sessionActions = sessionActions,
+                    managementActions = managementActions,
                 )
             }
         }
@@ -309,47 +336,85 @@ private fun HermesWorkspace(
     onClarify: (String) -> Unit,
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
+    managementActions: ManagementActions,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
-        var mobileChat by rememberSaveable { mutableStateOf(false) }
-        LaunchedEffect(state.runtimeSessionId) { if (state.runtimeSessionId != null) mobileChat = true }
-        BackHandler(enabled = !wide && mobileChat) { mobileChat = false }
+        var destination by rememberSaveable { mutableStateOf(WorkspaceDestination.SESSIONS) }
+        LaunchedEffect(state.runtimeSessionId) {
+            if (state.runtimeSessionId != null && destination == WorkspaceDestination.SESSIONS) {
+                destination = WorkspaceDestination.CHAT
+            }
+        }
+        BackHandler(enabled = !wide && destination != WorkspaceDestination.SESSIONS) {
+            destination = WorkspaceDestination.SESSIONS
+        }
 
         if (wide) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
-                SessionRail(state, connection, onRefresh, onSession, onNewSession, Modifier.width(330.dp).fillMaxHeight())
-                HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
-                ChatSurface(
-                    state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
-                    onApprove, onClarify, modelActions, sessionActions, Modifier.weight(1f),
+                SessionRail(
+                    state, connection, onRefresh,
+                    onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                    onNewSession = { onNewSession(); destination = WorkspaceDestination.CHAT },
+                    onSkills = { destination = WorkspaceDestination.SKILLS },
+                    onCron = { destination = WorkspaceDestination.CRON },
+                    modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
+                HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
+                when (destination) {
+                    WorkspaceDestination.SKILLS -> SkillsScreen(
+                        state, managementActions.refreshSkills, managementActions.toggleSkill, null, Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.CRON -> CronScreen(
+                        state, managementActions.refreshCron, managementActions.setCronEnabled,
+                        managementActions.triggerCron, managementActions.createCron,
+                        managementActions.updateCron, managementActions.deleteCron,
+                        null, Modifier.weight(1f),
+                    )
+                    else -> ChatSurface(
+                        state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
+                        onApprove, onClarify, modelActions, sessionActions, Modifier.weight(1f),
+                    )
+                }
             }
         } else {
             AnimatedContent(
-                targetState = mobileChat,
+                targetState = destination,
                 transitionSpec = {
-                    if (targetState) {
+                    if (targetState != WorkspaceDestination.SESSIONS) {
                         slideInHorizontally(tween(260)) { it / 3 } togetherWith slideOutHorizontally(tween(220)) { -it / 4 }
                     } else {
                         slideInHorizontally(tween(260)) { -it / 3 } togetherWith slideOutHorizontally(tween(220)) { it / 4 }
                     }
                 },
                 label = "mobile-master-detail",
-            ) { showChat ->
-                if (showChat) {
-                    ChatSurface(
+            ) { activeDestination ->
+                when (activeDestination) {
+                    WorkspaceDestination.CHAT -> ChatSurface(
                         state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, modelActions, sessionActions,
                         Modifier.fillMaxSize(),
-                        onBack = { mobileChat = false },
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
                     )
-                } else {
-                    SessionRail(
+                    WorkspaceDestination.SKILLS -> SkillsScreen(
+                        state, managementActions.refreshSkills, managementActions.toggleSkill,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
+                    WorkspaceDestination.CRON -> CronScreen(
+                        state, managementActions.refreshCron, managementActions.setCronEnabled,
+                        managementActions.triggerCron, managementActions.createCron,
+                        managementActions.updateCron, managementActions.deleteCron,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
+                    WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh,
-                        onSession = { onSession(it); mobileChat = true },
-                        onNewSession = { onNewSession(); mobileChat = true },
-                        Modifier.fillMaxSize().statusBarsPadding(),
+                        onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                        onNewSession = { onNewSession(); destination = WorkspaceDestination.CHAT },
+                        onSkills = { destination = WorkspaceDestination.SKILLS },
+                        onCron = { destination = WorkspaceDestination.CRON },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )
                 }
             }
@@ -364,6 +429,8 @@ private fun SessionRail(
     onRefresh: () -> Unit,
     onSession: (StoredSession) -> Unit,
     onNewSession: () -> Unit,
+    onSkills: () -> Unit,
+    onCron: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
@@ -381,6 +448,21 @@ private fun SessionRail(
             IconButton(onClick = onNewSession) { Icon(Icons.Outlined.Add, "New session") }
         }
         ConnectionLine(connection)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = onSkills, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.AutoAwesome, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Skills")
+            }
+            OutlinedButton(onClick = onCron, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Schedule, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Cron")
+            }
+        }
         state.error?.let { ErrorBanner(it, Modifier.padding(12.dp)) }
         LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
             items(state.sessions, key = { "${it.profile}:${it.durableId}" }) { session ->

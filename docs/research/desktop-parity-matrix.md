@@ -33,10 +33,10 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | File/artifact preview | REST/desktop filesystem bridge, artifact tools | Not implemented | Safe native viewers; isolated WebView | No preview shipped | General remote artifact descriptor desirable |
 | Voice STT/TTS | `/api/audio/transcribe`, `/api/audio/speak` | Not implemented | Press/lock recording, Media3 playback | Permissions declared only; no controls | No |
 | Profiles management | REST profiles APIs, pooled gateways | Session profile display only | Switch/create/manage without workspace reset | Mutations absent | Remote profile gateway contract needs tests |
-| Skills installed/hub/manage | REST skills/hub APIs, `skills.manage` | Not implemented | Trust-first browse/review/install | Omitted | No |
+| Skills installed/hub/manage | REST skills/hub APIs, `skills.manage` | Installed list/search/toggle implemented; hub install flow absent | Dedicated capability surface with provenance and usage | Typed REST contract test; source review/install/update/remove pending | No |
 | MCP catalogue/config/reload | REST MCP APIs, `reload.mcp` | Not implemented | Structured editor plus advanced raw diff | Omitted | No |
 | Toolsets/providers/config | REST config/schema/toolset APIs | Not implemented | Schema-driven forms | Omitted | Formal schema improves durability |
-| Cron/jobs/runs | REST cron routes | Not implemented | Exact editor plus natural-language helper | Omitted | Push delivery for mobile result notifications |
+| Cron/jobs/runs | REST cron routes | List/create/edit/delete/pause/resume/run-now implemented; run history absent | Exact schedule editor explicitly labels server-side execution/timezone | Typed REST route test; natural-language helper and run history pending | Push delivery for mobile result notifications |
 | Messaging management | REST messaging platform routes | Not implemented | Status/setup/diagnostics | Omitted | No |
 | Agents/Command Center | Desktop agents/command-center; delegation RPCs | Not implemented | Run tree and intervention surface | Omitted; no empty screen shipped | Replay/push beneficial |
 | Usage/token accounting | session usage + analytics REST | Not implemented | Accessible summaries | Omitted | No |

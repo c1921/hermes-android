@@ -1,0 +1,62 @@
+package com.nousresearch.hermes.protocol
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class SkillInfo(
+    val category: String = "general",
+    val description: String = "",
+    val enabled: Boolean,
+    val name: String,
+    val usage: Int? = null,
+    val provenance: String? = null,
+)
+
+@Serializable
+data class SkillToggleResult(
+    val ok: Boolean,
+    val name: String,
+    val enabled: Boolean,
+)
+
+@Serializable
+data class CronJobSchedule(
+    val display: String? = null,
+    val expr: String? = null,
+    val kind: String? = null,
+)
+
+@Serializable
+data class CronJob(
+    val deliver: String? = null,
+    val enabled: Boolean,
+    val id: String,
+    @SerialName("last_error") val lastError: String? = null,
+    @SerialName("last_run_at") val lastRunAt: String? = null,
+    val name: String? = null,
+    @SerialName("next_run_at") val nextRunAt: String? = null,
+    @SerialName("no_agent") val noAgent: Boolean = false,
+    val prompt: String? = null,
+    val schedule: CronJobSchedule? = null,
+    @SerialName("schedule_display") val scheduleDisplay: String? = null,
+    val script: String? = null,
+    val state: String? = null,
+)
+
+@Serializable
+data class CronJobCreatePayload(
+    val deliver: String? = null,
+    val name: String? = null,
+    val prompt: String,
+    val schedule: String,
+)
+
+@Serializable
+data class CronJobUpdates(
+    val deliver: String? = null,
+    val enabled: Boolean? = null,
+    val name: String? = null,
+    val prompt: String? = null,
+    val schedule: String? = null,
+)

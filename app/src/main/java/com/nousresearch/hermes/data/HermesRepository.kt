@@ -5,6 +5,9 @@ import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.ConfigSetResult
+import com.nousresearch.hermes.protocol.CronJob
+import com.nousresearch.hermes.protocol.CronJobCreatePayload
+import com.nousresearch.hermes.protocol.CronJobUpdates
 import com.nousresearch.hermes.protocol.FileAttachResult
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
@@ -20,6 +23,7 @@ import com.nousresearch.hermes.protocol.SessionRuntimeInfo
 import com.nousresearch.hermes.protocol.SessionSteerResult
 import com.nousresearch.hermes.protocol.SessionTitleResult
 import com.nousresearch.hermes.protocol.SessionUndoResult
+import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.security.SecureTokenStore
@@ -55,6 +59,9 @@ data class HermesState(
     val modelOptions: ModelOptionsResult? = null,
     val modelsLoading: Boolean = false,
     val pendingModelConfirmation: PendingModelConfirmation? = null,
+    val skills: List<SkillInfo> = emptyList(),
+    val cronJobs: List<CronJob> = emptyList(),
+    val managementLoading: Boolean = false,
     val error: String? = null,
 )
 
@@ -495,6 +502,121 @@ class HermesRepository @Inject constructor(
         }.onFailure(::fail)
     }
 
+    suspend fun refreshSkills() {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(managementLoading = true, error = null)
+        runCatching { restClient.skills(backend, token) }
+            .onSuccess { skills ->
+                mutableState.value = mutableState.value.copy(
+                    skills = skills.sortedWith(compareByDescending<SkillInfo> { it.usage ?: 0 }.thenBy { it.name }),
+                    managementLoading = false,
+                )
+            }
+            .onFailure(::fail)
+    }
+
+    suspend fun toggleSkill(name: String, enabled: Boolean) {
+        val (backend, token) = activeCredentials()
+        runCatching { restClient.toggleSkill(backend, token, name, enabled) }
+            .onSuccess { changed ->
+                mutableState.value = mutableState.value.copy(
+                    skills = mutableState.value.skills.map {
+                        if (it.name == changed.name) it.copy(enabled = changed.enabled) else it
+                    },
+                    error = null,
+                )
+            }
+            .onFailure(::fail)
+    }
+
+    suspend fun refreshCronJobs() {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(managementLoading = true, error = null)
+        runCatching { restClient.cronJobs(backend, token) }
+            .onSuccess { jobs ->
+                mutableState.value = mutableState.value.copy(cronJobs = jobs, managementLoading = false)
+            }
+            .onFailure(::fail)
+    }
+
+    suspend fun setCronEnabled(jobId: String, enabled: Boolean) {
+        val (backend, token) = activeCredentials()
+        runCatching { restClient.setCronEnabled(backend, token, jobId, enabled) }
+            .onSuccess(::replaceCronJob)
+            .onFailure(::fail)
+    }
+
+    suspend fun triggerCron(jobId: String) {
+        val (backend, token) = activeCredentials()
+        runCatching { restClient.triggerCron(backend, token, jobId) }
+            .onSuccess(::replaceCronJob)
+            .onFailure(::fail)
+    }
+
+    suspend fun createCron(name: String, prompt: String, schedule: String, deliver: String) {
+        val cleanPrompt = prompt.trim()
+        val cleanSchedule = schedule.trim()
+        require(cleanPrompt.isNotEmpty() && cleanSchedule.isNotEmpty()) { "Cron prompt and schedule are required" }
+        val (backend, token) = activeCredentials()
+        runCatching {
+            restClient.createCron(
+                backend,
+                token,
+                CronJobCreatePayload(
+                    name = name.trim().takeIf(String::isNotEmpty),
+                    prompt = cleanPrompt,
+                    schedule = cleanSchedule,
+                    deliver = deliver.trim().takeIf(String::isNotEmpty),
+                ),
+            )
+        }.onSuccess(::replaceCronJob).onFailure(::fail)
+    }
+
+    suspend fun updateCron(jobId: String, name: String, prompt: String, schedule: String, deliver: String) {
+        val cleanPrompt = prompt.trim()
+        val cleanSchedule = schedule.trim()
+        require(cleanPrompt.isNotEmpty() && cleanSchedule.isNotEmpty()) { "Cron prompt and schedule are required" }
+        val (backend, token) = activeCredentials()
+        runCatching {
+            restClient.updateCron(
+                backend,
+                token,
+                jobId,
+                CronJobUpdates(
+                    name = name.trim(),
+                    prompt = cleanPrompt,
+                    schedule = cleanSchedule,
+                    deliver = deliver.trim(),
+                ),
+            )
+        }.onSuccess(::replaceCronJob).onFailure(::fail)
+    }
+
+    suspend fun deleteCron(jobId: String) {
+        val (backend, token) = activeCredentials()
+        runCatching { restClient.deleteCron(backend, token, jobId) }
+            .onSuccess {
+                mutableState.value = mutableState.value.copy(
+                    cronJobs = mutableState.value.cronJobs.filterNot { it.id == jobId },
+                    error = null,
+                )
+            }
+            .onFailure(::fail)
+    }
+
+    private fun replaceCronJob(job: CronJob) {
+        val existing = mutableState.value.cronJobs
+        mutableState.value = mutableState.value.copy(
+            cronJobs = if (existing.any { it.id == job.id }) {
+                existing.map { if (it.id == job.id) job else it }
+            } else {
+                existing + job
+            },
+            managementLoading = false,
+            error = null,
+        )
+    }
+
     suspend fun attach(uri: Uri) {
         val sessionId = mutableState.value.runtimeSessionId ?: run {
             newSession()
@@ -677,6 +799,7 @@ class HermesRepository @Inject constructor(
             sending = false,
             attaching = false,
             modelsLoading = false,
+            managementLoading = false,
             error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
     }

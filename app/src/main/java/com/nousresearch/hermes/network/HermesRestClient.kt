@@ -1,13 +1,19 @@
 package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.protocol.CronJob
+import com.nousresearch.hermes.protocol.CronJobCreatePayload
+import com.nousresearch.hermes.protocol.CronJobUpdates
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
+import com.nousresearch.hermes.protocol.SkillInfo
+import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
@@ -94,6 +100,101 @@ class HermesRestClient(
     suspend fun getJson(config: BackendConfig, token: String, path: String): JsonElement =
         request(config, token, path)
 
+    suspend fun skills(config: BackendConfig, token: String): List<SkillInfo> =
+        get(config, token, "/api/skills", ListSerializer(SkillInfo.serializer()))
+
+    suspend fun toggleSkill(
+        config: BackendConfig,
+        token: String,
+        name: String,
+        enabled: Boolean,
+    ): SkillToggleResult = json.decodeFromJsonElement(
+        SkillToggleResult.serializer(),
+        request(
+            config,
+            token,
+            "/api/skills/toggle",
+            method = "PUT",
+            body = buildJsonObject {
+                put("name", name)
+                put("enabled", enabled)
+            },
+        ),
+    )
+
+    suspend fun cronJobs(config: BackendConfig, token: String): List<CronJob> =
+        get(config, token, "/api/cron/jobs", ListSerializer(CronJob.serializer()))
+
+    suspend fun setCronEnabled(
+        config: BackendConfig,
+        token: String,
+        jobId: String,
+        enabled: Boolean,
+    ): CronJob = json.decodeFromJsonElement(
+        CronJob.serializer(),
+        request(
+            config,
+            token,
+            "/api/cron/jobs/${encodePathSegment(jobId)}/${if (enabled) "resume" else "pause"}",
+            method = "POST",
+            body = buildJsonObject { },
+        ),
+    )
+
+    suspend fun triggerCron(config: BackendConfig, token: String, jobId: String): CronJob =
+        json.decodeFromJsonElement(
+            CronJob.serializer(),
+            request(
+                config,
+                token,
+                "/api/cron/jobs/${encodePathSegment(jobId)}/trigger",
+                method = "POST",
+                body = buildJsonObject { },
+            ),
+        )
+
+    suspend fun createCron(
+        config: BackendConfig,
+        token: String,
+        payload: CronJobCreatePayload,
+    ): CronJob = json.decodeFromJsonElement(
+        CronJob.serializer(),
+        request(
+            config,
+            token,
+            "/api/cron/jobs",
+            method = "POST",
+            body = json.encodeToJsonElement(CronJobCreatePayload.serializer(), payload),
+        ),
+    )
+
+    suspend fun updateCron(
+        config: BackendConfig,
+        token: String,
+        jobId: String,
+        updates: CronJobUpdates,
+    ): CronJob = json.decodeFromJsonElement(
+        CronJob.serializer(),
+        request(
+            config,
+            token,
+            "/api/cron/jobs/${encodePathSegment(jobId)}",
+            method = "PUT",
+            body = buildJsonObject {
+                put("updates", json.encodeToJsonElement(CronJobUpdates.serializer(), updates))
+            },
+        ),
+    )
+
+    suspend fun deleteCron(config: BackendConfig, token: String, jobId: String) {
+        request(
+            config,
+            token,
+            "/api/cron/jobs/${encodePathSegment(jobId)}",
+            method = "DELETE",
+        )
+    }
+
     private suspend fun <T> get(
         config: BackendConfig,
         token: String?,
@@ -146,4 +247,3 @@ class HermesHttpException(
     val statusCode: Int,
     detail: String,
 ) : IOException("Hermes returned HTTP $statusCode: $detail")
-
