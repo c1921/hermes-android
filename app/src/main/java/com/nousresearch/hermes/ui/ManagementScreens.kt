@@ -195,7 +195,7 @@ private fun BackendConnectionDialog(
 @Composable
 internal fun SkillsScreen(
     state: HermesState,
-    onRefresh: (() -> Unit)?,
+    onRefresh: () -> Unit,
     onToggle: (String, Boolean) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -529,7 +529,7 @@ private fun ManagementHeader(
     title: String,
     subtitle: String,
     loading: Boolean,
-    onRefresh: () -> Unit,
+    onRefresh: (() -> Unit)?,
     onBack: (() -> Unit)?,
 ) {
     Row(
