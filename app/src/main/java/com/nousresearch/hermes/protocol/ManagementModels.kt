@@ -136,3 +136,73 @@ data class ProviderValidationResult(
     val message: String = "",
     val models: List<String> = emptyList(),
 )
+
+@Serializable
+data class SkillHubResult(
+    val name: String,
+    val description: String = "",
+    val source: String = "",
+    val identifier: String,
+    @SerialName("trust_level") val trustLevel: String = "community",
+    val repo: String? = null,
+    val tags: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubSourcesResponse(
+    val sources: List<SkillHubSource> = emptyList(),
+    @SerialName("index_available") val indexAvailable: Boolean = false,
+    val featured: List<SkillHubResult> = emptyList(),
+)
+
+@Serializable
+data class SkillHubSource(
+    val id: String,
+    val label: String,
+    val available: Boolean? = null,
+    @SerialName("rate_limited") val rateLimited: Boolean? = null,
+    val searchable: Boolean? = null,
+)
+
+@Serializable
+data class SkillHubSearchResponse(
+    val results: List<SkillHubResult> = emptyList(),
+    @SerialName("source_counts") val sourceCounts: Map<String, Int> = emptyMap(),
+    @SerialName("timed_out") val timedOut: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubPreview(
+    val name: String,
+    val description: String = "",
+    val source: String = "",
+    val identifier: String,
+    @SerialName("trust_level") val trustLevel: String = "community",
+    val repo: String? = null,
+    val tags: List<String> = emptyList(),
+    @SerialName("skill_md") val skillMarkdown: String = "",
+    val files: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubScanFinding(
+    val severity: String,
+    val category: String,
+    val file: String,
+    val line: Int? = null,
+    val description: String,
+)
+
+@Serializable
+data class SkillHubScanResult(
+    val name: String,
+    val identifier: String,
+    val source: String = "",
+    @SerialName("trust_level") val trustLevel: String = "community",
+    val verdict: String,
+    val summary: String = "",
+    val policy: String,
+    @SerialName("policy_reason") val policyReason: String? = null,
+    val findings: List<SkillHubScanFinding> = emptyList(),
+    @SerialName("severity_counts") val severityCounts: Map<String, Int> = emptyMap(),
+)

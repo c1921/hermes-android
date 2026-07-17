@@ -133,6 +133,12 @@ private data class SessionActionCallbacks(
 private data class ManagementActions(
     val refreshSkills: () -> Unit,
     val toggleSkill: (String, Boolean) -> Unit,
+    val loadSkillHub: (String) -> Unit,
+    val reviewSkill: (String) -> Unit,
+    val closeSkillReview: () -> Unit,
+    val installReviewedSkill: () -> Unit,
+    val uninstallSkill: (String) -> Unit,
+    val updateSkills: () -> Unit,
     val refreshCron: () -> Unit,
     val refreshCronRuns: (String) -> Unit,
     val setCronEnabled: (String, Boolean) -> Unit,
@@ -179,6 +185,12 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
         ManagementActions(
             refreshSkills = viewModel::refreshSkills,
             toggleSkill = viewModel::toggleSkill,
+            loadSkillHub = viewModel::loadSkillHub,
+            reviewSkill = viewModel::reviewSkill,
+            closeSkillReview = viewModel::closeSkillReview,
+            installReviewedSkill = viewModel::installReviewedSkill,
+            uninstallSkill = viewModel::uninstallSkill,
+            updateSkills = viewModel::updateSkills,
             refreshCron = viewModel::refreshCron,
             refreshCronRuns = viewModel::refreshCronRuns,
             setCronEnabled = viewModel::setCronEnabled,
@@ -407,7 +419,10 @@ private fun HermesWorkspace(
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
                 when (destination) {
                     WorkspaceDestination.SKILLS -> SkillsScreen(
-                        state, managementActions.refreshSkills, managementActions.toggleSkill, null, Modifier.weight(1f),
+                        state, managementActions.refreshSkills, managementActions.toggleSkill,
+                        managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
+                        managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
+                        null, Modifier.weight(1f),
                     )
                     WorkspaceDestination.CRON -> CronScreen(
                         state, managementActions.refreshCron, managementActions.setCronEnabled,
@@ -478,6 +493,8 @@ private fun HermesWorkspace(
                     )
                     WorkspaceDestination.SKILLS -> SkillsScreen(
                         state, managementActions.refreshSkills, managementActions.toggleSkill,
+                        managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
+                        managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                     )

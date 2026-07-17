@@ -27,6 +27,9 @@ import com.nousresearch.hermes.protocol.SessionSteerResult
 import com.nousresearch.hermes.protocol.SessionTitleResult
 import com.nousresearch.hermes.protocol.SessionUndoResult
 import com.nousresearch.hermes.protocol.SkillInfo
+import com.nousresearch.hermes.protocol.SkillHubPreview
+import com.nousresearch.hermes.protocol.SkillHubResult
+import com.nousresearch.hermes.protocol.SkillHubScanResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.security.DiagnosticRedactor
@@ -66,6 +69,10 @@ data class HermesState(
     val modelsLoading: Boolean = false,
     val pendingModelConfirmation: PendingModelConfirmation? = null,
     val skills: List<SkillInfo> = emptyList(),
+    val skillHubResults: List<SkillHubResult> = emptyList(),
+    val skillHubReview: SkillHubReview? = null,
+    val skillHubLoading: Boolean = false,
+    val skillAction: DiagnosticRunState? = null,
     val cronJobs: List<CronJob> = emptyList(),
     val cronRuns: Map<String, List<StoredSession>> = emptyMap(),
     val profiles: List<ProfileInfo> = emptyList(),
@@ -113,6 +120,11 @@ data class DiagnosticRunState(
     val lines: List<String> = emptyList(),
     val error: String? = null,
     val timedOut: Boolean = false,
+)
+
+data class SkillHubReview(
+    val preview: SkillHubPreview,
+    val scan: SkillHubScanResult,
 )
 
 data class ModelSelection(val provider: String, val model: String) {
@@ -578,6 +590,105 @@ class HermesRepository @Inject constructor(
                 )
             }
             .onFailure(::fail)
+    }
+
+    suspend fun loadSkillHub(query: String = "") {
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(skillHubLoading = true, skillHubReview = null, error = null)
+        runCatching {
+            if (query.isBlank()) restClient.skillHubSources(backend, token, profile).featured
+            else restClient.searchSkillHub(backend, token, profile, query.trim()).results
+        }.onSuccess { results ->
+            mutableState.value = mutableState.value.copy(skillHubResults = results, skillHubLoading = false)
+        }.onFailure(::fail)
+    }
+
+    suspend fun reviewSkill(identifier: String) {
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(skillHubLoading = true, skillHubReview = null, error = null)
+        runCatching {
+            SkillHubReview(
+                preview = restClient.previewSkillHub(backend, token, profile, identifier),
+                scan = restClient.scanSkillHub(backend, token, profile, identifier),
+            )
+        }.onSuccess { review ->
+            require(review.preview.identifier == review.scan.identifier) { "Hermes returned mismatched skill review data" }
+            mutableState.value = mutableState.value.copy(skillHubReview = review, skillHubLoading = false)
+        }.onFailure(::fail)
+    }
+
+    fun closeSkillReview() {
+        mutableState.value = mutableState.value.copy(skillHubReview = null)
+    }
+
+    suspend fun installReviewedSkill() {
+        try {
+            val review = mutableState.value.skillHubReview ?: error("Review and scan a skill before installing it")
+            require(review.scan.policy != "block") { review.scan.policyReason ?: "Hermes blocked this skill" }
+            val (backend, token) = activeCredentials()
+            val started = restClient.installSkillHub(backend, token, mutableState.value.activeProfile, review.preview.identifier)
+            mutableState.value = mutableState.value.copy(skillHubReview = null)
+            pollSkillAction(started.name, started.pid)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            fail(error)
+        }
+    }
+
+    suspend fun uninstallSkill(name: String) {
+        runCatching {
+            val (backend, token) = activeCredentials()
+            restClient.uninstallSkillHub(backend, token, mutableState.value.activeProfile, name)
+        }.onSuccess { pollSkillAction(it.name, it.pid) }.onFailure(::fail)
+    }
+
+    suspend fun updateSkills() {
+        runCatching {
+            val (backend, token) = activeCredentials()
+            restClient.updateSkillsHub(backend, token, mutableState.value.activeProfile)
+        }.onSuccess { pollSkillAction(it.name, it.pid) }.onFailure(::fail)
+    }
+
+    private suspend fun pollSkillAction(name: String, pid: Long) {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(skillAction = DiagnosticRunState(running = true, pid = pid), error = null)
+        try {
+            repeat(DIAGNOSTIC_POLL_LIMIT) {
+                val status = restClient.actionStatus(backend, token, name)
+                mutableState.value = mutableState.value.copy(
+                    skillAction = DiagnosticRunState(
+                        running = status.running,
+                        pid = status.pid ?: pid,
+                        exitCode = status.exitCode,
+                        lines = DiagnosticRedactor.redactLines(status.lines),
+                    ),
+                )
+                if (!status.running) {
+                    refreshSkills()
+                    return
+                }
+                delay(DIAGNOSTIC_POLL_INTERVAL_MILLIS)
+            }
+            mutableState.value = mutableState.value.copy(
+                skillAction = mutableState.value.skillAction?.copy(
+                    running = false,
+                    timedOut = true,
+                    error = "Status polling stopped after two minutes. The server action may still be running.",
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            mutableState.value = mutableState.value.copy(
+                skillAction = mutableState.value.skillAction?.copy(
+                    running = false,
+                    error = DiagnosticRedactor.redact(error.message.orEmpty()).ifBlank { "Skill action failed" },
+                ),
+            )
+        }
     }
 
     suspend fun refreshCronJobs() {
@@ -1086,6 +1197,7 @@ class HermesRepository @Inject constructor(
             modelsLoading = false,
             managementLoading = false,
             providersLoading = false,
+            skillHubLoading = false,
             error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
     }

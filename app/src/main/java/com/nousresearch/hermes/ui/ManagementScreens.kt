@@ -31,6 +31,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SkillInfo
+import com.nousresearch.hermes.protocol.SkillHubResult
 import com.nousresearch.hermes.protocol.StoredSession
 
 @Composable
@@ -197,33 +199,120 @@ internal fun SkillsScreen(
     state: HermesState,
     onRefresh: () -> Unit,
     onToggle: (String, Boolean) -> Unit,
+    onLoadHub: (String) -> Unit,
+    onReview: (String) -> Unit,
+    onCloseReview: () -> Unit,
+    onInstall: () -> Unit,
+    onUninstall: (String) -> Unit,
+    onUpdate: () -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var browsing by rememberSaveable { mutableStateOf(false) }
+    var uninstallName by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { onRefresh() }
     val visible = state.skills.filter {
         query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || it.category.contains(query, true)
     }
     Column(modifier.fillMaxSize()) {
-        ManagementHeader("SKILLS", "Installed capabilities", state.managementLoading, onRefresh, onBack)
+        ManagementHeader("SKILLS", if (browsing) "Review before installing" else "Installed capabilities", state.managementLoading || state.skillHubLoading, onRefresh, onBack)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = { browsing = false }, modifier = Modifier.weight(1f)) { Text("Installed") }
+            OutlinedButton(
+                onClick = { browsing = true; onLoadHub("") },
+                modifier = Modifier.weight(1f),
+            ) { Text("Browse hub") }
+            if (!browsing) TextButton(onClick = onUpdate, enabled = state.skillAction?.running != true) { Text("Update") }
+        }
         TextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search installed skills") },
+            placeholder = { Text(if (browsing) "Search the Hermes skills hub" else "Search installed skills") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         )
+        if (browsing) {
+            Button(
+                onClick = { onLoadHub(query) },
+                enabled = query.isNotBlank() && !state.skillHubLoading,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            ) { Text("Search hub") }
+        }
+        state.skillAction?.let { action ->
+            Text(
+                when {
+                    action.running -> "Skill operation running on Hermes${action.pid?.let { " / PID $it" }.orEmpty()}"
+                    action.exitCode == 0 -> "Skill operation completed"
+                    action.error != null -> action.error
+                    else -> "Skill operation exited ${action.exitCode ?: "without status"}"
+                },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (action.exitCode != null && action.exitCode != 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+        }
         if (state.error != null) ManagementError(state.error)
-        if (!state.managementLoading && visible.isEmpty()) {
+        if (browsing) {
+            if (!state.skillHubLoading && state.skillHubResults.isEmpty()) {
+                ManagementEmpty("No hub results. Search by capability, tool or workflow.")
+            } else {
+                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(state.skillHubResults, key = SkillHubResult::identifier) { skill ->
+                        SkillHubRow(skill, onReview, Modifier.padding(horizontal = 12.dp))
+                    }
+                }
+            }
+        } else if (!state.managementLoading && visible.isEmpty()) {
             ManagementEmpty(if (state.skills.isEmpty()) "No installed skills were returned by Hermes." else "No matching skills.")
         } else {
             LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visible, key = SkillInfo::name) { skill ->
-                    SkillRow(skill, onToggle, Modifier.padding(horizontal = 12.dp))
+                    SkillRow(skill, onToggle, { uninstallName = it }, Modifier.padding(horizontal = 12.dp))
                 }
             }
         }
+    }
+
+    state.skillHubReview?.let { review ->
+        val blocked = review.scan.policy == "block"
+        AlertDialog(
+            onDismissRequest = onCloseReview,
+            title = { Text("REVIEW ${review.preview.name.uppercase()}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${review.preview.trustLevel.uppercase()} / ${review.preview.source} / ${review.scan.verdict.uppercase()}")
+                    Text(review.scan.summary.ifBlank { review.preview.description }, style = MaterialTheme.typography.bodySmall)
+                    review.scan.policyReason?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    if (review.scan.findings.isNotEmpty()) {
+                        Text(
+                            review.scan.findings.take(8).joinToString("\n") { "${it.severity.uppercase()} · ${it.file}${it.line?.let { line -> ":$line" }.orEmpty()} · ${it.description}" },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Text("FILES / ${review.preview.files.joinToString().ifBlank { "SKILL.md only" }}", style = MaterialTheme.typography.labelSmall)
+                    Text(review.preview.skillMarkdown.take(4_000), style = MaterialTheme.typography.bodySmall, maxLines = 14, overflow = TextOverflow.Ellipsis)
+                }
+            },
+            confirmButton = {
+                Button(onClick = onInstall, enabled = !blocked) {
+                    Text(if (review.scan.policy == "ask") "Accept risk and install" else if (blocked) "Blocked by Hermes" else "Install")
+                }
+            },
+            dismissButton = { TextButton(onClick = onCloseReview) { Text("Cancel") } },
+        )
+    }
+    uninstallName?.let { name ->
+        AlertDialog(
+            onDismissRequest = { uninstallName = null },
+            title = { Text("REMOVE SKILL") },
+            text = { Text("Uninstall $name from the selected Hermes profile?") },
+            confirmButton = { TextButton(onClick = { uninstallName = null; onUninstall(name) }) { Text("Remove") } },
+            dismissButton = { TextButton(onClick = { uninstallName = null }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -550,7 +639,12 @@ private fun ManagementHeader(
 }
 
 @Composable
-private fun SkillRow(skill: SkillInfo, onToggle: (String, Boolean) -> Unit, modifier: Modifier = Modifier) {
+private fun SkillRow(
+    skill: SkillInfo,
+    onToggle: (String, Boolean) -> Unit,
+    onUninstall: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -563,6 +657,24 @@ private fun SkillRow(skill: SkillInfo, onToggle: (String, Boolean) -> Unit, modi
                 skill.usage?.let { Text("$it observed actions", style = MaterialTheme.typography.labelSmall) }
             }
             Switch(checked = skill.enabled, onCheckedChange = { onToggle(skill.name, it) })
+            IconButton(onClick = { onUninstall(skill.name) }) { Icon(Icons.Outlined.Delete, "Uninstall ${skill.name}") }
+        }
+    }
+}
+
+@Composable
+private fun SkillHubRow(skill: SkillHubResult, onReview: (String) -> Unit, modifier: Modifier = Modifier) {
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(skill.name, fontWeight = FontWeight.SemiBold)
+                    Text("${skill.trustLevel.uppercase()} / ${skill.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Button(onClick = { onReview(skill.identifier) }) { Text("Review") }
+            }
+            Text(skill.description, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (skill.tags.isNotEmpty()) Text(skill.tags.joinToString(" · "), style = MaterialTheme.typography.labelSmall)
         }
     }
 }

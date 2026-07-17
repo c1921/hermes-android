@@ -16,6 +16,10 @@ import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
 import com.nousresearch.hermes.protocol.SkillInfo
+import com.nousresearch.hermes.protocol.SkillHubPreview
+import com.nousresearch.hermes.protocol.SkillHubScanResult
+import com.nousresearch.hermes.protocol.SkillHubSearchResponse
+import com.nousresearch.hermes.protocol.SkillHubSourcesResponse
 import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import java.io.IOException
@@ -275,7 +279,7 @@ class HermesRestClient(
         name: String,
         lines: Int = 400,
     ): ActionStatusResponse {
-        require(name in ALLOWED_ACTIONS) { "Unsupported Hermes diagnostic action" }
+        require(name in ALLOWED_ACTIONS || SKILL_ACTION.matches(name)) { "Unsupported Hermes background action" }
         return get(
             config,
             token,
@@ -351,10 +355,67 @@ class HermesRestClient(
         )
     }
 
-    private suspend fun startAction(config: BackendConfig, token: String, path: String): ActionResponse =
+    suspend fun skillHubSources(config: BackendConfig, token: String, profile: String): SkillHubSourcesResponse = get(
+        config,
+        token,
+        "/api/skills/hub/sources?profile=${encodePathSegment(profile)}",
+        SkillHubSourcesResponse.serializer(),
+    )
+
+    suspend fun searchSkillHub(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        query: String,
+    ): SkillHubSearchResponse = get(
+        config,
+        token,
+        "/api/skills/hub/search?q=${encodePathSegment(query)}&source=all&limit=30&profile=${encodePathSegment(profile)}",
+        SkillHubSearchResponse.serializer(),
+    )
+
+    suspend fun previewSkillHub(config: BackendConfig, token: String, profile: String, identifier: String): SkillHubPreview = get(
+        config,
+        token,
+        "/api/skills/hub/preview?identifier=${encodePathSegment(identifier)}&profile=${encodePathSegment(profile)}",
+        SkillHubPreview.serializer(),
+    )
+
+    suspend fun scanSkillHub(config: BackendConfig, token: String, profile: String, identifier: String): SkillHubScanResult = get(
+        config,
+        token,
+        "/api/skills/hub/scan?identifier=${encodePathSegment(identifier)}&profile=${encodePathSegment(profile)}",
+        SkillHubScanResult.serializer(),
+    )
+
+    suspend fun installSkillHub(config: BackendConfig, token: String, profile: String, identifier: String): ActionResponse =
+        startAction(
+            config,
+            token,
+            "/api/skills/hub/install",
+            buildJsonObject { put("identifier", identifier); put("profile", profile) },
+        )
+
+    suspend fun uninstallSkillHub(config: BackendConfig, token: String, profile: String, name: String): ActionResponse =
+        startAction(
+            config,
+            token,
+            "/api/skills/hub/uninstall",
+            buildJsonObject { put("name", name); put("profile", profile) },
+        )
+
+    suspend fun updateSkillsHub(config: BackendConfig, token: String, profile: String): ActionResponse =
+        startAction(config, token, "/api/skills/hub/update", buildJsonObject { put("profile", profile) })
+
+    private suspend fun startAction(
+        config: BackendConfig,
+        token: String,
+        path: String,
+        body: JsonElement = buildJsonObject { },
+    ): ActionResponse =
         json.decodeFromJsonElement(
             ActionResponse.serializer(),
-            request(config, token, path, method = "POST", body = buildJsonObject { }),
+            request(config, token, path, method = "POST", body = body),
         )
 
     private suspend fun <T> get(
@@ -402,6 +463,7 @@ class HermesRestClient(
 
     private companion object {
         val ALLOWED_ACTIONS = setOf("doctor", "security-audit")
+        val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }

@@ -60,6 +60,12 @@ class HermesViewModel @Inject constructor(
     fun compressActive(focusTopic: String) = viewModelScope.launch { repository.compressActive(focusTopic) }
     fun refreshSkills() = viewModelScope.launch { repository.refreshSkills() }
     fun toggleSkill(name: String, enabled: Boolean) = viewModelScope.launch { repository.toggleSkill(name, enabled) }
+    fun loadSkillHub(query: String) = viewModelScope.launch { repository.loadSkillHub(query) }
+    fun reviewSkill(identifier: String) = viewModelScope.launch { repository.reviewSkill(identifier) }
+    fun closeSkillReview() = repository.closeSkillReview()
+    fun installReviewedSkill() = viewModelScope.launch { repository.installReviewedSkill() }
+    fun uninstallSkill(name: String) = viewModelScope.launch { repository.uninstallSkill(name) }
+    fun updateSkills() = viewModelScope.launch { repository.updateSkills() }
     fun refreshCron() = viewModelScope.launch { repository.refreshCronJobs() }
     fun refreshCronRuns(jobId: String) = viewModelScope.launch { repository.refreshCronRuns(jobId) }
     fun setCronEnabled(jobId: String, enabled: Boolean) = viewModelScope.launch { repository.setCronEnabled(jobId, enabled) }
