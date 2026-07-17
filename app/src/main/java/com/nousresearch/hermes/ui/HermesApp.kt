@@ -1,6 +1,8 @@
 package com.nousresearch.hermes.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -46,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
@@ -102,6 +105,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nousresearch.hermes.BuildConfig
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.PendingAttachment
 import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
@@ -135,6 +139,8 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     onSession = viewModel::openSession,
                     onNewSession = viewModel::newSession,
                     onSend = viewModel::send,
+                    onAttach = viewModel::attach,
+                    onRemoveAttachment = viewModel::removeAttachment,
                     onInterrupt = viewModel::interrupt,
                     onApprove = viewModel::approve,
                     onClarify = viewModel::clarify,
@@ -271,6 +277,8 @@ private fun HermesWorkspace(
     onSession: (StoredSession) -> Unit,
     onNewSession: () -> Unit,
     onSend: (String) -> Unit,
+    onAttach: (android.net.Uri) -> Unit,
+    onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
@@ -287,7 +295,10 @@ private fun HermesWorkspace(
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 SessionRail(state, connection, onRefresh, onSession, onNewSession, Modifier.width(330.dp).fillMaxHeight())
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
-                ChatSurface(state, connection, onSend, onInterrupt, onApprove, onClarify, onArchive, onDisconnect, Modifier.weight(1f))
+                ChatSurface(
+                    state, connection, onSend, onAttach, onRemoveAttachment, onInterrupt,
+                    onApprove, onClarify, onArchive, onDisconnect, Modifier.weight(1f),
+                )
             }
         } else {
             AnimatedContent(
@@ -303,7 +314,8 @@ private fun HermesWorkspace(
             ) { showChat ->
                 if (showChat) {
                     ChatSurface(
-                        state, connection, onSend, onInterrupt, onApprove, onClarify, onArchive, onDisconnect,
+                        state, connection, onSend, onAttach, onRemoveAttachment, onInterrupt,
+                        onApprove, onClarify, onArchive, onDisconnect,
                         Modifier.fillMaxSize(),
                         onBack = { mobileChat = false },
                     )
@@ -410,6 +422,8 @@ private fun ChatSurface(
     state: HermesState,
     connection: GatewayConnectionState,
     onSend: (String) -> Unit,
+    onAttach: (android.net.Uri) -> Unit,
+    onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
@@ -434,7 +448,18 @@ private fun ChatSurface(
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
         state.error?.let { ErrorBanner(it, Modifier.padding(horizontal = 12.dp)) }
-        if (state.runtimeSessionId != null) Composer(state.sending, connection is GatewayConnectionState.Open, onSend, onInterrupt)
+        if (state.runtimeSessionId != null) {
+            Composer(
+                sending = state.sending,
+                attaching = state.attaching,
+                connected = connection is GatewayConnectionState.Open,
+                attachments = state.pendingAttachments,
+                onSend = onSend,
+                onAttach = onAttach,
+                onRemoveAttachment = onRemoveAttachment,
+                onInterrupt = onInterrupt,
+            )
+        }
     }
 
     state.timeline.approval?.let { request ->
@@ -563,8 +588,18 @@ private fun StatusBlock(status: TimelineItem.Status) {
     Text("${status.kind.uppercase()} / ${status.text}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Composer(sending: Boolean, connected: Boolean, onSend: (String) -> Unit, onInterrupt: () -> Unit) {
+private fun Composer(
+    sending: Boolean,
+    attaching: Boolean,
+    connected: Boolean,
+    attachments: List<PendingAttachment>,
+    onSend: (String) -> Unit,
+    onAttach: (android.net.Uri) -> Unit,
+    onRemoveAttachment: (String) -> Unit,
+    onInterrupt: () -> Unit,
+) {
     var draft by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
     fun submit() {
@@ -573,33 +608,60 @@ private fun Composer(sending: Boolean, connected: Boolean, onSend: (String) -> U
         draft = ""
         focus.clearFocus()
     }
-    Row(
-        Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(12.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        TextField(
-            value = draft,
-            onValueChange = { draft = it },
-            placeholder = { Text(if (connected) "Message Hermes" else "Reconnect to send") },
-            modifier = Modifier.weight(1f),
-            enabled = connected,
-            maxLines = 6,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { submit() }),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-        )
-        if (sending) {
-            IconButton(onClick = onInterrupt, modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" }) {
-                Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(onAttach)
+    }
+    Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(12.dp)) {
+        if (attachments.isNotEmpty() || attaching) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
+            ) {
+                attachments.forEach { attachment ->
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
+                            Text(attachment.label, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                            IconButton(onClick = { onRemoveAttachment(attachment.id) }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Outlined.Close, "Remove ${attachment.label}", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+                if (attaching) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
-        } else {
-            IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.Outlined.Send, "Send message") }
+        }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            IconButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, enabled = connected && !attaching) {
+                Icon(Icons.Outlined.AttachFile, "Attach a file")
+            }
+            TextField(
+                value = draft,
+                onValueChange = { draft = it },
+                placeholder = { Text(if (connected) "Message Hermes" else "Reconnect to send") },
+                modifier = Modifier.weight(1f),
+                enabled = connected,
+                maxLines = 6,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+            )
+            if (sending) {
+                IconButton(onClick = onInterrupt, modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" }) {
+                    Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.Outlined.Send, "Send message") }
+            }
         }
     }
 }
