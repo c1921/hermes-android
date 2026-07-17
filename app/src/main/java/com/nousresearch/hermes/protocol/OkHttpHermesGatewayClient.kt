@@ -142,7 +142,6 @@ class OkHttpHermesGatewayClient @Inject constructor(
         val uri = TransportPolicy.validate(config).getOrThrow()
         val base = uri.toString().trimEnd('/').toHttpUrl()
         return base.newBuilder()
-            .scheme(if (base.isHttps) "wss" else "ws")
             .addPathSegments("api/ws")
             .addQueryParameter("token", token)
             .build()
