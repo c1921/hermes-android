@@ -5,6 +5,39 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
+data class ImageAttachResult(
+    val attached: Boolean,
+    val path: String,
+    val text: String? = null,
+    val bytes: Long? = null,
+)
+
+@Serializable
+data class PdfAttachPage(
+    val path: String,
+    val page: Int,
+)
+
+@Serializable
+data class PdfAttachResult(
+    val attached: Boolean,
+    val filename: String,
+    @SerialName("pages_attached") val pagesAttached: Int,
+    val pages: List<PdfAttachPage>,
+    val text: String? = null,
+)
+
+@Serializable
+data class FileAttachResult(
+    val attached: Boolean,
+    val name: String,
+    val path: String,
+    @SerialName("ref_path") val refPath: String,
+    @SerialName("ref_text") val refText: String,
+    val uploaded: Boolean,
+)
+
+@Serializable
 data class StatusResponse(
     val status: String = "unknown",
     val version: String? = null,
@@ -63,6 +96,7 @@ data class SessionCreateResult(
     val messages: List<ProtocolMessage> = emptyList(),
     val status: String = "idle",
     val running: Boolean = false,
+    val info: SessionRuntimeInfo = SessionRuntimeInfo(),
 )
 
 @Serializable
@@ -74,26 +108,99 @@ data class SessionResumeResult(
     val status: String = "idle",
     val running: Boolean = false,
     val inflight: JsonElement? = null,
+    val info: SessionRuntimeInfo = SessionRuntimeInfo(),
 )
 
 @Serializable
 data class ModelOptionsResult(
+    val model: String? = null,
+    val provider: String? = null,
     val providers: List<ModelProvider> = emptyList(),
-    val models: List<ModelOption> = emptyList(),
 )
 
 @Serializable
 data class ModelProvider(
-    val id: String,
-    val name: String? = null,
-    val models: List<ModelOption> = emptyList(),
+    val slug: String,
+    val name: String,
+    @SerialName("is_current") val isCurrent: Boolean = false,
+    val models: List<String> = emptyList(),
+    @SerialName("total_models") val totalModels: Int = models.size,
+    val warning: String? = null,
+    val authenticated: Boolean = true,
+    @SerialName("auth_type") val authType: String? = null,
+    @SerialName("key_env") val keyEnvironment: String? = null,
+    @SerialName("is_user_defined") val isUserDefined: Boolean = false,
+    val capabilities: Map<String, ModelCapabilities> = emptyMap(),
 )
 
 @Serializable
-data class ModelOption(
-    val id: String,
-    val name: String? = null,
-    val provider: String? = null,
-    val supportsReasoning: Boolean? = null,
+data class ModelCapabilities(
+    val fast: Boolean = false,
+    val reasoning: Boolean = false,
 )
 
+@Serializable
+data class SessionRuntimeInfo(
+    val model: String = "",
+    val provider: String = "",
+    @SerialName("reasoning_effort") val reasoningEffort: String = "",
+    @SerialName("service_tier") val serviceTier: String = "",
+    val fast: Boolean = false,
+    val yolo: Boolean = false,
+    @SerialName("approval_mode") val approvalMode: String = "manual",
+    val running: Boolean = false,
+    val title: String = "",
+    @SerialName("stored_session_id") val storedSessionId: String = "",
+    @SerialName("desktop_contract") val desktopContract: Int? = null,
+    val usage: JsonElement? = null,
+)
+
+@Serializable
+data class ConfigSetResult(
+    val key: String,
+    val value: String,
+    val warning: String? = null,
+    @SerialName("confirm_required") val confirmRequired: Boolean = false,
+    @SerialName("confirm_message") val confirmMessage: String = "",
+    val scope: String? = null,
+)
+
+@Serializable
+data class SessionTitleResult(
+    val title: String,
+    @SerialName("session_key") val sessionKey: String? = null,
+)
+
+@Serializable
+data class SessionBranchResult(
+    @SerialName("session_id") val runtimeSessionId: String,
+    val title: String,
+    val parent: String,
+)
+
+@Serializable
+data class SessionUndoResult(
+    val removed: Int,
+)
+
+@Serializable
+data class SessionHistoryResult(
+    val count: Int,
+    val messages: List<ProtocolMessage> = emptyList(),
+)
+
+@Serializable
+data class SessionCompressResult(
+    val status: String,
+    val removed: Int = 0,
+    @SerialName("before_messages") val beforeMessages: Int = 0,
+    @SerialName("after_messages") val afterMessages: Int = 0,
+    val messages: List<ProtocolMessage> = emptyList(),
+    val info: SessionRuntimeInfo? = null,
+)
+
+@Serializable
+data class SessionSteerResult(
+    val status: String,
+    val text: String,
+)

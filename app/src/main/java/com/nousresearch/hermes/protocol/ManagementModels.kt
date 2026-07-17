@@ -1,0 +1,208 @@
+package com.nousresearch.hermes.protocol
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class SkillInfo(
+    val category: String = "general",
+    val description: String = "",
+    val enabled: Boolean,
+    val name: String,
+    val usage: Int? = null,
+    val provenance: String? = null,
+)
+
+@Serializable
+data class SkillToggleResult(
+    val ok: Boolean,
+    val name: String,
+    val enabled: Boolean,
+)
+
+@Serializable
+data class CronJobSchedule(
+    val display: String? = null,
+    val expr: String? = null,
+    val kind: String? = null,
+)
+
+@Serializable
+data class CronJob(
+    val deliver: String? = null,
+    val enabled: Boolean,
+    val id: String,
+    @SerialName("last_error") val lastError: String? = null,
+    @SerialName("last_run_at") val lastRunAt: String? = null,
+    val name: String? = null,
+    @SerialName("next_run_at") val nextRunAt: String? = null,
+    @SerialName("no_agent") val noAgent: Boolean = false,
+    val prompt: String? = null,
+    val schedule: CronJobSchedule? = null,
+    @SerialName("schedule_display") val scheduleDisplay: String? = null,
+    val script: String? = null,
+    val state: String? = null,
+)
+
+@Serializable
+data class CronJobCreatePayload(
+    val deliver: String? = null,
+    val name: String? = null,
+    val prompt: String,
+    val schedule: String,
+)
+
+@Serializable
+data class CronJobUpdates(
+    val deliver: String? = null,
+    val enabled: Boolean? = null,
+    val name: String? = null,
+    val prompt: String? = null,
+    val schedule: String? = null,
+)
+
+@Serializable
+data class CronRunPage(
+    val runs: List<StoredSession> = emptyList(),
+    val limit: Int = runs.size,
+)
+
+@Serializable
+data class ProfileInfo(
+    @SerialName("has_env") val hasEnv: Boolean = false,
+    @SerialName("is_default") val isDefault: Boolean = false,
+    val model: String? = null,
+    val name: String,
+    val path: String = "",
+    val provider: String? = null,
+    @SerialName("skill_count") val skillCount: Int = 0,
+)
+
+@Serializable
+data class ProfilesResponse(
+    val profiles: List<ProfileInfo> = emptyList(),
+)
+
+@Serializable
+data class ActiveProfileResponse(
+    val active: String = "default",
+    val current: String = "default",
+)
+
+@Serializable
+data class ProfileCreatePayload(
+    val name: String,
+    @SerialName("clone_from") val cloneFrom: String? = null,
+    @SerialName("clone_all") val cloneAll: Boolean = false,
+    @SerialName("no_skills") val noSkills: Boolean = false,
+)
+
+@Serializable
+data class ActionResponse(
+    val name: String,
+    val ok: Boolean,
+    val pid: Long,
+)
+
+@Serializable
+data class ActionStatusResponse(
+    @SerialName("exit_code") val exitCode: Int? = null,
+    val lines: List<String> = emptyList(),
+    val name: String,
+    val pid: Long? = null,
+    val running: Boolean,
+)
+
+@Serializable
+data class EnvVarInfo(
+    val advanced: Boolean = false,
+    val category: String = "",
+    @SerialName("channel_managed") val channelManaged: Boolean = false,
+    val custom: Boolean = false,
+    val description: String = "",
+    @SerialName("is_password") val isPassword: Boolean = true,
+    @SerialName("is_set") val isSet: Boolean = false,
+    val provider: String = "",
+    @SerialName("provider_label") val providerLabel: String = "",
+    @SerialName("redacted_value") val redactedValue: String? = null,
+    val tools: List<String> = emptyList(),
+    val url: String? = null,
+)
+
+@Serializable
+data class ProviderValidationResult(
+    val ok: Boolean,
+    val reachable: Boolean,
+    val message: String = "",
+    val models: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubResult(
+    val name: String,
+    val description: String = "",
+    val source: String = "",
+    val identifier: String,
+    @SerialName("trust_level") val trustLevel: String = "community",
+    val repo: String? = null,
+    val tags: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubSourcesResponse(
+    val sources: List<SkillHubSource> = emptyList(),
+    @SerialName("index_available") val indexAvailable: Boolean = false,
+    val featured: List<SkillHubResult> = emptyList(),
+)
+
+@Serializable
+data class SkillHubSource(
+    val id: String,
+    val label: String,
+    val available: Boolean? = null,
+    @SerialName("rate_limited") val rateLimited: Boolean? = null,
+    val searchable: Boolean? = null,
+)
+
+@Serializable
+data class SkillHubSearchResponse(
+    val results: List<SkillHubResult> = emptyList(),
+    @SerialName("source_counts") val sourceCounts: Map<String, Int> = emptyMap(),
+    @SerialName("timed_out") val timedOut: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubPreview(
+    val name: String,
+    val description: String = "",
+    val source: String = "",
+    val identifier: String,
+    @SerialName("trust_level") val trustLevel: String = "community",
+    val repo: String? = null,
+    val tags: List<String> = emptyList(),
+    @SerialName("skill_md") val skillMarkdown: String = "",
+    val files: List<String> = emptyList(),
+)
+
+@Serializable
+data class SkillHubScanFinding(
+    val severity: String,
+    val category: String,
+    val file: String,
+    val line: Int? = null,
+    val description: String,
+)
+
+@Serializable
+data class SkillHubScanResult(
+    val name: String,
+    val identifier: String,
+    val source: String = "",
+    @SerialName("trust_level") val trustLevel: String = "community",
+    val verdict: String,
+    val summary: String = "",
+    val policy: String,
+    @SerialName("policy_reason") val policyReason: String? = null,
+    val findings: List<SkillHubScanFinding> = emptyList(),
+    @SerialName("severity_counts") val severityCounts: Map<String, Int> = emptyMap(),
+)

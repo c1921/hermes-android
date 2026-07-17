@@ -1,20 +1,19 @@
 package com.nousresearch.hermes.protocol
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.network.TransportPolicy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
@@ -35,7 +34,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
     private val mutableConnectionState = MutableStateFlow<GatewayConnectionState>(GatewayConnectionState.Idle)
     private val mutableEvents = MutableSharedFlow<GatewayEvent>(
         extraBufferCapacity = 256,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        onBufferOverflow = BufferOverflow.SUSPEND,
     )
     private var socket: WebSocket? = null
 
@@ -43,17 +42,23 @@ class OkHttpHermesGatewayClient @Inject constructor(
     override val events = mutableEvents.asSharedFlow()
 
     override suspend fun connect(config: BackendConfig, token: String) {
-        disconnect()
+        val previous = socket
+        socket = null
+        previous?.close(1000, "connection replaced")
+        failPending(HermesRpcException("Hermes gateway connection replaced"))
         mutableConnectionState.value = GatewayConnectionState.Connecting(attempt = 1)
         val opened = CompletableDeferred<Unit>()
         val request = Request.Builder()
             .url(gatewayUrl(config, token))
             .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == AuthMode.DASHBOARD_SESSION) header("Cookie", token)
+            }
             .build()
         val nextSocket = client.newWebSocket(request, listener(opened))
         socket = nextSocket
         try {
-            opened.await()
+            withTimeout(CONNECT_TIMEOUT_MILLIS) { opened.await() }
         } catch (error: Throwable) {
             if (socket === nextSocket) socket = null
             nextSocket.cancel()
@@ -81,7 +86,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
             throw HermesRpcException("Hermes gateway rejected the request")
         }
         return try {
-            deferred.await()
+            withTimeout(REQUEST_TIMEOUT_MILLIS) { deferred.await() }
         } finally {
             pending.remove(id)
         }
@@ -99,7 +104,12 @@ class OkHttpHermesGatewayClient @Inject constructor(
             val frame = runCatching { json.decodeFromString(JsonRpcFrame.serializer(), text) }
                 .getOrElse { return }
             frame.params?.takeIf { frame.method == "event" }?.let {
-                mutableEvents.tryEmit(it)
+                if (!mutableEvents.tryEmit(it)) {
+                    webSocket.close(1013, "client event buffer exhausted")
+                    mutableConnectionState.value = GatewayConnectionState.Failed(
+                        "Hermes sent events faster than Android could safely process them; reconnecting to resynchronise.",
+                    )
+                }
                 return
             }
             val id = frame.id ?: return
@@ -135,15 +145,18 @@ class OkHttpHermesGatewayClient @Inject constructor(
     private fun gatewayUrl(config: BackendConfig, token: String): HttpUrl {
         val uri = TransportPolicy.validate(config).getOrThrow()
         val base = uri.toString().trimEnd('/').toHttpUrl()
-        return base.newBuilder()
-            .scheme(if (base.isHttps) "wss" else "ws")
-            .addPathSegments("api/ws")
-            .addQueryParameter("token", token)
-            .build()
+        return base.newBuilder().addPathSegments("api/ws").apply {
+            if (config.authMode != AuthMode.DASHBOARD_SESSION) addQueryParameter("token", token)
+        }.build()
     }
 
     private fun failPending(error: Throwable) {
         pending.values.forEach { it.completeExceptionally(error) }
         pending.clear()
+    }
+
+    private companion object {
+        const val CONNECT_TIMEOUT_MILLIS = 15_000L
+        const val REQUEST_TIMEOUT_MILLIS = 60_000L
     }
 }

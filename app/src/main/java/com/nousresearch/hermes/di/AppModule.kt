@@ -1,6 +1,11 @@
 package com.nousresearch.hermes.di
 
 import com.nousresearch.hermes.network.HermesRestClient
+import com.nousresearch.hermes.network.DashboardAuthClient
+import com.nousresearch.hermes.data.BackendSaver
+import com.nousresearch.hermes.data.BackendRegistry
+import com.nousresearch.hermes.data.SessionCredentialStore
+import com.nousresearch.hermes.security.SecureTokenStore
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.OkHttpHermesGatewayClient
 import dagger.Binds
@@ -8,10 +13,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -19,6 +24,14 @@ abstract class AppBindings {
     @Binds
     @Singleton
     abstract fun bindGatewayClient(implementation: OkHttpHermesGatewayClient): HermesGatewayClient
+
+    @Binds
+    @Singleton
+    abstract fun bindBackendSaver(implementation: BackendRegistry): BackendSaver
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionCredentialStore(implementation: SecureTokenStore): SessionCredentialStore
 }
 
 @Module
@@ -46,4 +59,8 @@ object AppModule {
     @Provides
     @Singleton
     fun restClient(client: OkHttpClient, json: Json): HermesRestClient = HermesRestClient(client, json)
+
+    @Provides
+    @Singleton
+    fun dashboardAuthClient(client: OkHttpClient, json: Json): DashboardAuthClient = DashboardAuthClient(client, json)
 }
