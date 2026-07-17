@@ -24,12 +24,12 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Retry/undo/compress/reset | session/slash RPC methods | Not implemented | Message action sheet | Omitted | No |
 | Branch | `session.branch` | Not implemented | Branch from message/action | Omitted | No |
 | Session rename/archive/delete/search | REST session routes | Archive implemented; others foundation | Swipe/menu/search | REST methods partly present; UI/tests incomplete | No |
-| Reconnect without duplicates | `session.resume`; events | Blocked for exact in-flight replay | Preserve transcript, rehydrate, reconcile | No universal stream sequence/replay cursor | Event replay v1 |
+| Reconnect without duplicates | `session.resume`; events | Foundation; exact in-flight replay blocked | Bounded backoff, then durable-session rehydrate | Replacement-close regression test; no universal stream sequence/replay cursor | Event replay v1 |
 | Draft persistence/queue | Desktop renderer state | Not implemented | Backend/session-scoped DataStore draft | Composer survives config only | No |
 | Slash autocomplete/catalogue | `commands.catalog`, `complete.slash`, `slash.exec` | Not implemented | Inline command palette | Omitted | No |
 | Model/provider catalogue | `model.options`, REST model/provider APIs | Protocol models only | Dynamic picker; never hard-code list | UI absent; response schema needs contract fixtures | Canonical schema |
 | Reasoning effort/fast mode/YOLO | `config.get/set`, Desktop stores | Not implemented | Persistent risk-labelled session controls | Omitted | No |
-| File/image/PDF attach | `file.attach`, `image.attach_bytes`, `pdf.attach` | Not implemented | SAF/camera upload with limits/progress | Omitted | Remote upload contract needs validation |
+| File/image/PDF attach | `file.attach`, `image.attach_bytes`, `pdf.attach`, `image.detach` | Implemented baseline | SAF upload, 10 MiB client cap, removable pending chips | Pinned response fixtures; camera/progress/large streaming pending | No for current path |
 | File/artifact preview | REST/desktop filesystem bridge, artifact tools | Not implemented | Safe native viewers; isolated WebView | No preview shipped | General remote artifact descriptor desirable |
 | Voice STT/TTS | `/api/audio/transcribe`, `/api/audio/speak` | Not implemented | Press/lock recording, Media3 playback | Permissions declared only; no controls | No |
 | Profiles management | REST profiles APIs, pooled gateways | Session profile display only | Switch/create/manage without workspace reset | Mutations absent | Remote profile gateway contract needs tests |
@@ -46,4 +46,3 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Local Termux runtime | Upstream Termux support | Research only | Detect/link to explicit companion | No cross-app runtime API | Optional Termux companion contract |
 | Phone/tablet/foldable layout | Desktop has responsive renderer | Implemented baseline | Master/detail below 840dp, two-pane above | Visual device QA pending | No |
 | Keyboard/accessibility/reduced motion | Desktop design system | Foundation | Semantics, labelled actions, simple transitions | Full TalkBack/keyboard/reduced-motion audit pending | No |
-
