@@ -2,7 +2,7 @@ package com.nousresearch.hermes.protocol
 
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -15,7 +15,7 @@ class OkHttpHermesGatewayClientTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @Test
-    fun `performs real websocket handshake and json rpc round trip`() = runTest {
+    fun `performs real websocket handshake and json rpc round trip`() = runBlocking {
         FakeHermesBackend(json).use { backend ->
             backend.start()
             val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
@@ -38,7 +38,7 @@ class OkHttpHermesGatewayClientTest {
     }
 
     @Test
-    fun `replacing a socket reaches open without publishing an intentional close`() = runTest {
+    fun `replacing a socket reaches open without publishing an intentional close`() = runBlocking {
         FakeHermesBackend(json).use { backend ->
             backend.start(connectionCount = 2)
             val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
@@ -59,7 +59,7 @@ class OkHttpHermesGatewayClientTest {
     }
 
     @Test
-    fun `steering round trip preserves the redirected text`() = runTest {
+    fun `steering round trip preserves the redirected text`() = runBlocking {
         FakeHermesBackend(json).use { backend ->
             backend.start()
             val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
