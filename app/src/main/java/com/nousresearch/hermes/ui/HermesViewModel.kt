@@ -140,6 +140,15 @@ class HermesViewModel @Inject constructor(
         repository.updateServerConfig(key, value)
     }
     fun refreshUsage(days: Int) = viewModelScope.launch { repository.refreshUsage(days) }
+    fun refreshBilling() = viewModelScope.launch { repository.refreshBilling() }
+    fun chargeBillingCredits(amount: String) = viewModelScope.launch { repository.chargeBillingCredits(amount) }
+    fun updateBillingAutoReload(enabled: Boolean, threshold: String, reloadTo: String) = viewModelScope.launch {
+        repository.updateBillingAutoReload(enabled, threshold, reloadTo)
+    }
+    fun startBillingStepUp() = viewModelScope.launch { repository.startBillingStepUp() }
+    fun acknowledgeUnconfirmedBillingCharge() = viewModelScope.launch {
+        repository.acknowledgeUnconfirmedBillingCharge()
+    }
     fun refreshCheckpoints() = viewModelScope.launch { repository.refreshCheckpoints() }
     fun previewCheckpoint(hash: String) = viewModelScope.launch { repository.previewCheckpoint(hash) }
     fun restoreCheckpoint(hash: String) = viewModelScope.launch { repository.restoreCheckpoint(hash) }

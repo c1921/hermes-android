@@ -1,0 +1,48 @@
+{
+  "ok": true,
+  "logged_in": true,
+  "is_admin": true,
+  "can_charge": true,
+  "balance_usd": "24.50",
+  "balance_display": "$24.50",
+  "cli_billing_enabled": true,
+  "charge_presets": ["10", "20", "50"],
+  "charge_presets_display": ["$10", "$20", "$50"],
+  "min_usd": "5",
+  "max_usd": "100",
+  "card": {
+    "brand": "Visa",
+    "last4": "4242",
+    "masked": "Visa •••• 4242",
+    "resolved_via": "subPin"
+  },
+  "monthly_cap": {
+    "is_default_ceiling": false,
+    "limit_display": "$100.00",
+    "limit_usd": "100",
+    "spent_display": "$10.00",
+    "spent_this_month_usd": "10"
+  },
+  "auto_reload": {
+    "card": { "kind": "canonical" },
+    "enabled": true,
+    "reload_to_display": "$25.00",
+    "reload_to_usd": "25",
+    "threshold_display": "$5.00",
+    "threshold_usd": "5"
+  },
+  "portal_url": "https://portal.nousresearch.com/billing",
+  "usage": {
+    "available": true,
+    "plan_name": "Super",
+    "renews_at": "2026-08-18T12:00:00Z",
+    "plan_bar": {
+      "kind": "plan",
+      "remaining_display": "$40.00",
+      "total_display": "$50.00",
+      "spent_display": "$10.00",
+      "pct_used": 20,
+      "fill_fraction": 0.2
+    }
+  }
+}

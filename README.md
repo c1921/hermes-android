@@ -43,6 +43,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Profile-scoped messaging-gateway catalogue, platform status, Hermes-owned credential setup/removal, enable/disable, connection tests, and explicitly confirmed gateway restart
 - [x] Profile-scoped MCP configured-server and Nous catalogue views, backend probes, reviewed catalog installation, confirmed removal, enable/disable, background-install polling, and live `reload.mcp`
 - [x] Profile-scoped 7/30/90-day token, API-call, model, tool, skill, cost, and live-session context breakdowns
+- [x] Nous billing account, plan, balance, payment method, credit usage, confirmed top-ups, auto-refill, portal management, and billing-scope device verification through Desktop's gateway RPCs
 - [x] Session-scoped checkpoint listing, bounded diff preview, and explicitly confirmed full workspace rollback with authoritative history reload
 - [x] Command Center with live Hermes subagent trees, TUI-persisted cross-session spawn-tree replay, delegation pause/resume, confirmed subagent interruption, current-session background-process output, and confirmed process stop
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
@@ -111,7 +112,7 @@ The app submits the credentials to the Dashboard login endpoint, requires its se
 Use the public or private HTTPS URL that already serves the Dashboard, including its port when required:
 
 ```text
-https://hermes.example.com
+https://<dashboard-host>[:port]
 ```
 
 HTTPS uses the Android system trust store. The app does not bypass certificate or hostname validation.

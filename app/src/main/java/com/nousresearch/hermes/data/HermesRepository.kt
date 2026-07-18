@@ -15,6 +15,11 @@ import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.BackgroundProcess
 import com.nousresearch.hermes.protocol.BackgroundProcessKillResponse
 import com.nousresearch.hermes.protocol.BackgroundProcessListResponse
+import com.nousresearch.hermes.protocol.BillingChargeResponse
+import com.nousresearch.hermes.protocol.BillingChargeStatusResponse
+import com.nousresearch.hermes.protocol.BillingMutationResponse
+import com.nousresearch.hermes.protocol.BillingStateResponse
+import com.nousresearch.hermes.protocol.BillingStepUpVerification
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
@@ -25,6 +30,7 @@ import com.nousresearch.hermes.protocol.DelegationStatusResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
+import com.nousresearch.hermes.protocol.HermesRpcException
 import com.nousresearch.hermes.protocol.ImageAttachResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.OAuthProvider
@@ -63,6 +69,7 @@ import com.nousresearch.hermes.protocol.SlashCommandResult
 import com.nousresearch.hermes.protocol.SlashCompletionResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.protocol.SubscriptionStateResponse
 import com.nousresearch.hermes.protocol.SubagentInterruptResponse
 import com.nousresearch.hermes.protocol.SpawnTreeListEntry
 import com.nousresearch.hermes.protocol.SpawnTreeListResponse
@@ -71,6 +78,7 @@ import com.nousresearch.hermes.protocol.ToolsetInfo
 import com.nousresearch.hermes.platform.mergeSharedText
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import java.util.UUID
+import java.math.BigDecimal
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -162,6 +170,19 @@ data class HermesState(
     val usageDays: Int = 30,
     val usageLoading: Boolean = false,
     val usageError: String? = null,
+    val billingState: BillingStateResponse? = null,
+    val subscriptionState: SubscriptionStateResponse? = null,
+    val billingSupported: Boolean = true,
+    val billingLoading: Boolean = false,
+    val billingBusy: Boolean = false,
+    val billingNotice: String? = null,
+    val billingError: String? = null,
+    val billingRecovery: BillingRecovery = BillingRecovery.NONE,
+    val billingPortalUrl: String? = null,
+    val billingRetryIntent: BillingRetryIntent? = null,
+    val billingChargeUnconfirmed: Boolean = false,
+    val billingStepUpVerification: BillingStepUpVerification? = null,
+    val backendTransitionInProgress: Boolean = false,
     val checkpointsEnabled: Boolean? = null,
     val checkpoints: List<RollbackCheckpoint> = emptyList(),
     val checkpointPreview: CheckpointPreview? = null,
@@ -280,6 +301,13 @@ data class PendingAttachment(
     val sourceUri: String? = null,
 )
 
+sealed interface BillingRetryIntent {
+    data object Refresh : BillingRetryIntent
+    data class Charge(val amountUsd: String) : BillingRetryIntent
+    data class AutoReload(val enabled: Boolean, val thresholdUsd: String, val reloadToUsd: String) : BillingRetryIntent
+    data object StepUp : BillingRetryIntent
+}
+
 data class SlashSuggestion(
     val text: String,
     val display: String,
@@ -299,6 +327,7 @@ class HermesRepository @Inject constructor(
     private val draftStore: DraftStore,
     private val composerQueueStore: ComposerQueueStore,
     private val privacyPreferences: PrivacyPreferences,
+    private val billingPendingChargeStore: BillingPendingChargeStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(HermesState())
@@ -308,7 +337,14 @@ class HermesRepository @Inject constructor(
     private var slashCompletionJob: Job? = null
     private var queueDrainJob: Job? = null
     private var providerOAuthPollJob: Job? = null
+    private var billingIdempotencyKey: String? = null
+    private var billingIdempotencyAmount: String? = null
+    private var billingIdempotencyBackendId: String? = null
+    private var billingSettlementDeadlineEpochMillis: Long? = null
+    private var billingStepUpRunId: String? = null
+    private var billingStepUpSessionId: String? = null
     private val queueMutex = Mutex()
+    private val billingAccountMutex = Mutex()
     private var extensionSlashCommands: Set<String>? = null
     private var cachedSlashCatalog: List<SlashSuggestion>? = null
     private var intentionalDisconnect = false
@@ -320,21 +356,50 @@ class HermesRepository @Inject constructor(
             combine(backendRegistry.backends, backendRegistry.activeBackendId) { backends, activeId ->
                 backends to backends.firstOrNull { it.id == activeId }
             }.collectLatest { (backends, backend) ->
-                if (backend == null) {
-                    flushDraft()
-                    intentionalDisconnect = true
-                    reconnectJob?.cancel()
-                    gateway.disconnect()
-                    mutableState.value = HermesState(savedBackends = backends)
-                } else {
-                    mutableState.value = mutableState.value.copy(savedBackends = backends)
-                    connect(backend)
+                billingAccountMutex.withLock {
+                    if (backend == null) {
+                        if (mutableState.value.backend != null) {
+                            flushDraft()
+                            intentionalDisconnect = true
+                            reconnectJob?.cancel()
+                            gateway.disconnect()
+                            mutableState.value = HermesState(savedBackends = backends)
+                        } else {
+                            mutableState.value = mutableState.value.copy(savedBackends = backends)
+                        }
+                    } else if (
+                        mutableState.value.backend == backend &&
+                        !mutableState.value.backendTransitionInProgress
+                    ) {
+                        mutableState.value = mutableState.value.copy(savedBackends = backends)
+                    } else {
+                        mutableState.value = mutableState.value.copy(savedBackends = backends)
+                        connect(backend)
+                    }
                 }
             }
         }
         scope.launch {
             gateway.events.collect { event ->
                 var current = mutableState.value
+                val eventSessionId = event.sessionId?.takeIf(String::isNotBlank)
+                if (
+                    event.type == "billing.step_up.verification" &&
+                    event.payload != null &&
+                    billingStepUpRunId != null &&
+                    eventSessionId == billingStepUpSessionId
+                ) {
+                    runCatching {
+                        json.decodeFromJsonElement(BillingStepUpVerification.serializer(), event.payload)
+                    }.onSuccess { verification ->
+                        current = current.copy(
+                            billingStepUpVerification = verification,
+                            billingNotice = "Finish verification in the browser, then return to Hermes.",
+                            billingError = null,
+                        )
+                        mutableState.value = current
+                    }
+                }
                 if (event.type in SubagentReducer.eventTypes) {
                     val sessionKey = event.sessionId?.takeIf(String::isNotBlank) ?: "unscoped"
                     val sessions = LinkedHashMap(current.subagentsBySession)
@@ -388,12 +453,23 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun testAndSave(config: BackendConfig, username: String, password: String): StatusResponse {
-        mutableState.value = mutableState.value.copy(loading = true, error = null)
-        return try {
-            dashboardConnector.loginValidateAndSave(config, username, password)
-        } catch (error: Throwable) {
-            fail(error)
-            throw error
+        return billingAccountMutex.withLock {
+            requireBackendTransitionSafe(config.id)
+            mutableState.value = mutableState.value.copy(
+                loading = true,
+                error = null,
+                backendTransitionInProgress = true,
+            )
+            try {
+                val status = dashboardConnector.loginValidateAndSave(config, username, password)
+                val saved = config.copy(lastHermesVersion = status.hermesVersion ?: status.version)
+                connect(saved)
+                status
+            } catch (error: Throwable) {
+                mutableState.value = mutableState.value.copy(backendTransitionInProgress = false)
+                fail(error)
+                throw error
+            }
         }
     }
 
@@ -698,6 +774,7 @@ class HermesRepository @Inject constructor(
         try {
             executeSlashUnchecked(rawCommand)
         } catch (cancelled: CancellationException) {
+            mutableState.value = mutableState.value.copy(billingLoading = false)
             throw cancelled
         } catch (error: Throwable) {
             fail(error)
@@ -2201,6 +2278,489 @@ class HermesRepository @Inject constructor(
         }
     }
 
+    suspend fun refreshBilling() = billingAccountMutex.withLock {
+        refreshBillingLocked()
+    }
+
+    private suspend fun refreshBillingLocked() {
+        if (mutableState.value.billingLoading) return
+        mutableState.value = mutableState.value.copy(
+            billingLoading = true,
+            billingNotice = null,
+            billingError = null,
+            billingRecovery = BillingRecovery.NONE,
+            billingRetryIntent = null,
+        )
+        val backendId: String
+        try {
+            backendId = activeCredentials().first.id
+        } catch (cancelled: CancellationException) {
+            mutableState.value = mutableState.value.copy(billingLoading = false)
+            throw cancelled
+        } catch (error: Throwable) {
+            failBilling(error)
+            return
+        }
+        val billing = runCatching {
+            gateway.request("billing.state", buildJsonObject {})
+                .let { json.decodeFromJsonElement(BillingStateResponse.serializer(), it) }
+        }.getOrElse { error ->
+            if (mutableState.value.backend?.id != backendId) return
+            if (error is CancellationException) {
+                mutableState.value = mutableState.value.copy(billingLoading = false)
+                throw error
+            }
+            if (error is HermesRpcException && error.rpcCode == -32601) {
+                mutableState.value = mutableState.value.copy(
+                    billingSupported = false,
+                    billingLoading = false,
+                    billingError = "Billing requires a newer Hermes gateway.",
+                )
+            } else {
+                failBilling(error)
+            }
+            return
+        }
+        var subscriptionUnavailable = false
+        val subscription = try {
+            gateway.request("subscription.state", buildJsonObject {})
+                .let { json.decodeFromJsonElement(SubscriptionStateResponse.serializer(), it) }
+        } catch (cancelled: CancellationException) {
+            mutableState.value = mutableState.value.copy(billingLoading = false)
+            throw cancelled
+        } catch (_: Throwable) {
+            subscriptionUnavailable = true
+            null
+        }
+        if (mutableState.value.backend?.id != backendId) return
+        if (!billing.ok) {
+            mutableState.value = mutableState.value.copy(
+                billingState = billing,
+                subscriptionState = null,
+                billingSupported = true,
+                billingLoading = false,
+                billingPortalUrl = billing.portalUrl,
+            )
+            applyBillingRefusal(billing.error, billing.message, billing.portalUrl)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            billingState = billing,
+            subscriptionState = subscription?.takeIf { it.ok },
+            billingSupported = true,
+            billingLoading = false,
+            billingNotice = if (subscriptionUnavailable || subscription?.ok == false) {
+                "Subscription details are unavailable. Portal management remains available."
+            } else null,
+            billingError = null,
+            billingPortalUrl = billing.portalUrl ?: subscription?.portalUrl,
+        )
+    }
+
+    suspend fun chargeBillingCredits(rawAmount: String) = billingAccountMutex.withLock {
+        try {
+            chargeBillingCreditsLocked(rawAmount)
+        } catch (cancelled: CancellationException) {
+            val pending = billingIdempotencyKey != null || mutableState.value.billingChargeUnconfirmed
+            mutableState.value = mutableState.value.copy(
+                billingBusy = false,
+                billingChargeUnconfirmed = pending,
+                billingNotice = null,
+                billingError = if (pending) {
+                    "Charge outcome is unconfirmed after interruption. Check your balance before retrying."
+                } else null,
+            )
+            throw cancelled
+        } catch (error: Throwable) {
+            failBilling(error, billingIdempotencyAmount?.let(BillingRetryIntent::Charge))
+        }
+    }
+
+    private suspend fun chargeBillingCreditsLocked(rawAmount: String) {
+        if (mutableState.value.billingBusy) return
+        if (
+            mutableState.value.billingChargeUnconfirmed &&
+            (billingIdempotencyAmount != rawAmount.trim() || billingIdempotencyKey == null)
+        ) return
+        mutableState.value = mutableState.value.copy(
+            billingBusy = true,
+            billingNotice = null,
+            billingError = null,
+            billingRecovery = BillingRecovery.NONE,
+        )
+        val backendId: String
+        val billing: BillingStateResponse
+        val amount: String
+        try {
+            backendId = activeCredentials().first.id
+            billing = requireNotNull(mutableState.value.billingState) { "Load billing before buying credits" }
+            require(billing.loggedIn && billing.isAdmin && billing.canCharge && billing.cliBillingEnabled && billing.card != null) {
+                "This account cannot buy credits from Hermes Android"
+            }
+            amount = validateBillingAmount(rawAmount, billing.minUsd, billing.maxUsd)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            failBilling(error)
+            return
+        }
+        val reusePendingIntent = billingIdempotencyBackendId == backendId && billingIdempotencyAmount == amount
+        val key = if (reusePendingIntent) {
+            billingIdempotencyKey ?: UUID.randomUUID().toString()
+        } else {
+            UUID.randomUUID().toString()
+        }
+        billingIdempotencyAmount = amount
+        billingIdempotencyKey = key
+        billingIdempotencyBackendId = backendId
+        val settlementDeadline = billingSettlementDeadlineEpochMillis
+            ?.takeIf { reusePendingIntent }
+            ?: (System.currentTimeMillis() + BILLING_SETTLEMENT_CAP_MILLIS)
+        billingSettlementDeadlineEpochMillis = settlementDeadline
+        try {
+            billingPendingChargeStore.put(
+                PendingBillingCharge(
+                    backendId = backendId,
+                    amountUsd = amount,
+                    idempotencyKey = key,
+                    settlementDeadlineEpochMillis = settlementDeadline,
+                    portalUrl = billing.portalUrl,
+                ),
+            )
+        } catch (cancelled: CancellationException) {
+            clearBillingIdempotency()
+            throw cancelled
+        } catch (error: Throwable) {
+            clearBillingIdempotency()
+            failBilling(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(billingChargeUnconfirmed = false)
+        mutableState.value = mutableState.value.copy(
+            billingBusy = true,
+            billingNotice = "Processing credit purchase and checking settlement…",
+            billingError = null,
+            billingRecovery = BillingRecovery.NONE,
+            billingPortalUrl = billing.portalUrl,
+            billingRetryIntent = BillingRetryIntent.Charge(amount),
+        )
+        val accepted = runCatching {
+            gateway.request(
+                "billing.charge",
+                billingChargeParams(amount, key),
+            ).let { json.decodeFromJsonElement(BillingChargeResponse.serializer(), it) }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            mutableState.value = mutableState.value.copy(billingChargeUnconfirmed = true)
+            failBilling(error, BillingRetryIntent.Charge(amount))
+            return
+        }
+        if (!accepted.ok) {
+            billingPendingChargeStore.remove(backendId)
+            applyBillingRefusal(
+                code = accepted.error,
+                message = accepted.message,
+                portalUrl = accepted.portalUrl ?: billing.portalUrl,
+                retryIntent = BillingRetryIntent.Charge(amount),
+                actor = accepted.actor,
+                payload = accepted.payload,
+            )
+            return
+        }
+        clearBillingIdempotency()
+        mutableState.value = mutableState.value.copy(
+            billingRetryIntent = null,
+            billingChargeUnconfirmed = true,
+        )
+        val chargeId = accepted.chargeId
+        if (chargeId.isNullOrBlank()) {
+            mutableState.value = mutableState.value.copy(
+                billingBusy = false,
+                billingNotice = null,
+                billingError = "Hermes accepted the charge but did not return a charge id. Check your balance before another purchase.",
+            )
+            return
+        }
+        val portalUrl = accepted.portalUrl ?: billing.portalUrl
+        billingPendingChargeStore.put(
+            PendingBillingCharge(
+                backendId = backendId,
+                amountUsd = amount,
+                idempotencyKey = key,
+                settlementDeadlineEpochMillis = settlementDeadline,
+                chargeId = chargeId,
+                portalUrl = portalUrl,
+            ),
+        )
+        pollBillingCharge(backendId, chargeId, portalUrl, settlementDeadline)
+    }
+
+    private suspend fun pollBillingCharge(
+        backendId: String,
+        chargeId: String,
+        portalUrl: String?,
+        settlementDeadlineEpochMillis: Long,
+    ) {
+        while (System.currentTimeMillis() < settlementDeadlineEpochMillis) {
+            val status = runCatching {
+                gateway.request(
+                    "billing.charge_status",
+                    billingChargeStatusParams(chargeId),
+                ).let { json.decodeFromJsonElement(BillingChargeStatusResponse.serializer(), it) }
+            }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                mutableState.value = mutableState.value.copy(
+                    billingBusy = false,
+                    billingNotice = null,
+                    billingError = "Charge outcome is unconfirmed. Check your balance or portal before retrying.",
+                    billingPortalUrl = portalUrl,
+                )
+                return
+            }
+            if (!status.ok) {
+                val policy = BillingPolicy.forCode(status.error)
+                if (policy.ambiguousMidPoll) {
+                    mutableState.value = mutableState.value.copy(
+                        billingBusy = false,
+                        billingChargeUnconfirmed = true,
+                        billingNotice = null,
+                        billingError = "${billingRefusalMessage(status.error, status.message, payload = status.payload)} Charge outcome is unconfirmed, so check your balance before retrying.",
+                        billingRecovery = policy.recovery,
+                        billingPortalUrl = status.portalUrl ?: portalUrl,
+                    )
+                    return
+                }
+                if (policy.recovery == BillingRecovery.RETRY) {
+                    val retrySeconds = (status.retryAfter ?: 5L).coerceIn(0L, BILLING_MAX_RETRY_SECONDS)
+                    delay(retrySeconds * 1_000L)
+                    continue
+                }
+                mutableState.value = mutableState.value.copy(billingChargeUnconfirmed = false)
+                billingPendingChargeStore.remove(backendId)
+                applyBillingRefusal(
+                    status.error,
+                    status.message,
+                    status.portalUrl ?: portalUrl,
+                    payload = status.payload,
+                )
+                return
+            }
+            when (status.status) {
+                "settled" -> {
+                    val notice = status.amountUsd?.let { "$$it added. Balance is refreshing." } ?: "Credits added. Balance is refreshing."
+                    refreshBillingLocked()
+                    mutableState.value = mutableState.value.copy(
+                        billingBusy = false,
+                        billingChargeUnconfirmed = false,
+                        billingNotice = notice,
+                    )
+                    clearBillingIdempotency()
+                    billingPendingChargeStore.remove(backendId)
+                    return
+                }
+                "failed" -> {
+                    mutableState.value = mutableState.value.copy(
+                        billingBusy = false,
+                        billingChargeUnconfirmed = false,
+                        billingNotice = null,
+                        billingError = billingChargeFailureMessage(status.reason),
+                        billingPortalUrl = status.portalUrl ?: portalUrl,
+                    )
+                    clearBillingIdempotency()
+                    billingPendingChargeStore.remove(backendId)
+                    return
+                }
+            }
+            delay(BILLING_SETTLEMENT_POLL_MILLIS)
+        }
+        mutableState.value = mutableState.value.copy(
+            billingBusy = false,
+            billingNotice = null,
+            billingError = "Charge may still settle. Check the portal before retrying.",
+            billingPortalUrl = portalUrl,
+        )
+    }
+
+    suspend fun updateBillingAutoReload(enabled: Boolean, rawThreshold: String, rawReloadTo: String) =
+        billingAccountMutex.withLock {
+            try {
+                updateBillingAutoReloadLocked(enabled, rawThreshold, rawReloadTo)
+            } catch (cancelled: CancellationException) {
+                mutableState.value = mutableState.value.copy(billingBusy = false)
+                throw cancelled
+            }
+        }
+
+    private suspend fun updateBillingAutoReloadLocked(enabled: Boolean, rawThreshold: String, rawReloadTo: String) {
+        if (mutableState.value.billingBusy) return
+        mutableState.value = mutableState.value.copy(
+            billingBusy = true,
+            billingNotice = null,
+            billingError = null,
+            billingRecovery = BillingRecovery.NONE,
+            billingRetryIntent = null,
+        )
+        val threshold: String
+        val reloadTo: String
+        try {
+            activeCredentials()
+            val billing = requireNotNull(mutableState.value.billingState) { "Load billing before changing auto-refill" }
+            require(billing.autoReload?.enabled == true && billing.autoReload.card.kind == "canonical") {
+                "Manage this auto-refill configuration in the Nous portal"
+            }
+            threshold = validateBillingAmount(rawThreshold, billing.minUsd, billing.maxUsd)
+            reloadTo = validateBillingAmount(rawReloadTo, billing.minUsd, billing.maxUsd)
+            require(BigDecimal(reloadTo) > BigDecimal(threshold)) { "Reload-to amount must be greater than the threshold" }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            failBilling(error)
+            return
+        }
+        val result = runCatching {
+            gateway.request(
+                "billing.auto_reload",
+                billingAutoReloadParams(enabled, threshold, reloadTo),
+            ).let { json.decodeFromJsonElement(BillingMutationResponse.serializer(), it) }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            failBilling(error, BillingRetryIntent.AutoReload(enabled, threshold, reloadTo))
+            return
+        }
+        if (!result.ok) {
+            applyBillingRefusal(
+                result.error,
+                result.message,
+                result.portalUrl,
+                retryIntent = BillingRetryIntent.AutoReload(enabled, threshold, reloadTo),
+            )
+            return
+        }
+        refreshBillingLocked()
+        mutableState.value = mutableState.value.copy(
+            billingBusy = false,
+            billingNotice = if (enabled) "Auto-refill updated." else "Auto-refill turned off.",
+        )
+    }
+
+    suspend fun startBillingStepUp() = billingAccountMutex.withLock {
+        startBillingStepUpLocked()
+    }
+
+    private suspend fun startBillingStepUpLocked() {
+        if (billingStepUpRunId != null) return
+        billingStepUpRunId = UUID.randomUUID().toString()
+        billingStepUpSessionId = mutableState.value.runtimeSessionId?.takeIf(String::isNotBlank)
+        mutableState.value = mutableState.value.copy(
+            billingBusy = true,
+            billingStepUpVerification = null,
+            billingNotice = "Waiting for a verification link…",
+            billingError = null,
+            billingRetryIntent = null,
+        )
+        try {
+            activeCredentials()
+        } catch (cancelled: CancellationException) {
+            billingStepUpRunId = null
+            billingStepUpSessionId = null
+            mutableState.value = mutableState.value.copy(billingBusy = false)
+            throw cancelled
+        } catch (error: Throwable) {
+            billingStepUpRunId = null
+            billingStepUpSessionId = null
+            failBilling(error, BillingRetryIntent.StepUp)
+            return
+        }
+        val result = runCatching {
+            gateway.request(
+                "billing.step_up",
+                billingStepUpParams(billingStepUpSessionId),
+            ).let { json.decodeFromJsonElement(BillingMutationResponse.serializer(), it) }
+        }.getOrElse { error ->
+            billingStepUpRunId = null
+            billingStepUpSessionId = null
+            if (error is CancellationException) {
+                mutableState.value = mutableState.value.copy(billingBusy = false)
+                throw error
+            }
+            failBilling(error, BillingRetryIntent.StepUp)
+            return
+        }
+        billingStepUpRunId = null
+        billingStepUpSessionId = null
+        if (!result.ok || result.granted != true) {
+            mutableState.value = mutableState.value.copy(billingStepUpVerification = null)
+            applyBillingRefusal(
+                result.error,
+                result.message ?: "Verification finished without granting billing access.",
+                result.portalUrl,
+                retryIntent = BillingRetryIntent.StepUp,
+            )
+            return
+        }
+        refreshBillingLocked()
+        mutableState.value = mutableState.value.copy(
+            billingBusy = false,
+            billingStepUpVerification = null,
+            billingNotice = "Billing management access verified.",
+        )
+    }
+
+    suspend fun acknowledgeUnconfirmedBillingCharge() = billingAccountMutex.withLock {
+        if (!mutableState.value.billingChargeUnconfirmed) return
+        mutableState.value.backend?.id?.let { billingPendingChargeStore.remove(it) }
+        clearBillingIdempotency()
+        mutableState.value = mutableState.value.copy(
+            billingChargeUnconfirmed = false,
+            billingError = null,
+            billingRecovery = BillingRecovery.NONE,
+            billingNotice = "Unconfirmed charge warning cleared after balance review.",
+        )
+    }
+
+    private fun applyBillingRefusal(
+        code: String?,
+        message: String?,
+        portalUrl: String?,
+        retryIntent: BillingRetryIntent? = null,
+        actor: String? = null,
+        payload: com.nousresearch.hermes.protocol.BillingErrorPayload? = null,
+    ) {
+        val policy = BillingPolicy.forCode(code)
+        if (!policy.reuseIdempotencyKey) {
+            clearBillingIdempotency()
+        }
+        mutableState.value = mutableState.value.copy(
+            billingBusy = false,
+            billingNotice = null,
+            billingError = billingRefusalMessage(code, message, actor, payload),
+            billingRecovery = policy.recovery,
+            billingPortalUrl = portalUrl ?: mutableState.value.billingState?.portalUrl,
+            billingRetryIntent = retryIntent.takeIf { policy.recovery == BillingRecovery.RETRY },
+        )
+    }
+
+    private fun failBilling(
+        error: Throwable,
+        retryIntent: BillingRetryIntent? = BillingRetryIntent.Refresh,
+    ) {
+        mutableState.value = mutableState.value.copy(
+            billingLoading = false,
+            billingBusy = false,
+            billingNotice = null,
+            billingError = DiagnosticRedactor.redact(error.message ?: "Billing request failed"),
+            billingRecovery = BillingRecovery.RETRY,
+            billingRetryIntent = retryIntent,
+        )
+    }
+
+    private fun clearBillingIdempotency() {
+        billingIdempotencyKey = null
+        billingIdempotencyAmount = null
+        billingIdempotencyBackendId = null
+        billingSettlementDeadlineEpochMillis = null
+    }
+
     suspend fun refreshUsage(days: Int = mutableState.value.usageDays) {
         require(days in USAGE_PERIODS) { "Unsupported usage period" }
         val (backend, token) = activeCredentials()
@@ -2818,49 +3378,106 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun disconnectAndForget() {
-        val backend = mutableState.value.backend ?: return
-        providerOAuthPollJob?.cancelAndJoin()
-        providerOAuthPollJob = null
-        draftSaveJob?.cancelAndJoin()
-        draftSaveJob = null
-        draftStore.removeBackend(backend.id)
-        composerQueueStore.removeBackend(backend.id)
-        mutableState.value = mutableState.value.copy(
-            backend = null,
-            draft = "",
-            queuedPrompts = emptyList(),
-            queueDraining = false,
-            queueNotice = null,
-        )
-        intentionalDisconnect = true
-        reconnectJob?.cancel()
-        gateway.disconnect()
-        tokenStore.remove(backend.id)
-        backendRegistry.remove(backend.id)
+        billingAccountMutex.withLock {
+            if (!billingBackendTransitionSafe()) return
+            val backend = mutableState.value.backend ?: return
+            mutableState.value = mutableState.value.copy(backendTransitionInProgress = true)
+            try {
+                providerOAuthPollJob?.cancelAndJoin()
+                providerOAuthPollJob = null
+                draftSaveJob?.cancelAndJoin()
+                draftSaveJob = null
+                draftStore.removeBackend(backend.id)
+                composerQueueStore.removeBackend(backend.id)
+                billingPendingChargeStore.remove(backend.id)
+                mutableState.value = mutableState.value.copy(
+                    backend = null,
+                    draft = "",
+                    queuedPrompts = emptyList(),
+                    queueDraining = false,
+                    queueNotice = null,
+                )
+                intentionalDisconnect = true
+                reconnectJob?.cancel()
+                gateway.disconnect()
+                tokenStore.remove(backend.id)
+                backendRegistry.remove(backend.id)
+            } finally {
+                mutableState.value = mutableState.value.copy(backendTransitionInProgress = false)
+            }
+        }
     }
 
     suspend fun selectBackend(id: String) {
-        require(mutableState.value.savedBackends.any { it.id == id }) { "Saved Hermes backend was not found" }
-        flushDraft()
-        backendRegistry.select(id)
+        billingAccountMutex.withLock {
+            if (mutableState.value.backend?.id == id) return
+            if (!billingBackendTransitionSafe()) return
+            val backend = requireNotNull(mutableState.value.savedBackends.firstOrNull { it.id == id }) {
+                "Saved Hermes backend was not found"
+            }
+            mutableState.value = mutableState.value.copy(backendTransitionInProgress = true)
+            try {
+                flushDraft()
+                backendRegistry.select(id)
+                connect(backend)
+            } catch (error: Throwable) {
+                mutableState.value = mutableState.value.copy(backendTransitionInProgress = false)
+                throw error
+            }
+        }
     }
 
     suspend fun forgetBackend(id: String) {
-        if (mutableState.value.backend?.id == id) {
-            draftSaveJob?.cancelAndJoin()
-            draftSaveJob = null
-            mutableState.value = mutableState.value.copy(
-                backend = null,
-                draft = "",
-                queuedPrompts = emptyList(),
-                queueDraining = false,
-                queueNotice = null,
-            )
+        billingAccountMutex.withLock {
+            val active = mutableState.value.backend?.id == id
+            val pendingReconnect = mutableState.value.reconnectRequiredBackendId == id &&
+                mutableState.value.billingChargeUnconfirmed
+            if ((active || pendingReconnect) && !billingBackendTransitionSafe()) return
+            if (active) mutableState.value = mutableState.value.copy(backendTransitionInProgress = true)
+            try {
+                if (active) {
+                    draftSaveJob?.cancelAndJoin()
+                    draftSaveJob = null
+                    mutableState.value = mutableState.value.copy(
+                        backend = null,
+                        draft = "",
+                        queuedPrompts = emptyList(),
+                        queueDraining = false,
+                        queueNotice = null,
+                    )
+                }
+                draftStore.removeBackend(id)
+                composerQueueStore.removeBackend(id)
+                billingPendingChargeStore.remove(id)
+                tokenStore.remove(id)
+                backendRegistry.remove(id)
+            } finally {
+                if (active) mutableState.value = mutableState.value.copy(backendTransitionInProgress = false)
+            }
         }
-        draftStore.removeBackend(id)
-        composerQueueStore.removeBackend(id)
-        tokenStore.remove(id)
-        backendRegistry.remove(id)
+    }
+
+    private fun billingBackendTransitionSafe(): Boolean {
+        val state = mutableState.value
+        val message = when {
+            state.backendTransitionInProgress -> "Wait for the active backend change to finish"
+            state.billingLoading || state.billingBusy -> "Wait for the active billing request to finish"
+            state.billingChargeUnconfirmed -> "Review the unconfirmed charge balance before switching backends"
+            else -> return true
+        }
+        mutableState.value = state.copy(error = message)
+        return false
+    }
+
+    private fun requireBackendTransitionSafe(reconnectingBackendId: String? = null) {
+        val state = mutableState.value
+        val resumingPendingBackend = state.billingChargeUnconfirmed &&
+            state.reconnectRequiredBackendId == reconnectingBackendId &&
+            !state.billingLoading &&
+            !state.billingBusy
+        check(resumingPendingBackend || billingBackendTransitionSafe()) {
+            mutableState.value.error ?: "Finish the active billing review before changing backends"
+        }
     }
 
     private suspend fun connect(backend: BackendConfig) {
@@ -2869,6 +3486,7 @@ class HermesRepository @Inject constructor(
         if (mutableState.value.backend?.id != backend.id) flushDraft()
         cachedSlashCatalog = null
         extensionSlashCommands = null
+        clearBillingIdempotency()
         intentionalDisconnect = false
         if (backend.authMode != AuthMode.DASHBOARD_SESSION) {
             mutableState.value = HermesState(
@@ -2876,6 +3494,7 @@ class HermesRepository @Inject constructor(
                 reconnectRequiredBackendId = backend.id,
                 error = "This legacy token-only backend must reconnect with its dashboard username and password.",
             )
+            restorePendingBillingCharge(backend.id)
             return
         }
         val cookie = tokenStore.get(backend.id)
@@ -2885,6 +3504,7 @@ class HermesRepository @Inject constructor(
                 reconnectRequiredBackendId = backend.id,
                 error = "Saved dashboard session is unavailable. Reconnect this backend.",
             )
+            restorePendingBillingCharge(backend.id)
             return
         }
         mutableState.value = HermesState(
@@ -2892,15 +3512,81 @@ class HermesRepository @Inject constructor(
             savedBackends = mutableState.value.savedBackends,
             loading = true,
             reconnectRequiredBackendId = null,
+            backendTransitionInProgress = true,
         )
+        restorePendingBillingCharge(backend.id)
         runCatching {
             val status = dashboardConnector.validateSaved(backend, cookie)
             val sessions = restClient.sessions(backend, cookie.headerValue).sessions
             status to sessions
         }.onSuccess { (status, sessions) ->
-            mutableState.value = mutableState.value.copy(status = status, sessions = sessions, loading = false, error = null)
+            mutableState.value = mutableState.value.copy(
+                status = status,
+                sessions = sessions,
+                loading = false,
+                error = null,
+                backendTransitionInProgress = false,
+            )
             loadComposerState()
-        }.onFailure(::fail)
+        }.onFailure { error ->
+            mutableState.value = mutableState.value.copy(backendTransitionInProgress = false)
+            fail(error)
+        }
+    }
+
+    private suspend fun restorePendingBillingCharge(backendId: String) {
+        val pending = try {
+            billingPendingChargeStore.get(backendId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            mutableState.value = mutableState.value.copy(
+                billingChargeUnconfirmed = true,
+                billingError = "A saved purchase review could not be restored. Check your Nous balance before buying again.",
+            )
+            return
+        } ?: return
+        val resumable = !pending.chargeId.isNullOrBlank()
+        if (!resumable) {
+            billingIdempotencyKey = pending.idempotencyKey
+            billingIdempotencyAmount = pending.amountUsd
+            billingIdempotencyBackendId = backendId
+            billingSettlementDeadlineEpochMillis = pending.settlementDeadlineEpochMillis
+        }
+        mutableState.value = mutableState.value.copy(
+            billingBusy = resumable,
+            billingChargeUnconfirmed = true,
+            billingPortalUrl = pending.portalUrl,
+            billingNotice = if (resumable) "Resuming the previous credit purchase check…" else null,
+            billingError = if (resumable) null else {
+                "A credit purchase was interrupted before Hermes returned a charge id. Check your balance before retrying."
+            },
+        )
+        val chargeId = pending.chargeId ?: return
+        scope.launch {
+            billingAccountMutex.withLock {
+                if (
+                    mutableState.value.backend?.id != backendId ||
+                    !mutableState.value.billingChargeUnconfirmed
+                ) return@withLock
+                try {
+                    pollBillingCharge(
+                        backendId,
+                        chargeId,
+                        pending.portalUrl,
+                        pending.settlementDeadlineEpochMillis,
+                    )
+                } catch (cancelled: CancellationException) {
+                    mutableState.value = mutableState.value.copy(
+                        billingBusy = false,
+                        billingChargeUnconfirmed = true,
+                        billingNotice = null,
+                        billingError = "Charge outcome remains unconfirmed. Check your balance before retrying.",
+                    )
+                    throw cancelled
+                }
+            }
+        }
     }
 
     private fun currentDraftContext(): DraftContext? {
@@ -3177,13 +3863,28 @@ class HermesRepository @Inject constructor(
         val reconnect = error is ReconnectRequiredException || (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
         val reconnectBackendId = mutableState.value.backend?.id
         if (reconnect) {
-            intentionalDisconnect = true
-            reconnectJob?.cancel()
-            reconnectBackendId?.let(tokenStore::remove)
-            scope.launch { gateway.disconnect() }
+            mutableState.value = mutableState.value.copy(
+                loading = false,
+                sending = false,
+                error = "Dashboard session expired or was rejected. Reconnect with your username and password.",
+            )
+            scope.launch {
+                billingAccountMutex.withLock {
+                    if (mutableState.value.backend?.id != reconnectBackendId) return@withLock
+                    intentionalDisconnect = true
+                    reconnectJob?.cancel()
+                    reconnectBackendId?.let(tokenStore::remove)
+                    gateway.disconnect()
+                    mutableState.value = mutableState.value.copy(
+                        backend = null,
+                        reconnectRequiredBackendId = reconnectBackendId,
+                    )
+                }
+            }
+            return
         }
         mutableState.value = mutableState.value.copy(
-            backend = if (reconnect) null else mutableState.value.backend,
+            backend = mutableState.value.backend,
             loading = false,
             sending = false,
             attaching = false,
@@ -3200,9 +3901,8 @@ class HermesRepository @Inject constructor(
             skillHubLoading = false,
             toolsetsLoading = false,
             sessionSearchLoading = false,
-            reconnectRequiredBackendId = if (reconnect) reconnectBackendId else mutableState.value.reconnectRequiredBackendId,
-            error = if (reconnect) "Dashboard session expired or was rejected. Reconnect with your username and password." else
-                error.message ?: error::class.simpleName ?: "Hermes operation failed",
+            reconnectRequiredBackendId = mutableState.value.reconnectRequiredBackendId,
+            error = error.message ?: error::class.simpleName ?: "Hermes operation failed",
         )
     }
 
@@ -3312,7 +4012,10 @@ class HermesRepository @Inject constructor(
             for ((index, retryDelay) in delays.withIndex()) {
                 if (intentionalDisconnect || mutableState.value.backend?.id != backend.id) return@launch
                 delay(retryDelay)
-                val connected = runCatching { gateway.connect(backend, cookie) }.isSuccess
+                val connected = billingAccountMutex.withLock {
+                    if (intentionalDisconnect || mutableState.value.backend?.id != backend.id) return@launch
+                    runCatching { gateway.connect(backend, cookie) }.isSuccess
+                }
                 if (connected) {
                     mutableState.value = mutableState.value.copy(error = null)
                     val active = mutableState.value.activeStoredSession
@@ -3365,6 +4068,9 @@ private const val MAX_SPAWN_TREE_PATH_CHARACTERS = 4_096
 private const val MAX_SPAWN_TREE_LABEL_CHARACTERS = 200
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
+private const val BILLING_SETTLEMENT_POLL_MILLIS = 2_000L
+private const val BILLING_SETTLEMENT_CAP_MILLIS = 5 * 60 * 1_000L
+private const val BILLING_MAX_RETRY_SECONDS = 30L
 private val USAGE_PERIODS = setOf(7, 30, 90)
 private val ACCEPTED_PROMPT_STATUSES = setOf("streaming", "queued", "steered")
 private const val QUEUE_RECOVERY_MESSAGE =
@@ -3440,3 +4146,65 @@ private fun isMobileSlashCommand(command: String, extensionCommands: Set<String>
 
 private fun String.isSafeModelToken(): Boolean =
     isNotBlank() && length <= 512 && !startsWith('-') && none { it.isWhitespace() || it.isISOControl() }
+
+internal fun validateBillingAmount(raw: String, minimum: String? = null, maximum: String? = null): String {
+    val clean = raw.trim()
+    require(clean.matches(Regex("\\d+(?:\\.\\d{1,2})?"))) { "Enter a dollar amount with at most 2 decimal places" }
+    val amount = BigDecimal(clean)
+    require(amount > BigDecimal.ZERO) { "Amount must be greater than $0" }
+    minimum?.let { require(amount >= BigDecimal(it)) { "Minimum is $$it" } }
+    maximum?.let { require(amount <= BigDecimal(it)) { "Maximum is $$it" } }
+    return amount.stripTrailingZeros().toPlainString()
+}
+
+internal fun billingChargeParams(amountUsd: String, idempotencyKey: String) = buildJsonObject {
+    put("amount_usd", amountUsd)
+    put("idempotency_key", idempotencyKey)
+}
+
+internal fun billingChargeStatusParams(chargeId: String) = buildJsonObject {
+    put("charge_id", chargeId)
+}
+
+internal fun billingAutoReloadParams(enabled: Boolean, thresholdUsd: String, reloadToUsd: String) = buildJsonObject {
+    put("enabled", enabled)
+    put("threshold", thresholdUsd)
+    put("top_up_amount", reloadToUsd)
+}
+
+internal fun billingStepUpParams(sessionId: String?) = buildJsonObject {
+    sessionId?.let { put("session_id", it) }
+}
+
+internal fun billingRefusalMessage(
+    code: String?,
+    serverMessage: String?,
+    actor: String? = null,
+    payload: com.nousresearch.hermes.protocol.BillingErrorPayload? = null,
+): String = when (code) {
+    "consent_required" -> "Confirm this card for terminal charges in the portal."
+    "insufficient_scope" -> "Terminal billing needs approval. Verify this device, then retry."
+    "remote_spending_revoked" -> if (actor == "admin") {
+        "An admin turned off terminal billing for this device. Reconnect it from the gateway settings."
+    } else {
+        "Terminal billing was turned off for this device. Reconnect it from the gateway settings."
+    }
+    "session_revoked" -> "Your Nous session was logged out. Sign in again from the gateway settings."
+    "cli_billing_disabled", "remote_spending_disabled" -> "Terminal billing is off for this account. An admin must enable it in the portal."
+    "role_required" -> "Adding funds needs an organisation admin or owner."
+    "no_payment_method" -> "No saved card is available for terminal charges. Add one in the portal."
+    "monthly_cap_exceeded" -> payload?.remainingUsd?.let {
+        "The monthly spend cap has been reached with $$it headroom left."
+    } ?: "The monthly spend cap has been reached."
+    "rate_limited", "temporarily_unavailable" -> "Too many charges are being processed right now. Try again shortly."
+    "stripe_unavailable" -> "Stripe is having trouble. Try again shortly."
+    else -> serverMessage?.takeIf(String::isNotBlank) ?: "Billing request failed."
+}
+
+internal fun billingChargeFailureMessage(reason: String?): String = when (reason) {
+    "authentication_required", "subscription_payment_intent_requires_action" ->
+        "Your bank requires verification. Complete it in the portal."
+    "payment_method_expired" -> "Your card has expired. Update it in the portal."
+    "card_declined" -> "Your card was declined. Try another card in the portal."
+    else -> "The charge did not go through (${reason ?: "processing_error"})."
+}

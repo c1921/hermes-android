@@ -194,7 +194,7 @@ import kotlinx.coroutines.flow.first
 
 private val WideLayout = 840.dp
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, AGENTS, CONFIG }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, BILLING, AGENTS, CONFIG }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -271,6 +271,11 @@ private data class ManagementActions(
     val refreshServerConfig: () -> Unit,
     val updateServerConfig: (String, kotlinx.serialization.json.JsonElement) -> Unit,
     val refreshUsage: (Int) -> Unit,
+    val refreshBilling: () -> Unit,
+    val chargeBillingCredits: (String) -> Unit,
+    val updateBillingAutoReload: (Boolean, String, String) -> Unit,
+    val startBillingStepUp: () -> Unit,
+    val acknowledgeUnconfirmedBillingCharge: () -> Unit,
     val refreshAgents: () -> Unit,
     val refreshSpawnTrees: () -> Unit,
     val loadSpawnTree: (String) -> Unit,
@@ -377,6 +382,11 @@ fun HermesApp(
             refreshServerConfig = viewModel::refreshServerConfig,
             updateServerConfig = viewModel::updateServerConfig,
             refreshUsage = viewModel::refreshUsage,
+            refreshBilling = viewModel::refreshBilling,
+            chargeBillingCredits = viewModel::chargeBillingCredits,
+            updateBillingAutoReload = viewModel::updateBillingAutoReload,
+            startBillingStepUp = viewModel::startBillingStepUp,
+            acknowledgeUnconfirmedBillingCharge = viewModel::acknowledgeUnconfirmedBillingCharge,
             refreshAgents = viewModel::refreshAgents,
             refreshSpawnTrees = viewModel::refreshSpawnTrees,
             loadSpawnTree = viewModel::loadSpawnTree,
@@ -687,6 +697,7 @@ private fun HermesWorkspace(
                     onMessaging = { destination = WorkspaceDestination.MESSAGING },
                     onMcp = { destination = WorkspaceDestination.MCP },
                     onUsage = { destination = WorkspaceDestination.USAGE },
+                    onBilling = { destination = WorkspaceDestination.BILLING },
                     onAgents = { destination = WorkspaceDestination.AGENTS },
                     onConfig = { destination = WorkspaceDestination.CONFIG },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
@@ -782,6 +793,17 @@ private fun HermesWorkspace(
                     WorkspaceDestination.USAGE -> UsageScreen(
                         state = state,
                         onRefresh = managementActions.refreshUsage,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.BILLING -> BillingScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshBilling,
+                        onCharge = managementActions.chargeBillingCredits,
+                        onUpdateAutoReload = managementActions.updateBillingAutoReload,
+                        onStepUp = managementActions.startBillingStepUp,
+                        onAcknowledgeUnconfirmedCharge = managementActions.acknowledgeUnconfirmedBillingCharge,
+                        onOpenUrl = openExternalUrl,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -925,6 +947,17 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    WorkspaceDestination.BILLING -> BillingScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshBilling,
+                        onCharge = managementActions.chargeBillingCredits,
+                        onUpdateAutoReload = managementActions.updateBillingAutoReload,
+                        onStepUp = managementActions.startBillingStepUp,
+                        onAcknowledgeUnconfirmedCharge = managementActions.acknowledgeUnconfirmedBillingCharge,
+                        onOpenUrl = openExternalUrl,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                    )
                     WorkspaceDestination.AGENTS -> AgentsScreen(
                         state = state,
                         onRefresh = managementActions.refreshAgents,
@@ -959,6 +992,7 @@ private fun HermesWorkspace(
                         onMessaging = { destination = WorkspaceDestination.MESSAGING },
                         onMcp = { destination = WorkspaceDestination.MCP },
                         onUsage = { destination = WorkspaceDestination.USAGE },
+                        onBilling = { destination = WorkspaceDestination.BILLING },
                         onAgents = { destination = WorkspaceDestination.AGENTS },
                         onConfig = { destination = WorkspaceDestination.CONFIG },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
@@ -988,6 +1022,7 @@ private fun SessionRail(
     onMessaging: () -> Unit,
     onMcp: () -> Unit,
     onUsage: () -> Unit,
+    onBilling: () -> Unit,
     onAgents: () -> Unit,
     onConfig: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1127,7 +1162,11 @@ private fun SessionRail(
                 Spacer(Modifier.width(6.dp))
                 Text("Settings")
             }
-            Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = onBilling, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.BarChart, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Billing")
+            }
         }
         OutlinedTextField(
             value = query,
