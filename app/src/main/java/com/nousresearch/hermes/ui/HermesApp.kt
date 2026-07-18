@@ -236,6 +236,8 @@ private data class ManagementActions(
     val setMcpServerEnabled: (String, Boolean) -> Unit,
     val removeMcpServer: (String) -> Unit,
     val installMcpCatalogEntry: (String, Map<String, String>) -> Unit,
+    val refreshToolsets: () -> Unit,
+    val setToolsetEnabled: (String, Boolean) -> Unit,
     val refreshUsage: (Int) -> Unit,
     val refreshAgents: () -> Unit,
     val setDelegationPaused: (Boolean) -> Unit,
@@ -317,6 +319,8 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             setMcpServerEnabled = viewModel::setMcpServerEnabled,
             removeMcpServer = viewModel::removeMcpServer,
             installMcpCatalogEntry = viewModel::installMcpCatalogEntry,
+            refreshToolsets = viewModel::refreshToolsets,
+            setToolsetEnabled = viewModel::setToolsetEnabled,
             refreshUsage = viewModel::refreshUsage,
             refreshAgents = viewModel::refreshAgents,
             setDelegationPaused = viewModel::setDelegationPaused,
@@ -603,6 +607,7 @@ private fun HermesWorkspace(
                 when (destination) {
                     WorkspaceDestination.SKILLS -> SkillsScreen(
                         state, managementActions.refreshSkills, managementActions.toggleSkill,
+                        managementActions.refreshToolsets, managementActions.setToolsetEnabled,
                         managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
                         managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
                         null, Modifier.weight(1f),
@@ -721,6 +726,7 @@ private fun HermesWorkspace(
                     )
                     WorkspaceDestination.SKILLS -> SkillsScreen(
                         state, managementActions.refreshSkills, managementActions.toggleSkill,
+                        managementActions.refreshToolsets, managementActions.setToolsetEnabled,
                         managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
                         managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
                         onBack = { destination = WorkspaceDestination.SESSIONS },

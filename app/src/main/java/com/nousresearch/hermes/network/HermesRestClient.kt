@@ -37,6 +37,8 @@ import com.nousresearch.hermes.protocol.SkillHubSearchResponse
 import com.nousresearch.hermes.protocol.SkillHubSourcesResponse
 import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
+import com.nousresearch.hermes.protocol.ToolsetInfo
+import com.nousresearch.hermes.protocol.ToolsetToggleResult
 import java.io.IOException
 import java.io.OutputStream
 import kotlinx.coroutines.Dispatchers
@@ -446,6 +448,34 @@ class HermesRestClient(
                 put("name", name)
                 put("enabled", enabled)
             },
+        ),
+    )
+
+    suspend fun toolsets(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): List<ToolsetInfo> = get(
+        config,
+        token,
+        "/api/tools/toolsets?profile=${encodePathSegment(profile)}",
+        ListSerializer(ToolsetInfo.serializer()),
+    )
+
+    suspend fun setToolsetEnabled(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        name: String,
+        enabled: Boolean,
+    ): ToolsetToggleResult = json.decodeFromJsonElement(
+        ToolsetToggleResult.serializer(),
+        request(
+            config,
+            token,
+            "/api/tools/toolsets/${encodePathSegment(name)}?profile=${encodePathSegment(profile)}",
+            method = "PUT",
+            body = buildJsonObject { put("enabled", enabled) },
         ),
     )
 

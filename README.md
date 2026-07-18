@@ -43,6 +43,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Command Center with live Hermes subagent trees, delegation pause/resume, confirmed subagent interruption, current-session background-process output, and confirmed process stop
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
+- [x] Profile-scoped Hermes toolset catalogue with server-advertised platform, setup state, tools, and enable/disable controls for future sessions
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
 - [x] Doctor and security-audit actions with bounded status polling and output redaction
 - [x] Phone master/detail and expanded tablet two-pane layouts
@@ -62,7 +63,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] Native OAuth/OIDC sign-in
 - [ ] Background push notifications and notification actions
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
-- [ ] MCP custom-server add/edit, remote-client OAuth setup, per-tool filters, and toolset/general configuration
+- [ ] MCP custom-server add/edit, remote-client OAuth setup, per-tool filters, and structured general configuration
 - [ ] Persisted spawn-tree replay and mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
 - [ ] Biometric lock, secure-screen option, Android share target, deep links, shortcuts, widgets, and other platform integrations

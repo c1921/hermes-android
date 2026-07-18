@@ -63,6 +63,7 @@ import com.nousresearch.hermes.protocol.SlashCompletionResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.SubagentInterruptResponse
+import com.nousresearch.hermes.protocol.ToolsetInfo
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import java.util.UUID
 import javax.inject.Inject
@@ -116,6 +117,10 @@ data class HermesState(
     val skillHubReview: SkillHubReview? = null,
     val skillHubLoading: Boolean = false,
     val skillAction: DiagnosticRunState? = null,
+    val toolsets: List<ToolsetInfo> = emptyList(),
+    val toolsetsLoading: Boolean = false,
+    val toolsetNotice: String? = null,
+    val toolsetError: String? = null,
     val cronJobs: List<CronJob> = emptyList(),
     val cronRuns: Map<String, List<StoredSession>> = emptyMap(),
     val profiles: List<ProfileInfo> = emptyList(),
@@ -1009,6 +1014,63 @@ class HermesRepository @Inject constructor(
                 )
             }
             .onFailure(::fail)
+    }
+
+    suspend fun refreshToolsets() {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            toolsetsLoading = true,
+            toolsetNotice = null,
+            toolsetError = null,
+        )
+        runCatching {
+            val active = restClient.activeProfile(backend, token)
+            active to restClient.toolsets(backend, token, active.active)
+        }.onSuccess { (active, rows) ->
+            val safeRows = rows
+                .filter { it.name.isNotBlank() && it.name.length <= MAX_TOOLSET_NAME_CHARACTERS }
+                .distinctBy(ToolsetInfo::name)
+                .sortedWith(compareByDescending<ToolsetInfo> { it.enabled }.thenBy { it.label })
+            mutableState.value = mutableState.value.copy(
+                activeProfile = active.active,
+                currentProfile = active.current,
+                toolsets = safeRows,
+                toolsetsLoading = false,
+                toolsetError = null,
+            )
+        }.onFailure(::failToolsets)
+    }
+
+    suspend fun setToolsetEnabled(name: String, enabled: Boolean) {
+        val toolset = mutableState.value.toolsets.firstOrNull { it.name == name }
+            ?: error("Hermes did not advertise this toolset")
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(
+            toolsetsLoading = true,
+            toolsetNotice = null,
+            toolsetError = null,
+        )
+        runCatching {
+            restClient.setToolsetEnabled(backend, token, profile, toolset.name, enabled).also { changed ->
+                require(
+                    changed.ok && changed.name == toolset.name &&
+                        changed.platform == toolset.platform && changed.enabled == enabled,
+                ) { "Hermes returned an inconsistent toolset state" }
+            }
+        }.onSuccess { changed ->
+            if (mutableState.value.activeProfile != profile) {
+                mutableState.value = mutableState.value.copy(toolsetsLoading = false)
+                return@onSuccess
+            }
+            mutableState.value = mutableState.value.copy(
+                toolsets = mutableState.value.toolsets.map { row ->
+                    if (row.name == changed.name) row.copy(enabled = changed.enabled, available = changed.enabled) else row
+                },
+                toolsetsLoading = false,
+                toolsetNotice = "${toolset.label} ${if (enabled) "enabled" else "disabled"} for ${toolset.platformLabel}. New sessions will use this configuration.",
+            )
+        }.onFailure(::failToolsets)
     }
 
     suspend fun loadSkillHub(query: String = "") {
@@ -2638,6 +2700,7 @@ class HermesRepository @Inject constructor(
             checkpointsLoading = false,
             agentsLoading = false,
             skillHubLoading = false,
+            toolsetsLoading = false,
             sessionSearchLoading = false,
             reconnectRequiredBackendId = if (reconnect) reconnectBackendId else mutableState.value.reconnectRequiredBackendId,
             error = if (reconnect) "Dashboard session expired or was rejected. Reconnect with your username and password." else
@@ -2668,6 +2731,21 @@ class HermesRepository @Inject constructor(
         mutableState.value = mutableState.value.copy(
             mcpLoading = false,
             mcpError = error.message ?: error::class.simpleName ?: "Hermes MCP request failed",
+        )
+    }
+
+    private fun failToolsets(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException ||
+            (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        if (reconnect) {
+            fail(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            toolsetsLoading = false,
+            toolsetError = DiagnosticRedactor.redact(
+                error.message ?: error::class.simpleName ?: "Hermes toolset request failed",
+            ),
         )
     }
 
@@ -2735,6 +2813,7 @@ private const val MAX_SLASH_ALIAS_DEPTH = 5
 private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
 private const val MAX_MCP_NAME_CHARACTERS = 200
 private const val MAX_MCP_ENV_VALUE_CHARACTERS = 32_768
+private const val MAX_TOOLSET_NAME_CHARACTERS = 200
 private const val MCP_INSTALL_POLL_INTERVAL_MILLIS = 1_000L
 private const val MCP_INSTALL_POLL_LIMIT = 240
 private const val MAX_USAGE_LABEL_CHARACTERS = 200

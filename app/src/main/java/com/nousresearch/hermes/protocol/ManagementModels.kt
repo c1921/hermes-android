@@ -21,6 +21,27 @@ data class SkillToggleResult(
 )
 
 @Serializable
+data class ToolsetInfo(
+    val name: String,
+    val label: String,
+    val description: String = "",
+    val platform: String,
+    @SerialName("platform_label") val platformLabel: String,
+    val enabled: Boolean,
+    val available: Boolean,
+    val configured: Boolean,
+    val tools: List<String> = emptyList(),
+)
+
+@Serializable
+data class ToolsetToggleResult(
+    val ok: Boolean,
+    val name: String,
+    val platform: String,
+    val enabled: Boolean,
+)
+
+@Serializable
 data class CronJobSchedule(
     val display: String? = null,
     val expr: String? = null,

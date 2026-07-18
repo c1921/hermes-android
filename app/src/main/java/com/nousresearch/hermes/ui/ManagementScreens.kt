@@ -59,6 +59,9 @@ import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.SkillHubResult
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.protocol.ToolsetInfo
+
+private enum class CapabilityView { SKILLS, HUB, TOOLSETS }
 
 @Composable
 internal fun BackendsScreen(
@@ -226,6 +229,8 @@ internal fun SkillsScreen(
     state: HermesState,
     onRefresh: () -> Unit,
     onToggle: (String, Boolean) -> Unit,
+    onRefreshToolsets: () -> Unit,
+    onToggleToolset: (String, Boolean) -> Unit,
     onLoadHub: (String) -> Unit,
     onReview: (String) -> Unit,
     onCloseReview: () -> Unit,
@@ -236,37 +241,52 @@ internal fun SkillsScreen(
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    var browsing by rememberSaveable { mutableStateOf(false) }
+    var view by rememberSaveable { mutableStateOf(CapabilityView.SKILLS) }
     var uninstallName by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { onRefresh() }
     val visible = state.skills.filter {
         query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || it.category.orEmpty().contains(query, true)
     }
+    val visibleToolsets = state.toolsets.filter {
+        query.isBlank() || it.name.contains(query, true) || it.label.contains(query, true) ||
+            it.description.contains(query, true) || it.tools.any { tool -> tool.contains(query, true) }
+    }
+    val refresh: () -> Unit = {
+        when (view) {
+            CapabilityView.SKILLS -> onRefresh()
+            CapabilityView.HUB -> onLoadHub(query)
+            CapabilityView.TOOLSETS -> onRefreshToolsets()
+        }
+    }
     Column(modifier.fillMaxSize()) {
-        ManagementHeader("SKILLS", if (browsing) "Review before installing" else "Installed capabilities", state.managementLoading || state.skillHubLoading, onRefresh, onBack)
+        ManagementHeader(
+            "CAPABILITIES",
+            when (view) {
+                CapabilityView.SKILLS -> "Installed skills"
+                CapabilityView.HUB -> "Review before installing"
+                CapabilityView.TOOLSETS -> "Server tools for ${state.activeProfile}"
+            },
+            state.managementLoading || state.skillHubLoading || state.toolsetsLoading,
+            refresh,
+            onBack,
+        )
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (browsing) {
-                OutlinedButton(onClick = { browsing = false }, modifier = Modifier.weight(1f)) {
-                    Text("Installed", maxLines = 1, style = MaterialTheme.typography.labelMedium)
-                }
-                Button(
-                    onClick = { onLoadHub("") },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Browse hub", maxLines = 1, style = MaterialTheme.typography.labelMedium) }
-            } else {
-                Button(onClick = { browsing = false }, modifier = Modifier.weight(1f)) {
-                    Text("Installed", maxLines = 1, style = MaterialTheme.typography.labelMedium)
-                }
-                OutlinedButton(
-                    onClick = { browsing = true; onLoadHub("") },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Browse hub", maxLines = 1, style = MaterialTheme.typography.labelMedium) }
+            CapabilityTab("Skills", view == CapabilityView.SKILLS, Modifier.weight(1f)) {
+                view = CapabilityView.SKILLS
+            }
+            CapabilityTab("Hub", view == CapabilityView.HUB, Modifier.weight(1f)) {
+                view = CapabilityView.HUB
+                onLoadHub("")
+            }
+            CapabilityTab("Tools", view == CapabilityView.TOOLSETS, Modifier.weight(1f)) {
+                view = CapabilityView.TOOLSETS
+                onRefreshToolsets()
             }
         }
-        if (!browsing) {
+        if (view == CapabilityView.SKILLS) {
             OutlinedButton(
                 onClick = onUpdate,
                 enabled = state.skillAction?.running != true,
@@ -275,19 +295,27 @@ internal fun SkillsScreen(
         }
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
-            placeholder = { Text(if (browsing) "Search the Hermes skills hub" else "Search installed skills") },
+            onValueChange = { query = it.take(200) },
+            placeholder = {
+                Text(
+                    when (view) {
+                        CapabilityView.SKILLS -> "Search installed skills"
+                        CapabilityView.HUB -> "Search the Hermes skills hub"
+                        CapabilityView.TOOLSETS -> "Search toolsets and tools"
+                    },
+                )
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         )
-        if (browsing) {
+        if (view == CapabilityView.HUB) {
             Button(
                 onClick = { onLoadHub(query) },
                 enabled = query.isNotBlank() && !state.skillHubLoading,
                 modifier = Modifier.padding(horizontal = 12.dp),
             ) { Text("Search hub") }
         }
-        state.skillAction?.let { action ->
+        if (view != CapabilityView.TOOLSETS) state.skillAction?.let { action ->
             Text(
                 when {
                     action.running -> "Skill operation running on Hermes${action.pid?.let { " / PID $it" }.orEmpty()}"
@@ -301,7 +329,21 @@ internal fun SkillsScreen(
             )
         }
         if (state.error != null) ManagementError(state.error)
-        if (browsing) {
+        if (view == CapabilityView.TOOLSETS) {
+            state.toolsetNotice?.let {
+                Text(it, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+            state.toolsetError?.let { ManagementError(it) }
+            if (!state.toolsetsLoading && visibleToolsets.isEmpty()) {
+                ManagementEmpty(if (state.toolsets.isEmpty()) "No configurable toolsets were returned by Hermes." else "No matching toolsets.")
+            } else {
+                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(visibleToolsets, key = ToolsetInfo::name) { toolset ->
+                        ToolsetRow(toolset, state.toolsetsLoading, onToggleToolset, Modifier.padding(horizontal = 12.dp))
+                    }
+                }
+            }
+        } else if (view == CapabilityView.HUB) {
             if (!state.skillHubLoading && state.skillHubResults.isEmpty()) {
                 ManagementEmpty("No hub results. Search by capability, tool or workflow.")
             } else {
@@ -358,6 +400,19 @@ internal fun SkillsScreen(
             confirmButton = { TextButton(onClick = { uninstallName = null; onUninstall(name) }) { Text("Remove") } },
             dismissButton = { TextButton(onClick = { uninstallName = null }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun CapabilityTab(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    if (selected) {
+        Button(onClick = onClick, modifier = modifier) {
+            Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 
@@ -706,6 +761,41 @@ private fun SkillRow(
             }
             Switch(checked = skill.enabled, onCheckedChange = { onToggle(skill.name, it) })
             IconButton(onClick = { onUninstall(skill.name) }) { Icon(Icons.Outlined.Delete, "Uninstall ${skill.name}") }
+        }
+    }
+}
+
+@Composable
+private fun ToolsetRow(
+    toolset: ToolsetInfo,
+    loading: Boolean,
+    onToggle: (String, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(toolset.label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    "${toolset.platformLabel.uppercase()} / ${if (toolset.configured) "CONFIGURED" else "SETUP MAY BE REQUIRED"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(toolset.description, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (toolset.tools.isNotEmpty()) {
+                    Text(
+                        toolset.tools.take(8).joinToString(" · ") + if (toolset.tools.size > 8) " · +${toolset.tools.size - 8}" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Switch(
+                checked = toolset.enabled,
+                onCheckedChange = { onToggle(toolset.name, it) },
+                enabled = !loading,
+            )
         }
     }
 }
