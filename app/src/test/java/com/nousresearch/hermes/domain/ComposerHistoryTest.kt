@@ -25,8 +25,8 @@ class ComposerHistoryTest {
     @Test
     fun `backward browsing snapshots draft and stops at oldest`() {
         val history = listOf("newest", "older")
-        val first = ComposerHistory.backward(ComposerBrowseState(), "unfinished draft", history)
-        val second = ComposerHistory.backward(first.state, first.text, history)
+        val first = requireNotNull(ComposerHistory.backward(ComposerBrowseState(), "unfinished draft", history))
+        val second = requireNotNull(ComposerHistory.backward(first.state, first.text, history))
         val exhausted = ComposerHistory.backward(second.state, second.text, history)
 
         assertEquals("newest", first.text)
