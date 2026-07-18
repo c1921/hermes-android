@@ -1,5 +1,7 @@
 # Hermes for Android
 
+[![Download latest APK and AAB](https://img.shields.io/badge/download-latest%20APK%20%2B%20AAB-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess)
+
 Native Android client for [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent). The project targets first-party-quality integration with the same Dashboard backend, sessions, profiles, skills, tools, models, providers, and automations used by Hermes Desktop, CLI, and TUI.
 
 This repository is an independent work in progress. It is not currently an official Nous Research release. Visible controls are backed by real Hermes REST or JSON-RPC/WebSocket operations; unavailable features are omitted rather than simulated.
@@ -8,7 +10,7 @@ This repository is an independent work in progress. It is not currently an offic
 
 Last verified: 18 July 2026.
 
-The current `main` checkout passes all unit tests, Android lint, and debug APK assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `main` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 ### Implemented
 
@@ -153,7 +155,7 @@ JDK 26 is not supported by the current Gradle/Android Gradle Plugin toolchain an
 Run the same project gate used by CI:
 
 ```bash
-./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleDebug
 ```
 
 Run only the Dashboard-authentication contract tests:
@@ -172,7 +174,7 @@ Install the debug build:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-CI publishes the successful debug APK as the `hermes-android-debug` workflow artifact. It is a debug build, not a signed public release.
+CI publishes the successful debug APK and AAB together as the `hermes-android-debug` workflow artifact. The download badge opens the successful `main` runs with the newest run first. GitHub requires sign-in to download workflow artifacts. These are debug builds, not signed public releases.
 
 ## Test coverage
 
