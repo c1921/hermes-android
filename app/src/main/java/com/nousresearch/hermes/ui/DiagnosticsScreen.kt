@@ -1,5 +1,7 @@
 package com.nousresearch.hermes.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,8 +28,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +47,13 @@ import com.nousresearch.hermes.data.DiagnosticRunState
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.security.DiagnosticRedactor
+import com.nousresearch.hermes.security.DiagnosticReportInput
+import com.nousresearch.hermes.security.DiagnosticReportSection
+import com.nousresearch.hermes.security.buildDiagnosticReport
+import java.time.Instant
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun DiagnosticsScreen(
@@ -50,6 +65,32 @@ internal fun DiagnosticsScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var exportInProgress by rememberSaveable { mutableStateOf(false) }
+    var exportNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    val createReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri == null) {
+            exportInProgress = false
+            exportNotice = "Diagnostic export cancelled."
+        } else {
+            scope.launch {
+                val report = state.buildDiagnosticReport(connection)
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { writer ->
+                            writer.write(report)
+                        } ?: error("Android could not open the selected document")
+                    }
+                }
+                exportInProgress = false
+                exportNotice = result.fold(
+                    onSuccess = { "Redacted diagnostic report saved." },
+                    onFailure = { "Export failed: ${DiagnosticRedactor.redact(it.message ?: "write failed").take(1_000)}" },
+                )
+            }
+        }
+    }
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -97,6 +138,30 @@ internal fun DiagnosticsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            item {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("REDACTED SUPPORT REPORT", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Save an allowlisted text report through Android's document picker. It excludes credentials, conversations, provider settings and raw configuration.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Button(
+                            onClick = {
+                                exportNotice = null
+                                exportInProgress = true
+                                createReport.launch("hermes-diagnostics-${System.currentTimeMillis()}.txt")
+                            },
+                            enabled = !exportInProgress,
+                        ) {
+                            Text(if (exportInProgress) "Exporting…" else "Save report")
+                        }
+                        exportNotice?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
             item {
                 DiagnosticActionCard(
@@ -170,14 +235,7 @@ private fun DiagnosticActionCard(
             }
             Text(description, style = MaterialTheme.typography.bodySmall)
             if (run != null) {
-                val result = when {
-                    run.running -> "RUNNING${run.pid?.let { " / PID $it" }.orEmpty()}"
-                    run.timedOut -> "POLLING TIMED OUT"
-                    run.exitCode == 0 -> "COMPLETED / EXIT 0"
-                    run.exitCode != null -> "FAILED / EXIT ${run.exitCode}"
-                    run.error != null -> "FAILED"
-                    else -> "STATUS UNKNOWN"
-                }
+                val result = run.displayStatus()
                 Text(result, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 run.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 if (run.lines.isNotEmpty()) {
@@ -196,6 +254,46 @@ private fun DiagnosticActionCard(
             }
         }
     }
+}
+
+private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState): String {
+    val status = status
+    return buildDiagnosticReport(
+        DiagnosticReportInput(
+            generatedAt = Instant.now().toString(),
+            appVersion = BuildConfig.VERSION_NAME,
+            auditedCommit = BuildConfig.AUDITED_HERMES_COMMIT,
+            backendLabel = backend?.label,
+            endpoint = backend?.baseUrl,
+            connection = connection.displayName(),
+            hermesVersion = status?.hermesVersion ?: status?.version,
+            serverState = status?.status,
+            authRequired = status?.authRequired,
+            desktopContract = runtimeInfo.desktopContract,
+            capabilities = status?.capabilities?.toString(),
+            sections = DiagnosticAction.entries.mapNotNull { action ->
+                diagnostics[action]?.let { run ->
+                    DiagnosticReportSection(
+                        title = when (action) {
+                            DiagnosticAction.DOCTOR -> "Hermes doctor"
+                            DiagnosticAction.SECURITY_AUDIT -> "Security audit"
+                        },
+                        status = run.displayStatus(),
+                        lines = run.error?.let { run.lines + it } ?: run.lines,
+                    )
+                }
+            },
+        ),
+    )
+}
+
+private fun DiagnosticRunState.displayStatus(): String = when {
+    running -> "RUNNING${pid?.let { " / PID $it" }.orEmpty()}"
+    timedOut -> "POLLING TIMED OUT"
+    exitCode == 0 -> "COMPLETED / EXIT 0"
+    exitCode != null -> "FAILED / EXIT $exitCode"
+    error != null -> "FAILED"
+    else -> "STATUS UNKNOWN"
 }
 
 private fun GatewayConnectionState.displayName(): String = when (this) {

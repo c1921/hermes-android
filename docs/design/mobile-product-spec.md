@@ -35,6 +35,7 @@ Dark surfaces carry a low-opacity carousel of six purpose-built Nous field plate
 - Reconnecting preserves transcript and draft, disables send, and keeps stop/approval state visible.
 - Auth expiry identifies the failed leg and returns to backend re-authentication.
 - Unsupported capabilities are absent from primary UI; diagnostics explain the required server version.
+- Diagnostic export is an explicit Android document-picker action. The bounded text report contains only allowlisted app/backend/version/connection facts and the already-redacted doctor or security-audit output; it excludes session content, credentials, provider settings and raw server configuration.
 - Tool and provider errors retain technical status codes with secrets removed.
 - Process recreation restores selected backend metadata and backend/profile/session-scoped drafts; live state and navigation are rehydrated from Hermes rather than trusted from a stale local process snapshot.
 - Android share targets accept text and provider-owned `content://` documents only. A share waits for an authenticated open gateway, opens a draft session, appends bounded text, attaches bounded documents sequentially through the existing Hermes contracts, moves to the composer and never submits on the user's behalf. Pending share payloads remain in activity memory and the source intent only until ingestion completes.

@@ -45,7 +45,7 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | Sudo or secret prompt leakage | Typed gateway events open a blocking password-semantics field backed only by non-saveable Compose state; values are sent once through the matching response method and never enter timelines, drafts, preferences, logs or diagnostics | Implemented |
 | Replay/duplicate events | Stable tool/request IDs; reducer upsert; authoritative rehydrate | Partial; stream cursor upstream gap |
 | Cross-profile/session confusion | Cache/navigation identity includes backend, profile, durable ID and runtime ID; events filtered by runtime | Implemented baseline, more tests required |
-| Diagnostic leakage | Structured redaction and explicit export review; never include tokens or raw credential stores | Planned |
+| Diagnostic leakage | Export only an allowlisted, bounded report through an explicit SAF destination; flatten and bound attacker-controlled metadata; apply defense-in-depth redaction to endpoint, connection, capability and diagnostic text; never include cookies, passwords, conversations, provider settings or raw config | Implemented baseline; real document-provider, cancellation, storage-full and exported-file review deferred |
 | Dependency compromise | Version catalogue, dependency locking, Dependabot/review, secret scan, SBOM and release provenance | CI foundation planned |
 | Android backup extraction | `allowBackup=false`, cloud/file exclusions | Implemented |
 

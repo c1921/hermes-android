@@ -59,7 +59,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] **Partial:** tool activity is structured and expandable; specialised renderers for every Hermes tool are not complete.
 - [ ] **Partial:** attachment sending and managed downloads/previews work; upload progress, camera capture, large streamed uploads, share actions, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
-- [ ] **Partial:** diagnostics expose versions, connection state, doctor, and security-audit results; diagnostic export, SBOM, and release provenance remain.
+- [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report; SBOM and release provenance remain.
 
 ### Not yet implemented
 
@@ -198,7 +198,7 @@ Current automated coverage includes:
 - Expired saved-session reconnect behavior
 - Legacy token-only record rejection without network reinterpretation
 - Password non-persistence at the connect-and-save boundary
-- Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, and diagnostic redaction
+- Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, diagnostic redaction, and bounded diagnostic-report generation
 - Profile-scoped MCP list/catalog/test/toggle/install/delete/action-status routes, session-cookie reuse, reviewed env-name filtering, unknown-field tolerance, and compute-host reload responses
 - Profile-scoped config/schema reads, exact one-field nested PUT bodies, cookie reuse, negative acknowledgements, positive safe-key intersection, type validation, and unknown-field tolerance
 - Profile-scoped usage analytics plus live `session.context_breakdown`, nullable legacy counters, and unknown-field tolerance
