@@ -249,6 +249,10 @@ private data class ManagementActions(
     val deleteProfile: (String) -> Unit,
     val runDiagnostic: (DiagnosticAction) -> Unit,
     val refreshProviders: () -> Unit,
+    val startProviderOAuth: (String) -> Unit,
+    val submitProviderOAuth: (String) -> Unit,
+    val cancelProviderOAuth: () -> Unit,
+    val disconnectProviderOAuth: (String) -> Unit,
     val saveProviderSetting: (String, String, String) -> Unit,
     val deleteProviderSetting: (String) -> Unit,
     val refreshMessaging: () -> Unit,
@@ -351,6 +355,10 @@ fun HermesApp(
             deleteProfile = viewModel::deleteProfile,
             runDiagnostic = viewModel::runDiagnostic,
             refreshProviders = viewModel::refreshProviders,
+            startProviderOAuth = viewModel::startProviderOAuth,
+            submitProviderOAuth = viewModel::submitProviderOAuth,
+            cancelProviderOAuth = viewModel::cancelProviderOAuth,
+            disconnectProviderOAuth = viewModel::disconnectProviderOAuth,
             saveProviderSetting = viewModel::saveProviderSetting,
             deleteProviderSetting = viewModel::deleteProviderSetting,
             refreshMessaging = viewModel::refreshMessaging,
@@ -630,6 +638,23 @@ private fun HermesWorkspace(
     onSkinChange: (HermesSkin) -> Unit,
     sharedContentId: String?,
 ) {
+    val context = LocalContext.current
+    val openExternalUrl: (String) -> Unit = remember(context) {
+        { value ->
+            safeExternalUrl(value)?.let { safe ->
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(safe))) }
+            }
+        }
+    }
+    val copyProviderText: (String, String) -> Unit = remember(context) {
+        { label, value ->
+            runCatching {
+                context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
+                    ClipData.newPlainText(label, value),
+                )
+            }
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
         var destination by rememberSaveable { mutableStateOf(WorkspaceDestination.SESSIONS) }
@@ -724,6 +749,12 @@ private fun HermesWorkspace(
                         onRefresh = managementActions.refreshProviders,
                         onSave = managementActions.saveProviderSetting,
                         onDelete = managementActions.deleteProviderSetting,
+                        onStartOAuth = managementActions.startProviderOAuth,
+                        onSubmitOAuth = managementActions.submitProviderOAuth,
+                        onCancelOAuth = managementActions.cancelProviderOAuth,
+                        onDisconnectOAuth = managementActions.disconnectProviderOAuth,
+                        onOpenUrl = openExternalUrl,
+                        onCopy = copyProviderText,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -858,6 +889,12 @@ private fun HermesWorkspace(
                         onRefresh = managementActions.refreshProviders,
                         onSave = managementActions.saveProviderSetting,
                         onDelete = managementActions.deleteProviderSetting,
+                        onStartOAuth = managementActions.startProviderOAuth,
+                        onSubmitOAuth = managementActions.submitProviderOAuth,
+                        onCancelOAuth = managementActions.cancelProviderOAuth,
+                        onDisconnectOAuth = managementActions.disconnectProviderOAuth,
+                        onOpenUrl = openExternalUrl,
+                        onCopy = copyProviderText,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )

@@ -179,6 +179,65 @@ data class ProviderValidationResult(
 )
 
 @Serializable
+data class OAuthProviderStatus(
+    @SerialName("logged_in") val loggedIn: Boolean,
+    val error: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("has_refresh_token") val hasRefreshToken: Boolean = false,
+    @SerialName("source_label") val sourceLabel: String? = null,
+    @SerialName("token_preview") val tokenPreview: String? = null,
+)
+
+@Serializable
+data class OAuthProvider(
+    val id: String,
+    val name: String,
+    val flow: String,
+    @SerialName("cli_command") val cliCommand: String = "",
+    @SerialName("docs_url") val docsUrl: String = "",
+    @SerialName("disconnect_hint") val disconnectHint: String? = null,
+    val disconnectable: Boolean = false,
+    val status: OAuthProviderStatus,
+)
+
+@Serializable
+data class OAuthProvidersResponse(
+    val providers: List<OAuthProvider> = emptyList(),
+)
+
+@Serializable
+data class OAuthStartResponse(
+    @SerialName("session_id") val sessionId: String,
+    val flow: String,
+    @SerialName("auth_url") val authUrl: String? = null,
+    @SerialName("user_code") val userCode: String? = null,
+    @SerialName("verification_url") val verificationUrl: String? = null,
+    @SerialName("expires_in") val expiresIn: Long,
+    @SerialName("poll_interval") val pollInterval: Long? = null,
+)
+
+@Serializable
+data class OAuthPollResponse(
+    @SerialName("session_id") val sessionId: String,
+    val status: String,
+    @SerialName("error_message") val errorMessage: String? = null,
+    @SerialName("expires_at") val expiresAt: Long? = null,
+)
+
+@Serializable
+data class OAuthSubmitResponse(
+    val ok: Boolean,
+    val status: String,
+    val message: String? = null,
+)
+
+@Serializable
+data class OAuthActionResponse(
+    val ok: Boolean,
+    val message: String? = null,
+)
+
+@Serializable
 data class ManagedFileEntry(
     val name: String,
     val path: String,

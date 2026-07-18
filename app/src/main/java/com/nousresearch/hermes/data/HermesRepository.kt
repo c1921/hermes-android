@@ -27,6 +27,7 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.ImageAttachResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
+import com.nousresearch.hermes.protocol.OAuthProvider
 import com.nousresearch.hermes.protocol.McpCatalogEntry
 import com.nousresearch.hermes.protocol.McpReloadResponse
 import com.nousresearch.hermes.protocol.McpServerSummary
@@ -140,6 +141,9 @@ data class HermesState(
     val diagnostics: Map<DiagnosticAction, DiagnosticRunState> = emptyMap(),
     val providerOptions: ModelOptionsResult? = null,
     val providerEnv: Map<String, EnvVarInfo> = emptyMap(),
+    val oauthProviders: List<OAuthProvider> = emptyList(),
+    val providerAccountsSupported: Boolean = oauthProviders.isNotEmpty(),
+    val providerOAuthSession: ProviderOAuthSession? = null,
     val providersLoading: Boolean = false,
     val providerNotice: String? = null,
     val messagingPlatforms: List<MessagingPlatformInfo> = emptyList(),
@@ -203,6 +207,27 @@ data class HermesState(
 data class SpawnTreeReplay(
     val archive: SpawnTreeListEntry,
     val subagents: List<SubagentProgress>,
+)
+
+data class ProviderOAuthSession(
+    val providerId: String,
+    val providerName: String,
+    val flow: String,
+    val sessionId: String,
+    val profile: String = "default",
+    val browserUrl: String,
+    val userCode: String? = null,
+    val expiresAtEpochMillis: Long,
+    val pollIntervalSeconds: Long,
+)
+
+private data class ProviderRefreshSnapshot(
+    val activeProfile: String,
+    val currentProfile: String,
+    val options: ModelOptionsResult,
+    val env: Map<String, EnvVarInfo>,
+    val oauthProviders: List<OAuthProvider>,
+    val providerAccountsSupported: Boolean,
 )
 
 enum class DiagnosticAction(val wireName: String) {
@@ -282,6 +307,7 @@ class HermesRepository @Inject constructor(
     private var sessionSearchJob: Job? = null
     private var slashCompletionJob: Job? = null
     private var queueDrainJob: Job? = null
+    private var providerOAuthPollJob: Job? = null
     private val queueMutex = Mutex()
     private var extensionSlashCommands: Set<String>? = null
     private var cachedSlashCatalog: List<SlashSuggestion>? = null
@@ -1470,9 +1496,14 @@ class HermesRepository @Inject constructor(
         val (backend, token) = activeCredentials()
         val result = runCatching { restClient.setActiveProfile(backend, token, name) }
         if (result.isSuccess) {
+            providerOAuthPollJob?.cancel()
+            providerOAuthPollJob = null
             mutableState.value = mutableState.value.copy(
                 providerOptions = null,
                 providerEnv = emptyMap(),
+                oauthProviders = emptyList(),
+                providerAccountsSupported = false,
+                providerOAuthSession = null,
                 providerNotice = null,
                 serverConfigProfile = null,
                 serverConfig = ServerConfigSnapshot(),
@@ -1555,17 +1586,235 @@ class HermesRepository @Inject constructor(
         runCatching {
             val active = restClient.activeProfile(backend, token)
             val options = restClient.globalModelOptions(backend, token, active.active, refresh)
-            Triple(active, options, restClient.envVars(backend, token, active.active))
-        }.onSuccess { (active, options, env) ->
-            mutableState.value = mutableState.value.copy(
+            val oauthProviders = try {
+                restClient.oauthProviders(backend, token, active.active)
+            } catch (error: com.nousresearch.hermes.network.HermesHttpException) {
+                if (error.statusCode == 404) null else throw error
+            }
+            ProviderRefreshSnapshot(
                 activeProfile = active.active,
                 currentProfile = active.current,
-                providerOptions = options,
-                providerEnv = env.filterValues { !it.channelManaged && (it.category == "provider" || it.provider.isNotBlank()) },
+                options = options,
+                env = restClient.envVars(backend, token, active.active),
+                oauthProviders = oauthProviders.orEmpty(),
+                providerAccountsSupported = oauthProviders != null,
+            )
+        }.onSuccess { snapshot ->
+            mutableState.value = mutableState.value.copy(
+                activeProfile = snapshot.activeProfile,
+                currentProfile = snapshot.currentProfile,
+                providerOptions = snapshot.options,
+                providerEnv = snapshot.env.filterValues { !it.channelManaged && (it.category == "provider" || it.provider.isNotBlank()) },
+                oauthProviders = snapshot.oauthProviders,
+                providerAccountsSupported = snapshot.providerAccountsSupported,
                 providersLoading = false,
                 error = null,
             )
         }.onFailure(::fail)
+    }
+
+    suspend fun startProviderOAuth(providerId: String) {
+        val provider = mutableState.value.oauthProviders.firstOrNull { it.id == providerId }
+            ?: error("Hermes did not advertise this provider account")
+        if (provider.status.loggedIn || provider.flow !in setOf("pkce", "device_code")) {
+            mutableState.value = mutableState.value.copy(
+                error = if (provider.status.loggedIn) {
+                    "This provider account is already connected."
+                } else {
+                    "Hermes advertised a provider sign-in flow this Android version does not support."
+                },
+            )
+            return
+        }
+        providerOAuthPollJob?.cancelAndJoin()
+        providerOAuthPollJob = null
+        mutableState.value = mutableState.value.copy(
+            providersLoading = true,
+            providerOAuthSession = null,
+            providerNotice = null,
+            error = null,
+        )
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        val started = runCatching { restClient.startProviderOAuth(backend, token, profile, provider.id) }
+            .getOrElse { error -> fail(error); return }
+        val session = runCatching {
+            require(started.flow == provider.flow) { "Hermes returned a different provider login flow" }
+            require(started.sessionId.isNotBlank() && started.sessionId.length <= MAX_OAUTH_SESSION_ID_CHARACTERS) {
+                "Hermes returned an invalid provider login session"
+            }
+            val browserUrl = when (started.flow) {
+                "device_code" -> started.verificationUrl
+                "pkce" -> started.authUrl
+                else -> null
+            }.orEmpty()
+            require(browserUrl.isNotBlank()) { "Hermes did not return a provider sign-in URL" }
+            if (started.flow == "device_code") require(!started.userCode.isNullOrBlank()) {
+                "Hermes did not return a provider authorization code"
+            }
+            val expiresInSeconds = started.expiresIn.coerceIn(1L, MAX_OAUTH_SESSION_SECONDS)
+            ProviderOAuthSession(
+                providerId = provider.id,
+                providerName = provider.name,
+                flow = started.flow,
+                sessionId = started.sessionId,
+                profile = profile,
+                browserUrl = browserUrl,
+                userCode = started.userCode,
+                expiresAtEpochMillis = System.currentTimeMillis() + expiresInSeconds * 1_000L,
+                pollIntervalSeconds = (started.pollInterval ?: DEFAULT_OAUTH_POLL_SECONDS)
+                    .coerceIn(MIN_OAUTH_POLL_SECONDS, MAX_OAUTH_POLL_SECONDS),
+            )
+        }.getOrElse { error -> fail(error); return }
+        mutableState.value = mutableState.value.copy(
+            providerOAuthSession = session,
+            providersLoading = false,
+            error = null,
+        )
+        if (session.flow == "device_code") {
+            providerOAuthPollJob = scope.launch {
+                pollProviderOAuthSession(backend, token, session)
+            }
+        }
+    }
+
+    suspend fun submitProviderOAuth(code: String) {
+        val session = mutableState.value.providerOAuthSession ?: return
+        require(session.flow == "pkce") { "This provider flow does not accept an authorization code" }
+        require(session.profile == mutableState.value.activeProfile) { "The active Hermes profile changed during sign-in" }
+        val clean = code.trim()
+        require(clean.isNotEmpty() && clean.length <= MAX_OAUTH_CODE_CHARACTERS) {
+            "Authorization code must be between 1 and $MAX_OAUTH_CODE_CHARACTERS characters"
+        }
+        mutableState.value = mutableState.value.copy(providersLoading = true, error = null)
+        val (backend, token) = activeCredentials()
+        val response = runCatching {
+            restClient.submitProviderOAuth(backend, token, session.profile, session.providerId, session.sessionId, clean)
+        }.getOrElse { error -> fail(error); return }
+        if (response.ok && response.status == "approved") {
+            mutableState.value = mutableState.value.copy(
+                providerOAuthSession = null,
+                providersLoading = false,
+                providerNotice = "${session.providerName} connected to Hermes.",
+                error = null,
+            )
+            refreshProviders(refresh = true)
+        } else {
+            mutableState.value = mutableState.value.copy(
+                providersLoading = false,
+                error = response.message?.takeIf(String::isNotBlank) ?: "Hermes could not complete provider sign-in.",
+            )
+        }
+    }
+
+    suspend fun cancelProviderOAuth() {
+        val session = mutableState.value.providerOAuthSession ?: return
+        providerOAuthPollJob?.cancelAndJoin()
+        providerOAuthPollJob = null
+        mutableState.value = mutableState.value.copy(providersLoading = true, error = null)
+        val (backend, token) = activeCredentials()
+        val result = runCatching { restClient.cancelProviderOAuth(backend, token, session.profile, session.sessionId) }
+        if (result.getOrDefault(false)) {
+            mutableState.value = mutableState.value.copy(
+                providerOAuthSession = null,
+                providersLoading = false,
+                providerNotice = "Provider sign-in cancelled.",
+                error = null,
+            )
+            return
+        }
+        val failure = result.exceptionOrNull()
+        if (failure != null) fail(failure) else {
+            mutableState.value = mutableState.value.copy(
+                providersLoading = false,
+                error = "Hermes did not cancel this provider sign-in session.",
+            )
+        }
+        if (session.flow == "device_code" && mutableState.value.backend?.id == backend.id) {
+            providerOAuthPollJob = scope.launch { pollProviderOAuthSession(backend, token, session) }
+        }
+    }
+
+    suspend fun disconnectProviderOAuth(providerId: String) {
+        val provider = mutableState.value.oauthProviders.firstOrNull { it.id == providerId }
+            ?: error("Hermes did not advertise this provider account")
+        require(provider.status.loggedIn && provider.disconnectable) {
+            provider.disconnectHint ?: "Hermes did not advertise automatic disconnect for this provider"
+        }
+        mutableState.value = mutableState.value.copy(providersLoading = true, providerNotice = null, error = null)
+        val (backend, token) = activeCredentials()
+        runCatching {
+            check(restClient.disconnectProviderOAuth(backend, token, mutableState.value.activeProfile, provider.id)) {
+                "Hermes did not disconnect this provider"
+            }
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(providerNotice = "${provider.name} disconnected from Hermes.")
+            refreshProviders(refresh = true)
+        }.onFailure(::fail)
+    }
+
+    private suspend fun pollProviderOAuthSession(
+        backend: BackendConfig,
+        token: String,
+        session: ProviderOAuthSession,
+    ) {
+        while (System.currentTimeMillis() < session.expiresAtEpochMillis) {
+            delay(session.pollIntervalSeconds * 1_000L)
+            if (mutableState.value.providerOAuthSession != session || mutableState.value.backend?.id != backend.id) return
+            val result = try {
+                restClient.pollProviderOAuth(backend, token, session.profile, session.providerId, session.sessionId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                mutableState.value = mutableState.value.copy(providerOAuthSession = null)
+                fail(error)
+                return
+            }
+            if (result.sessionId != session.sessionId) {
+                mutableState.value = mutableState.value.copy(
+                    providerOAuthSession = null,
+                    error = "Hermes returned a different provider login session.",
+                )
+                return
+            }
+            when (result.status) {
+                "pending" -> Unit
+                "approved" -> {
+                    mutableState.value = mutableState.value.copy(
+                        providerOAuthSession = null,
+                        providersLoading = false,
+                        providerNotice = "${session.providerName} connected to Hermes.",
+                        error = null,
+                    )
+                    refreshProviders(refresh = true)
+                    return
+                }
+                "denied", "expired", "error" -> {
+                    mutableState.value = mutableState.value.copy(
+                        providerOAuthSession = null,
+                        providersLoading = false,
+                        error = result.errorMessage?.takeIf(String::isNotBlank)
+                            ?: "Provider sign-in ${result.status}.",
+                    )
+                    return
+                }
+                else -> {
+                    mutableState.value = mutableState.value.copy(
+                        providerOAuthSession = null,
+                        providersLoading = false,
+                        error = "Hermes returned an unsupported provider sign-in status.",
+                    )
+                    return
+                }
+            }
+        }
+        if (mutableState.value.providerOAuthSession == session) {
+            mutableState.value = mutableState.value.copy(
+                providerOAuthSession = null,
+                providersLoading = false,
+                error = "Provider sign-in expired.",
+            )
+        }
     }
 
     suspend fun saveProviderSetting(key: String, value: String, apiKey: String = "") {
@@ -2570,6 +2819,8 @@ class HermesRepository @Inject constructor(
 
     suspend fun disconnectAndForget() {
         val backend = mutableState.value.backend ?: return
+        providerOAuthPollJob?.cancelAndJoin()
+        providerOAuthPollJob = null
         draftSaveJob?.cancelAndJoin()
         draftSaveJob = null
         draftStore.removeBackend(backend.id)
@@ -2613,6 +2864,8 @@ class HermesRepository @Inject constructor(
     }
 
     private suspend fun connect(backend: BackendConfig) {
+        providerOAuthPollJob?.cancelAndJoin()
+        providerOAuthPollJob = null
         if (mutableState.value.backend?.id != backend.id) flushDraft()
         cachedSlashCatalog = null
         extensionSlashCommands = null
@@ -3090,6 +3343,12 @@ private const val MAX_SLASH_OUTPUT_CHARACTERS = 20_000
 private const val MAX_SLASH_SUGGESTIONS = 12
 private const val MAX_SLASH_ALIAS_DEPTH = 5
 private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
+private const val MAX_OAUTH_CODE_CHARACTERS = 8_192
+private const val MAX_OAUTH_SESSION_ID_CHARACTERS = 512
+private const val MAX_OAUTH_SESSION_SECONDS = 3_600L
+private const val DEFAULT_OAUTH_POLL_SECONDS = 2L
+private const val MIN_OAUTH_POLL_SECONDS = 1L
+private const val MAX_OAUTH_POLL_SECONDS = 30L
 private const val MAX_MCP_NAME_CHARACTERS = 200
 private const val MAX_MCP_ENV_VALUE_CHARACTERS = 32_768
 private const val MAX_TOOLSET_NAME_CHARACTERS = 200

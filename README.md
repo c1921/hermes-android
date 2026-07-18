@@ -33,6 +33,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Dangerous-command approval, denial, clarification, interruption, session-only YOLO, and non-persistent masked sudo/secret prompts with expiry handling
 - [x] Dynamic Hermes model/provider catalogue, model selection, reasoning effort, and fast mode
 - [x] Provider API-key and custom-endpoint management through Hermes-owned APIs
+- [x] Profile-scoped provider account sign-in matching Desktop Accounts and API Keys, including server-advertised PKCE, device-code polling, external CLI handoff, and confirmed disconnect
 - [x] SAF file, image, and PDF attachments with bounded reads and server-queue cleanup
 - [x] Android share-target ingestion for bounded text and `content://` attachments into a draft session without automatic sending
 - [x] Managed workspace browsing with directory navigation, bounded text/source/image/PDF previews, network-isolated HTML rendering, streamed SAF downloads, cancellation, and MIME/path validation
@@ -74,7 +75,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 
 ### Not yet implemented
 
-- [ ] Native OAuth/OIDC sign-in
+- [ ] Native OAuth/OIDC sign-in for connecting the Android app itself to a Dashboard without username/password
 - [ ] Background push notifications and notification actions
 - [x] Persisted appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` palettes; Nous remains the default and Android follows the system light or dark setting
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, and per-tool filters
@@ -229,7 +230,7 @@ Open issues were last reconciled on 17 July 2026.
 Current concrete blockers:
 
 - **Production deployment verification:** the isolated pinned-upstream smoke passed, including login, authenticated status, two fresh WebSocket ticket mints, saved-backend reconnect, session creation, and management reads. A particular public, private, or Tailscale deployment still needs its own route and credential smoke before that deployment is declared verified.
-- **Native OAuth/OIDC:** browser cookies cannot safely be imported from Custom Tabs. A general upstream native code/session exchange with PKCE is required.
+- **Native backend OAuth/OIDC:** browser cookies cannot safely be imported from Custom Tabs. A general upstream native code/session exchange with PKCE is required. This is separate from the implemented profile-scoped model-provider account flows.
 - **Exact reconnect replay:** Hermes does not currently expose a universal ordered event cursor/replay contract for every in-flight stream.
 - **Background mobile delivery:** approvals, clarifications, completions, failures, and cron results need an upstream device-registration, revocation, acknowledgement, and single-use action-token contract.
 - **Remote artifacts:** full safe browsing and generated-artifact delivery would benefit from a canonical remote artifact descriptor rather than desktop filesystem assumptions.

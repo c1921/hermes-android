@@ -102,6 +102,10 @@ class HermesViewModel @Inject constructor(
     fun deleteProfile(name: String) = viewModelScope.launch { repository.deleteProfile(name) }
     fun runDiagnostic(action: DiagnosticAction) = viewModelScope.launch { repository.runDiagnostic(action) }
     fun refreshProviders() = viewModelScope.launch { repository.refreshProviders(refresh = true) }
+    fun startProviderOAuth(providerId: String) = viewModelScope.launch { repository.startProviderOAuth(providerId) }
+    fun submitProviderOAuth(code: String) = viewModelScope.launch { repository.submitProviderOAuth(code) }
+    fun cancelProviderOAuth() = viewModelScope.launch { repository.cancelProviderOAuth() }
+    fun disconnectProviderOAuth(providerId: String) = viewModelScope.launch { repository.disconnectProviderOAuth(providerId) }
     fun saveProviderSetting(key: String, value: String, apiKey: String) = viewModelScope.launch {
         repository.saveProviderSetting(key, value, apiKey)
     }

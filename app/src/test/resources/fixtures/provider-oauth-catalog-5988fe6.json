@@ -1,0 +1,23 @@
+{
+  "providers": [
+    {
+      "id": "nous",
+      "name": "Nous Portal",
+      "flow": "device_code",
+      "cli_command": "hermes login",
+      "docs_url": "https://portal.nousresearch.com",
+      "disconnect_hint": null,
+      "disconnect_command": null,
+      "disconnectable": true,
+      "status": {
+        "logged_in": false,
+        "source": null,
+        "source_label": null,
+        "token_preview": null,
+        "expires_at": null,
+        "has_refresh_token": false,
+        "last_refresh": null
+      }
+    }
+  ]
+}

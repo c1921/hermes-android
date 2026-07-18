@@ -16,6 +16,12 @@ import com.nousresearch.hermes.protocol.ActiveProfileResponse
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfilesResponse
 import com.nousresearch.hermes.protocol.ProviderValidationResult
+import com.nousresearch.hermes.protocol.OAuthProvider
+import com.nousresearch.hermes.protocol.OAuthProvidersResponse
+import com.nousresearch.hermes.protocol.OAuthStartResponse
+import com.nousresearch.hermes.protocol.OAuthPollResponse
+import com.nousresearch.hermes.protocol.OAuthActionResponse
+import com.nousresearch.hermes.protocol.OAuthSubmitResponse
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.ManagedFileReadResponse
 import com.nousresearch.hermes.protocol.ManagedFilesResponse
@@ -697,6 +703,97 @@ class HermesRestClient(
         "/api/env?profile=${encodePathSegment(profile)}",
         MapSerializer(String.serializer(), EnvVarInfo.serializer()),
     )
+
+    suspend fun oauthProviders(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): List<OAuthProvider> = get(
+        config,
+        token,
+        "/api/providers/oauth?profile=${encodePathSegment(profile)}",
+        OAuthProvidersResponse.serializer(),
+    ).providers
+
+    suspend fun startProviderOAuth(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        providerId: String,
+    ): OAuthStartResponse = json.decodeFromJsonElement(
+        OAuthStartResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/providers/oauth/${encodePathSegment(providerId)}/start?profile=${encodePathSegment(profile)}",
+            method = "POST",
+            body = buildJsonObject { },
+        ),
+    )
+
+    suspend fun pollProviderOAuth(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        providerId: String,
+        sessionId: String,
+    ): OAuthPollResponse = get(
+        config,
+        token,
+        "/api/providers/oauth/${encodePathSegment(providerId)}/poll/${encodePathSegment(sessionId)}?profile=${encodePathSegment(profile)}",
+        OAuthPollResponse.serializer(),
+    )
+
+    suspend fun cancelProviderOAuth(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        sessionId: String,
+    ): Boolean = json.decodeFromJsonElement(
+        OAuthActionResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/providers/oauth/sessions/${encodePathSegment(sessionId)}?profile=${encodePathSegment(profile)}",
+            method = "DELETE",
+        ),
+    ).ok
+
+    suspend fun submitProviderOAuth(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        providerId: String,
+        sessionId: String,
+        code: String,
+    ): OAuthSubmitResponse = json.decodeFromJsonElement(
+        OAuthSubmitResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/providers/oauth/${encodePathSegment(providerId)}/submit?profile=${encodePathSegment(profile)}",
+            method = "POST",
+            body = buildJsonObject {
+                put("session_id", sessionId)
+                put("code", code)
+            },
+        ),
+    )
+
+    suspend fun disconnectProviderOAuth(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        providerId: String,
+    ): Boolean = json.decodeFromJsonElement(
+        OAuthActionResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/providers/oauth/${encodePathSegment(providerId)}?profile=${encodePathSegment(profile)}",
+            method = "DELETE",
+        ),
+    ).ok
 
     suspend fun validateProviderCredential(
         config: BackendConfig,
