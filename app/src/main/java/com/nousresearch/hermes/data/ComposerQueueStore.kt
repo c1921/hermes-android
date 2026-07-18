@@ -41,18 +41,11 @@ class ComposerQueueStore @Inject constructor(
 
     suspend fun get(queue: ComposerQueueContext): List<QueuedPrompt> {
         val raw = context.composerQueueDataStore.data.first()[stringPreferencesKey(queue.storageKey)] ?: return emptyList()
-        return runCatching { json.decodeFromString(serializer, raw) }
-            .getOrDefault(emptyList())
-            .take(ComposerQueue.MAX_ENTRIES)
-            .mapNotNull { entry -> ComposerQueue.tryEnqueue(emptyList(), entry)?.singleOrNull() }
-            .distinctBy(QueuedPrompt::id)
+        return ComposerQueue.requireValid(json.decodeFromString(serializer, raw))
     }
 
     suspend fun put(queue: ComposerQueueContext, entries: List<QueuedPrompt>) {
-        require(entries.size <= ComposerQueue.MAX_ENTRIES) { "Pending-message queue is too large" }
-        val normalized = entries.fold(emptyList<QueuedPrompt>()) { result, entry ->
-            ComposerQueue.tryEnqueue(result, entry) ?: error("Pending-message queue contains an invalid entry")
-        }
+        val normalized = ComposerQueue.requireValid(entries)
         context.composerQueueDataStore.edit { preferences ->
             val key = stringPreferencesKey(queue.storageKey)
             if (normalized.isEmpty()) preferences.remove(key) else preferences[key] = json.encodeToString(serializer, normalized)

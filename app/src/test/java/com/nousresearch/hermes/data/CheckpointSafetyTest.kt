@@ -51,7 +51,10 @@ class CheckpointSafetyTest {
 
     @Test
     fun `restore rejects a workspace diff changed since user review`() {
-        val preview = CheckpointPreview(checkpoint.hash, "app.kt | 1 +", "+first")
+        val preview = CheckpointSafety.boundedPreview(
+            checkpoint.hash,
+            RollbackDiffResult(stat = "app.kt | 1 +", diff = "+first"),
+        )
 
         CheckpointSafety.requireUnchangedPreview(
             preview,
@@ -61,6 +64,23 @@ class CheckpointSafetyTest {
             CheckpointSafety.requireUnchangedPreview(
                 preview,
                 RollbackDiffResult(stat = "app.kt | 2 +", diff = "+first\n+second"),
+            )
+        }
+    }
+
+    @Test
+    fun `restore fingerprints the full response beyond the bounded preview`() {
+        val result = RollbackDiffResult(
+            stat = "s".repeat(CheckpointSafety.MAX_STAT_CHARACTERS + 20),
+            diff = "d".repeat(CheckpointSafety.MAX_DIFF_CHARACTERS + 20),
+        )
+        val preview = CheckpointSafety.boundedPreview(checkpoint.hash, result)
+
+        CheckpointSafety.requireUnchangedPreview(preview, result)
+        assertThrows(IllegalStateException::class.java) {
+            CheckpointSafety.requireUnchangedPreview(
+                preview,
+                result.copy(diff = result.diff.dropLast(1) + "x"),
             )
         }
     }

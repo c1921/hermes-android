@@ -43,6 +43,8 @@ class AgentsScreenTest {
                     onInterrupt = {},
                     onStopProcess = {},
                     onOpenSession = {},
+                    onRefreshArchives = {},
+                    onLoadArchive = {},
                     onBack = null,
                 )
             }

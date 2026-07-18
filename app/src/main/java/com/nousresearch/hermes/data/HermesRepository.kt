@@ -108,6 +108,7 @@ data class HermesState(
     val queuedPrompts: List<QueuedPrompt> = emptyList(),
     val queueDraining: Boolean = false,
     val queueNotice: String? = null,
+    val queueStorageHealthy: Boolean = true,
     val draft: String = "",
     val slashSuggestions: List<SlashSuggestion> = emptyList(),
     val slashLoading: Boolean = false,
@@ -241,6 +242,7 @@ data class CheckpointPreview(
     val hash: String,
     val stat: String,
     val diff: String,
+    val fingerprint: String,
 )
 
 data class PendingAttachment(
@@ -250,6 +252,7 @@ data class PendingAttachment(
     val byteCount: Int,
     val refText: String? = null,
     val queuedImagePaths: List<String> = emptyList(),
+    val sourceUri: String? = null,
 )
 
 data class SlashSuggestion(
@@ -529,25 +532,30 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    suspend fun ingestSharedContent(text: String, uris: List<Uri>) {
-        runCatching {
-            if (mutableState.value.runtimeSessionId == null) {
-                newSession()
-                requireNotNull(mutableState.value.runtimeSessionId) { "Hermes could not open a session for shared content" }
-            }
-            if (text.isNotEmpty()) {
-                updateDraft(mergeSharedText(mutableState.value.draft, text, DraftStore.MAX_DRAFT_CHARACTERS))
-            }
-            uris.take(MAX_SHARED_ATTACHMENTS).forEach { uri ->
-                require(uri.scheme.equals("content", ignoreCase = true)) { "Shared attachments must use content URIs" }
-                attach(uri)
-            }
-        }.onFailure(::fail)
+    suspend fun ingestSharedContent(text: String, uris: List<Uri>): Boolean = try {
+        if (mutableState.value.runtimeSessionId == null) {
+            newSession()
+            requireNotNull(mutableState.value.runtimeSessionId) { "Hermes could not open a session for shared content" }
+        }
+        uris.take(MAX_SHARED_ATTACHMENTS).forEach { uri ->
+            require(uri.scheme.equals("content", ignoreCase = true)) { "Shared attachments must use content URIs" }
+            if (mutableState.value.pendingAttachments.none { it.sourceUri == uri.toString() }) attachOrThrow(uri)
+        }
+        if (text.isNotEmpty()) {
+            updateDraft(mergeSharedText(mutableState.value.draft, text, DraftStore.MAX_DRAFT_CHARACTERS))
+        }
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        fail(error)
+        false
     }
 
     suspend fun queueDraft() {
         runCatching {
             val current = mutableState.value
+            require(current.queueStorageHealthy) { QUEUE_RECOVERY_MESSAGE }
             require(isRunBusy(current)) { "Pending messages can only be queued while Hermes is running" }
             require(current.pendingAttachments.isEmpty()) {
                 "Pending-message queue is text-only. Send or remove attachments first."
@@ -574,6 +582,7 @@ class HermesRepository @Inject constructor(
 
     suspend fun updateQueuedPrompt(id: String, text: String) {
         runCatching {
+            require(mutableState.value.queueStorageHealthy) { QUEUE_RECOVERY_MESSAGE }
             val context = requireNotNull(currentComposerQueueContext()) { "Queued message session is unavailable" }
             queueMutex.withLock {
                 val next = ComposerQueue.updateText(mutableState.value.queuedPrompts, id, text)
@@ -586,6 +595,7 @@ class HermesRepository @Inject constructor(
 
     suspend fun removeQueuedPrompt(id: String) {
         runCatching {
+            require(mutableState.value.queueStorageHealthy) { QUEUE_RECOVERY_MESSAGE }
             val context = requireNotNull(currentComposerQueueContext()) { "Queued message session is unavailable" }
             queueMutex.withLock {
                 val current = mutableState.value.queuedPrompts
@@ -599,6 +609,7 @@ class HermesRepository @Inject constructor(
 
     suspend fun sendQueuedPromptNow(id: String) {
         runCatching {
+            require(mutableState.value.queueStorageHealthy) { QUEUE_RECOVERY_MESSAGE }
             require(!isRunBusy(mutableState.value)) { "Stop the current run before sending a queued message now" }
             val context = requireNotNull(currentComposerQueueContext()) { "Queued message session is unavailable" }
             queueMutex.withLock {
@@ -1715,7 +1726,7 @@ class HermesRepository @Inject constructor(
                 mcpLoading = false,
                 mcpError = catalog.diagnostics.takeIf { it.isNotEmpty() }?.joinToString("\n") {
                     "${it.name}: ${it.message}"
-                },
+                }?.let(DiagnosticRedactor::redact),
                 error = null,
             )
         }.onFailure { error ->
@@ -1731,10 +1742,11 @@ class HermesRepository @Inject constructor(
         runCatching {
             restClient.testMcpServer(backend, token, mutableState.value.activeProfile, server.name)
         }.onSuccess { result ->
+            val safeResult = result.copy(error = result.error?.let(DiagnosticRedactor::redact))
             mutableState.value = mutableState.value.copy(
-                mcpTests = mutableState.value.mcpTests + (server.name to result),
+                mcpTests = mutableState.value.mcpTests + (server.name to safeResult),
                 mcpLoading = false,
-                mcpError = result.error,
+                mcpError = safeResult.error,
             )
         }.onFailure { error ->
             if (error is CancellationException) throw error
@@ -1888,7 +1900,9 @@ class HermesRepository @Inject constructor(
         }.onFailure { error ->
             if (error is CancellationException) throw error
             mutableState.value = mutableState.value.copy(
-                mcpError = "The setting was saved, but the live MCP reload failed: ${error.message ?: "unknown gateway error"}",
+                mcpError = DiagnosticRedactor.redact(
+                    "The setting was saved, but the live MCP reload failed: ${error.message ?: "unknown gateway error"}",
+                ),
             )
         }
     }
@@ -2007,11 +2021,7 @@ class HermesRepository @Inject constructor(
         }.onSuccess { result ->
             if (mutableState.value.runtimeSessionId != sessionId) return@onSuccess
             mutableState.value = mutableState.value.copy(
-                checkpointPreview = CheckpointPreview(
-                    hash = checkpoint.hash,
-                    stat = result.stat.take(MAX_CHECKPOINT_STAT_CHARACTERS),
-                    diff = result.diff.take(MAX_CHECKPOINT_DIFF_CHARACTERS),
-                ),
+                checkpointPreview = CheckpointSafety.boundedPreview(checkpoint.hash, result),
                 checkpointsLoading = false,
                 checkpointError = null,
                 error = null,
@@ -2309,12 +2319,22 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun attach(uri: Uri) {
+        try {
+            attachOrThrow(uri)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            fail(error)
+        }
+    }
+
+    private suspend fun attachOrThrow(uri: Uri) {
         val sessionId = mutableState.value.runtimeSessionId ?: run {
             newSession()
             requireNotNull(mutableState.value.runtimeSessionId)
         }
         mutableState.value = mutableState.value.copy(attaching = true, error = null)
-        runCatching {
+        val attachment = try {
             val payload = attachmentReader.read(uri)
             when {
                 payload.mimeType.startsWith("image/") -> {
@@ -2333,6 +2353,7 @@ class HermesRepository @Inject constructor(
                         mimeType = payload.mimeType,
                         byteCount = payload.byteCount,
                         queuedImagePaths = listOf(attached.path),
+                        sourceUri = uri.toString(),
                     )
                 }
                 payload.mimeType == "application/pdf" -> {
@@ -2351,6 +2372,7 @@ class HermesRepository @Inject constructor(
                         mimeType = payload.mimeType,
                         byteCount = payload.byteCount,
                         queuedImagePaths = attached.pages.map { it.path },
+                        sourceUri = uri.toString(),
                     )
                 }
                 else -> {
@@ -2370,18 +2392,16 @@ class HermesRepository @Inject constructor(
                         mimeType = payload.mimeType,
                         byteCount = payload.byteCount,
                         refText = attached.refText,
+                        sourceUri = uri.toString(),
                     )
                 }
             }
-        }.onSuccess { attachment ->
-            mutableState.value = mutableState.value.copy(
-                attaching = false,
-                pendingAttachments = mutableState.value.pendingAttachments + attachment,
-            )
-        }.onFailure { error ->
+        } finally {
             mutableState.value = mutableState.value.copy(attaching = false)
-            fail(error)
         }
+        mutableState.value = mutableState.value.copy(
+            pendingAttachments = mutableState.value.pendingAttachments + attachment,
+        )
     }
 
     suspend fun removePendingAttachment(id: String) {
@@ -2609,11 +2629,21 @@ class HermesRepository @Inject constructor(
         queueDrainJob?.cancelAndJoin()
         queueDrainJob = null
         val context = currentComposerQueueContext()
-        val queue = context?.let { composerQueueStore.get(it) }.orEmpty()
+        val loaded = context?.let {
+            try {
+                Result.success(composerQueueStore.get(it))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Result.failure(error)
+            }
+        }
+        val queue = loaded?.getOrNull().orEmpty()
         mutableState.value = mutableState.value.copy(
             queuedPrompts = queue,
             queueDraining = false,
-            queueNotice = null,
+            queueNotice = loaded?.exceptionOrNull()?.let { QUEUE_RECOVERY_MESSAGE },
+            queueStorageHealthy = loaded?.isSuccess != false,
         )
         scheduleQueueDrain()
     }
@@ -2915,7 +2945,9 @@ class HermesRepository @Inject constructor(
         }
         mutableState.value = mutableState.value.copy(
             mcpLoading = false,
-            mcpError = error.message ?: error::class.simpleName ?: "Hermes MCP request failed",
+            mcpError = DiagnosticRedactor.redact(
+                error.message ?: error::class.simpleName ?: "Hermes MCP request failed",
+            ),
         )
     }
 
@@ -2984,6 +3016,7 @@ class HermesRepository @Inject constructor(
                 delay(retryDelay)
                 val connected = runCatching { gateway.connect(backend, cookie) }.isSuccess
                 if (connected) {
+                    mutableState.value = mutableState.value.copy(error = null)
                     val active = mutableState.value.activeStoredSession
                     if (active != null) runCatching { openSession(active) }
                     return@launch
@@ -3021,8 +3054,6 @@ private const val MAX_USAGE_LABEL_CHARACTERS = 200
 private const val MAX_CONTEXT_CATEGORIES = 32
 private const val MAX_CHECKPOINTS = 100
 private const val MAX_CHECKPOINT_LABEL_CHARACTERS = 300
-private const val MAX_CHECKPOINT_STAT_CHARACTERS = 2_000
-private const val MAX_CHECKPOINT_DIFF_CHARACTERS = 4_000
 private const val MAX_AGENT_EVENT_SESSIONS = 32
 private const val MAX_SPAWN_TREE_ARCHIVES = 30
 private const val MAX_AGENTS_PER_SPAWN_TREE = 100
@@ -3032,6 +3063,8 @@ private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
 private val USAGE_PERIODS = setOf(7, 30, 90)
 private val ACCEPTED_PROMPT_STATUSES = setOf("streaming", "queued", "steered")
+private const val QUEUE_RECOVERY_MESSAGE =
+    "Pending messages could not be loaded. They remain stored on this device; do not queue another message until recovery is available."
 
 internal fun validateMcpInstall(entry: McpCatalogEntry, env: Map<String, String>): Map<String, String> {
     require(!entry.installed) { "This MCP catalog entry is already installed" }

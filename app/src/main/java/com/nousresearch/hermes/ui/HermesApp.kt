@@ -268,8 +268,7 @@ fun HermesApp(
         val content = sharedContent ?: return@LaunchedEffect
         if (state.backend == null) return@LaunchedEffect
         snapshotFlow { latestConnection }.first { it == GatewayConnectionState.Open }
-        viewModel.ingestSharedContent(content)
-        onSharedContentConsumed(content.id)
+        if (viewModel.ingestSharedContent(content)) onSharedContentConsumed(content.id)
     }
     val modelActions = remember(viewModel) {
         ModelActions(
@@ -479,7 +478,7 @@ private fun OnboardingScreen(
                         Text("BACKEND LINK", style = MaterialTheme.typography.headlineMedium)
                     }
                     HermesField(label, { label = it }, "Connection name")
-                    HermesField(url, { url = it }, "https://hermes.example.com", KeyboardType.Uri)
+                    HermesField(url, { url = it }, "Hermes backend URL", KeyboardType.Uri)
                     HermesField(username, { username = it }, "Dashboard username")
                     HermesField(password, { password = it }, "Dashboard password", KeyboardType.Password, secret = true)
                     Row(

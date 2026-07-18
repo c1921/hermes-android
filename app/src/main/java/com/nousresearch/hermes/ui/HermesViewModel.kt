@@ -49,9 +49,8 @@ class HermesViewModel @Inject constructor(
     fun removeQueuedPrompt(id: String) = viewModelScope.launch { repository.removeQueuedPrompt(id) }
     fun sendQueuedPromptNow(id: String) = viewModelScope.launch { repository.sendQueuedPromptNow(id) }
     fun updateDraft(value: String) = repository.updateDraft(value)
-    suspend fun ingestSharedContent(content: SharedContent) {
+    suspend fun ingestSharedContent(content: SharedContent): Boolean =
         repository.ingestSharedContent(content.text, content.uriStrings.map(Uri::parse))
-    }
     fun completeSlash(text: String) = repository.completeSlash(text)
     fun executeSlash(command: String) = viewModelScope.launch { repository.executeSlash(command) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }

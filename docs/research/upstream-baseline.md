@@ -111,6 +111,16 @@ Desktop completes browser login inside the persistent Electron partition `persis
 
 Nous Portal is one dashboard auth provider. Its browser session is not a distinct native Android token API in current `main`.
 
+## Live Android validation against an operator backend
+
+On 18 July 2026, the `0.1.0-dev` debug client was installed on a Samsung SM-S906E running Android 16 and tested against the operator's personal Hermes Dashboard `0.18.0`. Live service inspection first confirmed that `hermes-dashboard.service` and `hermes-gateway.service` both used `HERMES_HOME=/home/discord/.hermes`; the sibling iniuria gateway remained isolated under `/home/discord/.hermes-iniuria`. No service was restarted and no backend configuration was changed.
+
+The Android client completed password login, authenticated status validation, fresh single-use WebSocket ticket minting, `/api/ws` upgrade, and real session hydration. One new-session message was submitted with the required Hermes Android production-QA preamble and an explicit instruction that no work or response was required. The message was accepted, the composer returned to idle, and the agent performed no work. Reinstalling the same package with `adb install -r` preserved the Keystore-backed session and reconnected without another password entry.
+
+The network path was then removed while the authenticated app was open. Android surfaced bounded reconnect attempts without discarding the saved backend. Restoring the path returned the client to `LIVE / JSON-RPC`. A stale reconnect warning discovered during this test was fixed at the successful-reconnect state boundary and the same cut-and-recover sequence proved that the warning now clears.
+
+The temporary SSH tunnel, host-rewriting proxy, ADB port reversals, device test files, and local proxy files were removed after validation. The new QA session was archived from the client; a read-only search of the personal Hermes database found no persisted message or session matching the QA marker. Credentials, cookies, ticket values, message content, and host addresses are not recorded in repository artifacts.
+
 ## Current limitations affecting Android
 
 1. **No versioned full-client handshake.** `gateway.ready` contains only `skin`. Android can read the package version from `/api/status`, but current `main` does not negotiate a protocol/schema version, per-method capability set, or compatibility range before dispatch.

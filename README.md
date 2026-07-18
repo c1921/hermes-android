@@ -61,6 +61,15 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
 - [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report; SBOM and release provenance remain.
 
+### Correctness fixes
+
+- [x] Large checkpoint previews retain a full-response fingerprint for pre-restore validation, so bounded display does not reject unchanged large diffs or miss changes beyond the display limit.
+- [x] Android share payloads remain pending when session creation or attachment ingestion fails, and successful partial attachments are identified for a safe retry.
+- [x] MCP catalogue diagnostics, probe failures, and reload errors are redacted before entering Android UI state.
+- [x] Unreadable pending-message queue data remains stored and blocks queue mutation with an explicit recovery message instead of being silently replaced.
+- [x] A successful bounded reconnect clears its previous retry notice instead of showing a stale failure beside `LIVE / JSON-RPC`.
+- [x] Production onboarding labels the required backend URL without embedding an example endpoint.
+
 ### Not yet implemented
 
 - [ ] Native OAuth/OIDC sign-in

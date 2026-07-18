@@ -18,6 +18,15 @@ object ComposerQueue {
     fun enqueue(queue: List<QueuedPrompt>, entry: QueuedPrompt): List<QueuedPrompt> =
         requireNotNull(tryEnqueue(queue, entry)) { "Pending-message queue rejected the entry" }
 
+    fun requireValid(queue: List<QueuedPrompt>): List<QueuedPrompt> {
+        require(queue.size <= MAX_ENTRIES) { "Pending-message queue is too large" }
+        return queue.fold(emptyList()) { valid, entry ->
+            val next = requireNotNull(tryEnqueue(valid, entry)) { "Pending-message queue contains an invalid entry" }
+            require(next.last() == entry) { "Pending-message queue contains a modified entry" }
+            next
+        }
+    }
+
     fun tryEnqueue(queue: List<QueuedPrompt>, entry: QueuedPrompt): List<QueuedPrompt>? {
         val normalized = entry.copy(
             text = entry.text.trim().take(MAX_TEXT_CHARACTERS),

@@ -3,6 +3,7 @@ package com.nousresearch.hermes.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,5 +69,19 @@ class ComposerQueueTest {
         assertTrue(ComposerQueue.shouldAutoDrain(isBusy = false, queue = ComposerQueue.resetFailures(queue, "one")))
         assertFalse(ComposerQueue.shouldAutoDrain(isBusy = true, queue = queue))
         assertFalse(ComposerQueue.shouldAutoDrain(isBusy = false, queue = emptyList()))
+    }
+
+    @Test
+    fun `persisted queue validation rejects data it would have to drop or modify`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ComposerQueue.requireValid(listOf(QueuedPrompt("one", "valid", 1), QueuedPrompt("one", "duplicate", 2)))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ComposerQueue.requireValid(listOf(QueuedPrompt("one", " padded ", 1)))
+        }
+        assertEquals(
+            listOf(QueuedPrompt("one", "valid", 1)),
+            ComposerQueue.requireValid(listOf(QueuedPrompt("one", "valid", 1))),
+        )
     }
 }
