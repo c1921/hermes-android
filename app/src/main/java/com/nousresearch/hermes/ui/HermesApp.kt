@@ -80,6 +80,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
@@ -168,7 +169,7 @@ import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, AGENTS }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, AGENTS, CONFIG }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -238,6 +239,8 @@ private data class ManagementActions(
     val installMcpCatalogEntry: (String, Map<String, String>) -> Unit,
     val refreshToolsets: () -> Unit,
     val setToolsetEnabled: (String, Boolean) -> Unit,
+    val refreshServerConfig: () -> Unit,
+    val updateServerConfig: (String, kotlinx.serialization.json.JsonElement) -> Unit,
     val refreshUsage: (Int) -> Unit,
     val refreshAgents: () -> Unit,
     val refreshSpawnTrees: () -> Unit,
@@ -327,6 +330,8 @@ fun HermesApp(
             installMcpCatalogEntry = viewModel::installMcpCatalogEntry,
             refreshToolsets = viewModel::refreshToolsets,
             setToolsetEnabled = viewModel::setToolsetEnabled,
+            refreshServerConfig = viewModel::refreshServerConfig,
+            updateServerConfig = viewModel::updateServerConfig,
             refreshUsage = viewModel::refreshUsage,
             refreshAgents = viewModel::refreshAgents,
             refreshSpawnTrees = viewModel::refreshSpawnTrees,
@@ -613,6 +618,7 @@ private fun HermesWorkspace(
                     onMcp = { destination = WorkspaceDestination.MCP },
                     onUsage = { destination = WorkspaceDestination.USAGE },
                     onAgents = { destination = WorkspaceDestination.AGENTS },
+                    onConfig = { destination = WorkspaceDestination.CONFIG },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -710,6 +716,13 @@ private fun HermesWorkspace(
                         onInterrupt = managementActions.interruptSubagent,
                         onStopProcess = managementActions.stopBackgroundProcess,
                         onOpenSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.CONFIG -> ServerConfigScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshServerConfig,
+                        onUpdate = managementActions.updateServerConfig,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -838,6 +851,13 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    WorkspaceDestination.CONFIG -> ServerConfigScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshServerConfig,
+                        onUpdate = managementActions.updateServerConfig,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh, onSearchSessions,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
@@ -854,6 +874,7 @@ private fun HermesWorkspace(
                         onMcp = { destination = WorkspaceDestination.MCP },
                         onUsage = { destination = WorkspaceDestination.USAGE },
                         onAgents = { destination = WorkspaceDestination.AGENTS },
+                        onConfig = { destination = WorkspaceDestination.CONFIG },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                 }
@@ -882,6 +903,7 @@ private fun SessionRail(
     onMcp: () -> Unit,
     onUsage: () -> Unit,
     onAgents: () -> Unit,
+    onConfig: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -1009,6 +1031,17 @@ private fun SessionRail(
                 Spacer(Modifier.width(6.dp))
                 Text("Usage")
             }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = onConfig, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Tune, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Settings")
+            }
+            Spacer(Modifier.weight(1f))
         }
         OutlinedTextField(
             value = query,

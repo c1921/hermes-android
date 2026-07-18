@@ -14,6 +14,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 
 @HiltViewModel
 class HermesViewModel @Inject constructor(
@@ -126,6 +127,10 @@ class HermesViewModel @Inject constructor(
     fun refreshToolsets() = viewModelScope.launch { repository.refreshToolsets() }
     fun setToolsetEnabled(name: String, enabled: Boolean) = viewModelScope.launch {
         repository.setToolsetEnabled(name, enabled)
+    }
+    fun refreshServerConfig() = viewModelScope.launch { repository.refreshServerConfig() }
+    fun updateServerConfig(key: String, value: JsonElement) = viewModelScope.launch {
+        repository.updateServerConfig(key, value)
     }
     fun refreshUsage(days: Int) = viewModelScope.launch { repository.refreshUsage(days) }
     fun refreshCheckpoints() = viewModelScope.launch { repository.refreshCheckpoints() }

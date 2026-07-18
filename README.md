@@ -44,6 +44,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
 - [x] Profile-scoped Hermes toolset catalogue with server-advertised platform, setup state, tools, and enable/disable controls for future sessions
+- [x] Schema-driven profile configuration for an audited safe set of server-advertised boolean, number, select, and text fields using one-field deep-merge writes
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
 - [x] Doctor and security-audit actions with bounded status polling and output redaction
 - [x] Optional durable secure-screen mode that blocks screenshots, screen recording, and recent-app thumbnails
@@ -64,7 +65,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] Native OAuth/OIDC sign-in
 - [ ] Background push notifications and notification actions
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
-- [ ] MCP custom-server add/edit, remote-client OAuth setup, per-tool filters, and structured general configuration
+- [ ] MCP custom-server add/edit, remote-client OAuth setup, and per-tool filters
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
 - [ ] Biometric lock, Android share target, deep links, shortcuts, widgets, and other platform integrations
@@ -198,6 +199,7 @@ Current automated coverage includes:
 - Password non-persistence at the connect-and-save boundary
 - Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, and diagnostic redaction
 - Profile-scoped MCP list/catalog/test/toggle/install/delete/action-status routes, session-cookie reuse, reviewed env-name filtering, unknown-field tolerance, and compute-host reload responses
+- Profile-scoped config/schema reads, exact one-field nested PUT bodies, cookie reuse, negative acknowledgements, positive safe-key intersection, type validation, and unknown-field tolerance
 - Profile-scoped usage analytics plus live `session.context_breakdown`, nullable legacy counters, and unknown-field tolerance
 - Sensitive sudo/secret request and expiry reduction plus physical Compose instrumentation for password semantics, exact submission, cancellation, and cross-request value isolation
 - Hermes voice REST payloads, spoken-audio MIME/base64 validation, Desktop-equivalent speech sanitisation, and numeric/string session-history message identifiers

@@ -124,6 +124,11 @@ data class HermesState(
     val toolsetsLoading: Boolean = false,
     val toolsetNotice: String? = null,
     val toolsetError: String? = null,
+    val serverConfigProfile: String? = null,
+    val serverConfig: ServerConfigSnapshot = ServerConfigSnapshot(),
+    val serverConfigLoading: Boolean = false,
+    val serverConfigNotice: String? = null,
+    val serverConfigError: String? = null,
     val cronJobs: List<CronJob> = emptyList(),
     val cronRuns: Map<String, List<StoredSession>> = emptyMap(),
     val profiles: List<ProfileInfo> = emptyList(),
@@ -1085,6 +1090,66 @@ class HermesRepository @Inject constructor(
         }.onFailure(::failToolsets)
     }
 
+    suspend fun refreshServerConfig() {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            serverConfigLoading = true,
+            serverConfigNotice = null,
+            serverConfigError = null,
+        )
+        runCatching {
+            val active = restClient.activeProfile(backend, token)
+            val schema = restClient.serverConfigSchema(backend, token)
+            val config = restClient.serverConfig(backend, token, active.active)
+            Triple(active, parseServerConfig(schema, config), active.active)
+        }.onSuccess { (active, snapshot, profile) ->
+            mutableState.value = mutableState.value.copy(
+                activeProfile = active.active,
+                currentProfile = active.current,
+                serverConfigProfile = profile,
+                serverConfig = snapshot,
+                serverConfigLoading = false,
+                serverConfigError = null,
+            )
+        }.onFailure(::failServerConfig)
+    }
+
+    suspend fun updateServerConfig(key: String, value: kotlinx.serialization.json.JsonElement) {
+        val observed = mutableState.value
+        val field = observed.serverConfig.fields.firstOrNull { it.key == key }
+            ?: error("Hermes did not advertise this configuration field")
+        val profile = observed.serverConfigProfile
+            ?.takeIf { it == observed.activeProfile }
+            ?: error("Refresh server settings after switching profiles")
+        val safeValue = validateServerConfigValue(field, value)
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            serverConfigLoading = true,
+            serverConfigNotice = null,
+            serverConfigError = null,
+        )
+        runCatching {
+            restClient.updateServerConfig(backend, token, profile, field.key, safeValue).also { result ->
+                require(result.ok) { "Hermes did not confirm the configuration change" }
+            }
+        }.onSuccess {
+            if (mutableState.value.activeProfile != profile || mutableState.value.serverConfigProfile != profile) {
+                mutableState.value = mutableState.value.copy(serverConfigLoading = false)
+                return@onSuccess
+            }
+            mutableState.value = mutableState.value.copy(
+                serverConfig = mutableState.value.serverConfig.copy(
+                    fields = mutableState.value.serverConfig.fields.map { current ->
+                        if (current.key == field.key) current.copy(value = safeValue) else current
+                    },
+                ),
+                serverConfigLoading = false,
+                serverConfigNotice = "${field.key} saved for $profile. Running sessions may retain their prior value.",
+                serverConfigError = null,
+            )
+        }.onFailure(::failServerConfig)
+    }
+
     suspend fun loadSkillHub(query: String = "") {
         val (backend, token) = activeCredentials()
         val profile = mutableState.value.activeProfile
@@ -1336,6 +1401,10 @@ class HermesRepository @Inject constructor(
                 providerOptions = null,
                 providerEnv = emptyMap(),
                 providerNotice = null,
+                serverConfigProfile = null,
+                serverConfig = ServerConfigSnapshot(),
+                serverConfigNotice = null,
+                serverConfigError = null,
             )
             refreshProfiles()
         } else {
@@ -2844,6 +2913,21 @@ class HermesRepository @Inject constructor(
             toolsetsLoading = false,
             toolsetError = DiagnosticRedactor.redact(
                 error.message ?: error::class.simpleName ?: "Hermes toolset request failed",
+            ),
+        )
+    }
+
+    private fun failServerConfig(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException ||
+            (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        if (reconnect) {
+            fail(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            serverConfigLoading = false,
+            serverConfigError = DiagnosticRedactor.redact(
+                error.message ?: error::class.simpleName ?: "Hermes configuration request failed",
             ),
         )
     }

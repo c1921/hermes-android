@@ -44,7 +44,7 @@ Tests: multi-device delivery, revoked/rotated tokens, duplicate ACK, expired app
 
 Existing limitation: Desktop TypeScript, Python handlers and external clients manually mirror parts of the contract.
 
-Proposal: publish a versioned JSON Schema or OpenAPI plus JSON-RPC method/event schema generated from the same models used in server contract tests. Generate TypeScript and Kotlin boundary models. Preserve an extension/unknown-event escape hatch.
+Proposal: publish a versioned JSON Schema or OpenAPI plus JSON-RPC method/event schema generated from the same models used in server contract tests. Configuration fields should declare sensitivity, risk/confirmation level, mutability and application/restart semantics so remote clients do not maintain key-name exclusions. Generate TypeScript and Kotlin boundary models. Preserve an extension/unknown-event escape hatch.
 
 Suggested boundary: schema and golden fixtures first; generators and clients follow independently. Avoid changing runtime behaviour in the schema commit.
 

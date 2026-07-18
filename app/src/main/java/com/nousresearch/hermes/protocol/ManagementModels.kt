@@ -2,6 +2,7 @@ package com.nousresearch.hermes.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class SkillInfo(
@@ -39,6 +40,25 @@ data class ToolsetToggleResult(
     val name: String,
     val platform: String,
     val enabled: Boolean,
+)
+
+@Serializable
+data class ServerConfigSchemaField(
+    val type: String = "",
+    val category: String = "general",
+    val description: String = "",
+    val options: List<JsonPrimitive> = emptyList(),
+)
+
+@Serializable
+data class ServerConfigSchemaResponse(
+    val fields: Map<String, ServerConfigSchemaField> = emptyMap(),
+    @SerialName("category_order") val categoryOrder: List<String> = emptyList(),
+)
+
+@Serializable
+data class ServerConfigMutationResponse(
+    val ok: Boolean,
 )
 
 @Serializable

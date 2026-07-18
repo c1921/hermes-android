@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.buildServerConfigPatch
 import com.nousresearch.hermes.protocol.ActionResponse
 import com.nousresearch.hermes.protocol.ActionStatusResponse
 import com.nousresearch.hermes.protocol.AnalyticsResponse
@@ -39,6 +40,8 @@ import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.ToolsetInfo
 import com.nousresearch.hermes.protocol.ToolsetToggleResult
+import com.nousresearch.hermes.protocol.ServerConfigMutationResponse
+import com.nousresearch.hermes.protocol.ServerConfigSchemaResponse
 import java.io.IOException
 import java.io.OutputStream
 import kotlinx.coroutines.Dispatchers
@@ -52,9 +55,11 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -333,6 +338,43 @@ class HermesRestClient(
             AnalyticsResponse.serializer(),
         )
     }
+
+    suspend fun serverConfig(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): JsonObject = request(
+        config,
+        token,
+        "/api/config?profile=${encodePathSegment(profile)}",
+    ).jsonObject
+
+    suspend fun serverConfigSchema(
+        config: BackendConfig,
+        token: String,
+    ): ServerConfigSchemaResponse = get(
+        config,
+        token,
+        "/api/config/schema",
+        ServerConfigSchemaResponse.serializer(),
+    )
+
+    suspend fun updateServerConfig(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        key: String,
+        value: JsonElement,
+    ): ServerConfigMutationResponse = json.decodeFromJsonElement(
+        ServerConfigMutationResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/config?profile=${encodePathSegment(profile)}",
+            method = "PUT",
+            body = buildJsonObject { put("config", buildServerConfigPatch(key, value)) },
+        ),
+    )
 
     suspend fun downloadManagedFile(
         config: BackendConfig,
