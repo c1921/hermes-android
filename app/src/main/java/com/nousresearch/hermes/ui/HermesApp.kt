@@ -165,8 +165,8 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
-import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.HermesTheme
+import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 import kotlinx.coroutines.flow.first
 
@@ -257,6 +257,8 @@ private data class ManagementActions(
 fun HermesApp(
     secureScreen: Boolean = false,
     onSecureScreenChange: (Boolean) -> Unit = {},
+    skin: HermesSkin = HermesSkin.NOUS,
+    onSkinChange: (HermesSkin) -> Unit = {},
     sharedContent: SharedContent? = null,
     onSharedContentConsumed: (String) -> Unit = {},
     viewModel: HermesViewModel = hiltViewModel(),
@@ -353,7 +355,7 @@ fun HermesApp(
             stopBackgroundProcess = viewModel::stopBackgroundProcess,
         )
     }
-    HermesTheme {
+    HermesTheme(skin) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize()) {
                 NousBackdrop(Modifier.fillMaxSize())
@@ -401,6 +403,8 @@ fun HermesApp(
                         onForgetBackend = viewModel::forgetBackend,
                         secureScreen = secureScreen,
                         onSecureScreenChange = onSecureScreenChange,
+                        skin = skin,
+                        onSkinChange = onSkinChange,
                         sharedContentId = sharedContent?.id,
                     )
                 }
@@ -600,6 +604,8 @@ private fun HermesWorkspace(
     onForgetBackend: (String) -> Unit,
     secureScreen: Boolean,
     onSecureScreenChange: (Boolean) -> Unit,
+    skin: HermesSkin,
+    onSkinChange: (HermesSkin) -> Unit,
     sharedContentId: String?,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -686,6 +692,8 @@ private fun HermesWorkspace(
                         onRun = managementActions.runDiagnostic,
                         secureScreen = secureScreen,
                         onSecureScreenChange = onSecureScreenChange,
+                        skin = skin,
+                        onSkinChange = onSkinChange,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -818,6 +826,8 @@ private fun HermesWorkspace(
                         onRun = managementActions.runDiagnostic,
                         secureScreen = secureScreen,
                         onSecureScreenChange = onSecureScreenChange,
+                        skin = skin,
+                        onSkinChange = onSkinChange,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
@@ -1211,8 +1221,8 @@ private fun ConnectionLine(connection: GatewayConnectionState) {
         GatewayConnectionState.Open -> MaterialTheme.colorScheme.tertiary to "LIVE / JSON-RPC"
         is GatewayConnectionState.Connecting -> WarningColor to "CONNECTING"
         is GatewayConnectionState.Reconnecting -> WarningColor to "RECONNECTING"
-        is GatewayConnectionState.Failed -> Danger to "CONNECTION FAILED"
-        is GatewayConnectionState.Closed -> Danger to "OFFLINE"
+        is GatewayConnectionState.Failed -> MaterialTheme.colorScheme.error to "CONNECTION FAILED"
+        is GatewayConnectionState.Closed -> MaterialTheme.colorScheme.error to "OFFLINE"
         GatewayConnectionState.Idle -> MaterialTheme.colorScheme.outline to "IDLE"
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1504,7 +1514,7 @@ private fun ToolBlock(tool: TimelineItem.Tool) {
     val colour = when (tool.state) {
         ToolState.RUNNING -> WarningColor
         ToolState.COMPLETE -> MaterialTheme.colorScheme.tertiary
-        ToolState.FAILED -> Danger
+        ToolState.FAILED -> MaterialTheme.colorScheme.error
     }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant)

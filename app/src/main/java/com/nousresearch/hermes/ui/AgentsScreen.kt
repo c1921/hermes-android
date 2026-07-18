@@ -52,7 +52,6 @@ import com.nousresearch.hermes.domain.SubagentStatus
 import com.nousresearch.hermes.protocol.BackgroundProcess
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.SpawnTreeListEntry
-import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.Warning
 import kotlinx.coroutines.delay
 
@@ -351,7 +350,7 @@ private fun SubagentCard(
                     Text(
                         "${entry.kind.name.lowercase()} / ${entry.text}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (entry.isError) Danger else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (entry.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (agent.filesRead.isNotEmpty()) Text("Read / ${agent.filesRead.joinToString()}", style = MaterialTheme.typography.bodySmall)
@@ -449,6 +448,6 @@ private fun SubagentStatus.color(): Color = when (this) {
     SubagentStatus.QUEUED -> MaterialTheme.colorScheme.onSurfaceVariant
     SubagentStatus.RUNNING -> MaterialTheme.colorScheme.primary
     SubagentStatus.COMPLETED -> MaterialTheme.colorScheme.tertiary
-    SubagentStatus.FAILED -> Danger
+    SubagentStatus.FAILED -> MaterialTheme.colorScheme.error
     SubagentStatus.INTERRUPTED -> Warning
 }

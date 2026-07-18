@@ -14,6 +14,7 @@ import com.nousresearch.hermes.data.PrivacyPreferences
 import com.nousresearch.hermes.platform.SharedContent
 import com.nousresearch.hermes.platform.sanitizeSharedContent
 import com.nousresearch.hermes.ui.HermesApp
+import com.nousresearch.hermes.ui.theme.HermesSkin
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.UUID
 import javax.inject.Inject
@@ -42,11 +43,16 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val secureScreen by privacyPreferences.secureScreen.collectAsStateWithLifecycle(initialValue = false)
+            val skin by privacyPreferences.skin.collectAsStateWithLifecycle(initialValue = HermesSkin.NOUS)
             val pendingShares by sharedContent.collectAsStateWithLifecycle()
             HermesApp(
                 secureScreen = secureScreen,
                 onSecureScreenChange = { enabled ->
                     lifecycleScope.launch { privacyPreferences.setSecureScreen(enabled) }
+                },
+                skin = skin,
+                onSkinChange = { selected ->
+                    lifecycleScope.launch { privacyPreferences.setSkin(selected) }
                 },
                 sharedContent = pendingShares.firstOrNull(),
                 onSharedContentConsumed = ::consumeSharedContent,

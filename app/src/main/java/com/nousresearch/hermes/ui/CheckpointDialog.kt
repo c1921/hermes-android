@@ -30,7 +30,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.RollbackCheckpoint
-import com.nousresearch.hermes.ui.theme.Danger
 
 @Composable
 internal fun CheckpointDialog(
@@ -129,7 +128,7 @@ internal fun CheckpointDialog(
                         onRestore(hash)
                     },
                     enabled = checkpoint != null && state.checkpointPreview?.hash == hash && !running,
-                ) { Text("Restore workspace", color = Danger) }
+                ) { Text("Restore workspace", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel") } },
         )
@@ -167,7 +166,7 @@ private fun CheckpointRow(
 private fun CheckpointMessage(message: String, danger: Boolean) {
     Text(
         text = message,
-        color = if (danger) Danger else MaterialTheme.colorScheme.onSurface,
+        color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         style = MaterialTheme.typography.bodySmall,
     )
 }

@@ -15,6 +15,8 @@ This document records the upstream contract audited for the Android client. It d
 
 The audited commit was the fetched `origin/main` tip at `2026-07-17T23:04:33Z`. The existing upstream checkout at `/home/lu/.hermes/hermes-agent` was clean and pointed to `git@github.com:NousResearch/hermes-agent.git`. It was fetched without checking out or modifying its working tree. Source inspection used the detached worktree `/tmp/hermes-agent-audit-5122ddd47`.
 
+The Desktop appearance contract was rechecked separately against fetched `origin/main` commit [`5988fe6cd5547d3620df1de889ac6007f5463b4d`](https://github.com/NousResearch/hermes-agent/commit/5988fe6cd5547d3620df1de889ac6007f5463b4d) on 18 July 2026. `apps/desktop/src/themes/presets.ts` still exposes the six built-in presets and `apps/desktop/src/themes/context.tsx` remains authoritative for dark-only light-palette synthesis. This targeted recheck does not replace the pinned full protocol audit above.
+
 No Hermes backend was started for this baseline refresh. Runtime behavior is not claimed unless it is represented by upstream source or tests. The official documentation was checked against source, but source controls where they disagree.
 
 ## Relevant implementation areas

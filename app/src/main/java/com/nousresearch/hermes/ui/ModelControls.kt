@@ -47,7 +47,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.ModelProvider
-import com.nousresearch.hermes.ui.theme.Danger
 
 private val reasoningEfforts = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 
@@ -157,7 +156,7 @@ internal fun ModelControls(
     if (yoloConfirmation) {
         AlertDialog(
             onDismissRequest = { yoloConfirmation = false },
-            icon = { Icon(Icons.Outlined.Warning, null, tint = Danger) },
+            icon = { Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("BYPASS APPROVALS?") },
             text = {
                 Text("Hermes will run dangerous commands in this session without asking. This does not change other sessions or the server-wide policy.")
@@ -168,7 +167,7 @@ internal fun ModelControls(
                         yoloConfirmation = false
                         onYolo(true)
                     },
-                ) { Text("Enable for session", color = Danger) }
+                ) { Text("Enable for session", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { yoloConfirmation = false }) { Text("Cancel") } },
         )
@@ -177,7 +176,7 @@ internal fun ModelControls(
     state.pendingModelConfirmation?.let { pending ->
         AlertDialog(
             onDismissRequest = onCancelModel,
-            icon = { Icon(Icons.Outlined.Warning, null, tint = Danger) },
+            icon = { Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("CONFIRM MODEL COST") },
             text = { Text(pending.message) },
             confirmButton = { TextButton(onClick = onConfirmModel) { Text("Use model") } },

@@ -74,7 +74,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 
 - [ ] Native OAuth/OIDC sign-in
 - [ ] Background push notifications and notification actions
-- [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
+- [x] Persisted appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` palettes; Nous remains the default and Android follows the system light or dark setting
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, and per-tool filters
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration

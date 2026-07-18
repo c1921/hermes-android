@@ -2,20 +2,27 @@ package com.nousresearch.hermes.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material3.Button
@@ -36,8 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -50,6 +58,8 @@ import com.nousresearch.hermes.security.DiagnosticRedactor
 import com.nousresearch.hermes.security.DiagnosticReportInput
 import com.nousresearch.hermes.security.DiagnosticReportSection
 import com.nousresearch.hermes.security.buildDiagnosticReport
+import com.nousresearch.hermes.ui.theme.HermesSkin
+import com.nousresearch.hermes.ui.theme.colorScheme
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -62,6 +72,8 @@ internal fun DiagnosticsScreen(
     onRun: (DiagnosticAction) -> Unit,
     secureScreen: Boolean,
     onSecureScreenChange: (Boolean) -> Unit,
+    skin: HermesSkin,
+    onSkinChange: (HermesSkin) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -110,6 +122,9 @@ internal fun DiagnosticsScreen(
         ) {
             item {
                 DiagnosticInfoCard(state, connection)
+            }
+            item {
+                AppearancePicker(skin, onSkinChange)
             }
             item {
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
@@ -180,6 +195,81 @@ internal fun DiagnosticsScreen(
                     run = state.diagnostics[DiagnosticAction.SECURITY_AUDIT],
                     onRun = { onRun(DiagnosticAction.SECURITY_AUDIT) },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppearancePicker(
+    selected: HermesSkin,
+    onSelected: (HermesSkin) -> Unit,
+) {
+    val dark = isSystemInDarkTheme()
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("APPEARANCE", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            Text(
+                "Official Hermes Desktop presets. Android follows the system light or dark setting.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            HermesSkin.entries.chunked(2).forEach { rowSkins ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    rowSkins.forEach { skin ->
+                        val preview = skin.colorScheme(dark)
+                        val active = skin == selected
+                        Surface(
+                            color = preview.surface,
+                            contentColor = preview.onSurface,
+                            shape = MaterialTheme.shapes.small,
+                            border = BorderStroke(
+                                if (active) 2.dp else 1.dp,
+                                if (active) preview.primary else preview.outline,
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 104.dp)
+                                .selectable(
+                                    selected = active,
+                                    role = Role.RadioButton,
+                                    onClick = { onSelected(skin) },
+                                ),
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth().height(18.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    listOf(preview.background, preview.primary, preview.tertiary).forEach { color ->
+                                        Box(
+                                            Modifier
+                                                .weight(1f)
+                                                .height(18.dp),
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.fillMaxSize(),
+                                                color = color,
+                                                shape = MaterialTheme.shapes.extraSmall,
+                                                border = BorderStroke(1.dp, preview.outline),
+                                            ) {}
+                                        }
+                                    }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(skin.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                                    if (active) Icon(Icons.Outlined.Check, "Selected", modifier = Modifier.size(18.dp))
+                                }
+                                Text(
+                                    skin.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = preview.onSurfaceVariant,
+                                    maxLines = 2,
+                                )
+                            }
+                        }
+                    }
+                    if (rowSkins.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
     }
