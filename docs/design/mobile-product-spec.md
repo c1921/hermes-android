@@ -34,7 +34,7 @@ The launcher uses Hermes Desktop's official application icon. Product screens us
 - Auth expiry identifies the failed leg and returns to backend re-authentication.
 - Unsupported capabilities are absent from primary UI; diagnostics explain the required server version.
 - Tool and provider errors retain technical status codes with secrets removed.
-- Process recreation restores navigation, selected backend metadata and drafts; live state is rehydrated from Hermes.
+- Process recreation restores selected backend metadata and backend/profile/session-scoped drafts; live state and navigation are rehydrated from Hermes rather than trusted from a stale local process snapshot.
 
 ## Notifications and permissions
 

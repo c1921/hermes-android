@@ -86,4 +86,37 @@ class HermesRestClientManagementTest {
             assertTrue(requests.all { it.getHeader("Authorization") == "Bearer secret" })
         }
     }
+
+    @Test
+    fun `session search uses the profile scoped full text endpoint`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            val config = BackendConfig(
+                id = "fake",
+                label = "Fake Hermes",
+                baseUrl = server.url("/").toString().trimEnd('/'),
+                authMode = AuthMode.TOKEN,
+                allowInsecurePrivateNetwork = true,
+            )
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"results":[{"session_id":"stored-1","snippet":"Android release notes","role":"assistant","source":"tui","model":"hermes-4","session_started":42.0}]}""",
+                ),
+            )
+
+            val result = HermesRestClient(OkHttpClient(), json).searchSessions(
+                config,
+                "secret",
+                "Android release",
+                "research profile",
+            )
+
+            assertEquals("stored-1", result.results.single().sessionId)
+            assertEquals("Android release notes", result.results.single().snippet)
+            assertEquals(
+                "/api/sessions/search?q=Android%20release&limit=30&profile=research%20profile",
+                server.takeRequest().path,
+            )
+        }
+    }
 }

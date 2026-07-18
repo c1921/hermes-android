@@ -55,6 +55,22 @@ data class SessionPage(
 )
 
 @Serializable
+data class SessionSearchPage(
+    val results: List<SessionSearchHit> = emptyList(),
+)
+
+@Serializable
+data class SessionSearchHit(
+    @SerialName("session_id") val sessionId: String,
+    val snippet: String = "",
+    val role: String? = null,
+    val source: String? = null,
+    val model: String? = null,
+    @SerialName("session_started") val sessionStarted: Double = 0.0,
+    val profile: String? = null,
+)
+
+@Serializable
 data class StoredSession(
     @SerialName("session_id") val sessionId: String = "",
     val id: String? = null,
@@ -181,6 +197,11 @@ data class SessionBranchResult(
 @Serializable
 data class SessionUndoResult(
     val removed: Int,
+)
+
+@Serializable
+data class SessionDeleteResult(
+    val deleted: String,
 )
 
 @Serializable

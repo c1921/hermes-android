@@ -20,9 +20,11 @@ import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionBranchResult
 import com.nousresearch.hermes.protocol.SessionCompressResult
+import com.nousresearch.hermes.protocol.SessionDeleteResult
 import com.nousresearch.hermes.protocol.SessionHistoryResult
 import com.nousresearch.hermes.protocol.SessionResumeResult
 import com.nousresearch.hermes.protocol.SessionRuntimeInfo
+import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.SessionSteerResult
 import com.nousresearch.hermes.protocol.SessionTitleResult
 import com.nousresearch.hermes.protocol.SessionUndoResult
@@ -38,6 +40,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -56,6 +59,9 @@ data class HermesState(
     val savedBackends: List<BackendConfig> = emptyList(),
     val status: StatusResponse? = null,
     val sessions: List<StoredSession> = emptyList(),
+    val sessionSearchResults: List<SessionSearchHit> = emptyList(),
+    val sessionSearchLoading: Boolean = false,
+    val sessionSearchQuery: String = "",
     val activeStoredSession: StoredSession? = null,
     val runtimeSessionId: String? = null,
     val timeline: TimelineState = TimelineState(),
@@ -63,6 +69,7 @@ data class HermesState(
     val sending: Boolean = false,
     val attaching: Boolean = false,
     val pendingAttachments: List<PendingAttachment> = emptyList(),
+    val draft: String = "",
     val runtimeInfo: SessionRuntimeInfo = SessionRuntimeInfo(),
     val modelOptions: ModelOptionsResult? = null,
     val modelsLoading: Boolean = false,
@@ -159,10 +166,13 @@ class HermesRepository @Inject constructor(
     private val dashboardConnector: DashboardBackendConnector,
     private val json: Json,
     private val attachmentReader: AttachmentReader,
+    private val draftStore: DraftStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(HermesState())
     private var reconnectJob: Job? = null
+    private var draftSaveJob: Job? = null
+    private var sessionSearchJob: Job? = null
     private var intentionalDisconnect = false
     val state = mutableState.asStateFlow()
     val connectionState = gateway.connectionState
@@ -173,6 +183,7 @@ class HermesRepository @Inject constructor(
                 backends to backends.firstOrNull { it.id == activeId }
             }.collectLatest { (backends, backend) ->
                 if (backend == null) {
+                    flushDraft()
                     intentionalDisconnect = true
                     reconnectJob?.cancel()
                     gateway.disconnect()
@@ -245,8 +256,53 @@ class HermesRepository @Inject constructor(
             .onFailure { fail(it) }
     }
 
+    fun searchSessions(query: String) {
+        val cleaned = query.trim().take(200)
+        sessionSearchJob?.cancel()
+        if (cleaned.isBlank()) {
+            mutableState.value = mutableState.value.copy(
+                sessionSearchResults = emptyList(),
+                sessionSearchLoading = false,
+                sessionSearchQuery = "",
+            )
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            sessionSearchLoading = true,
+            sessionSearchQuery = cleaned,
+        )
+        sessionSearchJob = scope.launch {
+            delay(SESSION_SEARCH_DEBOUNCE_MILLIS)
+            runCatching {
+                val (backend, token) = activeCredentials()
+                val profiles = restClient.profiles(backend, token).profiles
+                    .map(ProfileInfo::name)
+                    .ifEmpty { listOf("default") }
+                profiles.flatMap { profile ->
+                    restClient.searchSessions(backend, token, cleaned, profile).results.map {
+                        it.copy(profile = profile)
+                    }
+                }.distinctBy { "${it.profile}:${it.sessionId}" }.take(MAX_SESSION_SEARCH_RESULTS)
+            }.onSuccess { results ->
+                if (mutableState.value.sessionSearchQuery == cleaned) {
+                    mutableState.value = mutableState.value.copy(
+                        sessionSearchResults = results,
+                        sessionSearchLoading = false,
+                        error = null,
+                    )
+                }
+            }.onFailure { error ->
+                if (error !is CancellationException && mutableState.value.sessionSearchQuery == cleaned) {
+                    mutableState.value = mutableState.value.copy(sessionSearchLoading = false)
+                    fail(error)
+                }
+            }
+        }
+    }
+
     suspend fun openSession(session: StoredSession) {
         val (_, _) = activeCredentials()
+        flushDraft()
         setLoading(true)
         val current = mutableState.value
         mutableState.value = current.copy(activeStoredSession = session, timeline = TimelineState(), error = null)
@@ -279,11 +335,15 @@ class HermesRepository @Inject constructor(
             )
             opened = true
         }.onFailure(::fail)
-        if (opened) refreshModelOptions()
+        if (opened) {
+            loadDraft()
+            refreshModelOptions()
+        }
     }
 
     suspend fun newSession(profile: String? = null) {
         activeCredentials()
+        flushDraft()
         setLoading(true)
         var opened = false
         runCatching {
@@ -302,12 +362,27 @@ class HermesRepository @Inject constructor(
                 runtimeSessionId = created.runtimeSessionId,
                 timeline = TimelineReducer.hydrate(created.messages),
                 runtimeInfo = created.info,
+                activeProfile = profile ?: mutableState.value.activeProfile,
                 loading = false,
                 error = null,
             )
             opened = true
         }.onFailure(::fail)
-        if (opened) refreshModelOptions()
+        if (opened) {
+            loadDraft()
+            refreshModelOptions()
+        }
+    }
+
+    fun updateDraft(value: String) {
+        val bounded = value.take(DraftStore.MAX_DRAFT_CHARACTERS)
+        mutableState.value = mutableState.value.copy(draft = bounded)
+        val context = currentDraftContext() ?: return
+        draftSaveJob?.cancel()
+        draftSaveJob = scope.launch {
+            delay(DRAFT_SAVE_DEBOUNCE_MILLIS)
+            draftStore.put(context, bounded)
+        }
     }
 
     suspend fun refreshModelOptions(refresh: Boolean = false) {
@@ -417,6 +492,8 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun send(text: String) {
+        val submittedDraft = text
+        val draftContextBeforeSend = currentDraftContext()
         val cleaned = text.trim()
         require(cleaned.isNotEmpty())
         val sessionId = mutableState.value.runtimeSessionId ?: run {
@@ -444,10 +521,15 @@ class HermesRepository @Inject constructor(
             )
         }.onSuccess {
             mutableState.value = mutableState.value.copy(sending = false, pendingAttachments = emptyList())
+            if (mutableState.value.draft == submittedDraft) {
+                clearDraft(listOfNotNull(draftContextBeforeSend, currentDraftContext()).distinct())
+            }
         }.onFailure(::fail)
     }
 
     suspend fun steer(text: String) {
+        val submittedDraft = text
+        val draftContextBeforeSteer = currentDraftContext()
         val cleaned = text.trim()
         require(cleaned.isNotEmpty())
         val sessionId = mutableState.value.runtimeSessionId ?: return
@@ -464,6 +546,9 @@ class HermesRepository @Inject constructor(
             }
         }.onSuccess {
             mutableState.value = mutableState.value.copy(error = null)
+            if (mutableState.value.draft == submittedDraft) {
+                clearDraft(listOfNotNull(draftContextBeforeSteer, currentDraftContext()).distinct())
+            }
         }.onFailure(::fail)
     }
 
@@ -497,6 +582,8 @@ class HermesRepository @Inject constructor(
     suspend fun branchActive(name: String = "") {
         val sessionId = mutableState.value.runtimeSessionId ?: return
         val profile = mutableState.value.activeStoredSession?.profile
+        flushDraft()
+        var opened = false
         runCatching {
             val response = gateway.request(
                 "session.branch",
@@ -513,8 +600,12 @@ class HermesRepository @Inject constructor(
                 runtimeInfo = mutableState.value.runtimeInfo.copy(title = branch.title, storedSessionId = "", running = false),
                 error = null,
             )
-            refreshModelOptions()
+            opened = true
         }.onFailure(::fail)
+        if (opened) {
+            loadDraft()
+            refreshModelOptions()
+        }
     }
 
     suspend fun undoLastTurn() {
@@ -1124,14 +1215,47 @@ class HermesRepository @Inject constructor(
 
     suspend fun archiveActive() {
         val session = mutableState.value.activeStoredSession ?: return
+        flushDraft()
         val (backend, token) = activeCredentials()
         restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         mutableState.value = mutableState.value.copy(activeStoredSession = null, runtimeSessionId = null, timeline = TimelineState())
+        loadDraft()
         refreshSessions()
+    }
+
+    suspend fun deleteSession(session: StoredSession) {
+        require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
+        require(
+            mutableState.value.activeStoredSession?.durableId != session.durableId,
+        ) { "Close an active session before deleting it" }
+        runCatching {
+            val response = gateway.request(
+                "session.delete",
+                buildJsonObject { put("session_id", session.durableId) },
+            )
+            json.decodeFromJsonElement(SessionDeleteResult.serializer(), response).also {
+                require(it.deleted == session.durableId) { "Hermes deleted a different session than requested" }
+            }
+        }.onSuccess {
+            val backendId = mutableState.value.backend?.id
+            if (backendId != null) {
+                draftStore.remove(DraftContext(backendId, session.profile ?: mutableState.value.activeProfile, session.durableId))
+            }
+            mutableState.value = mutableState.value.copy(
+                sessions = mutableState.value.sessions.filterNot {
+                    it.durableId == session.durableId && it.profile == session.profile
+                },
+                error = null,
+            )
+        }.onFailure(::fail)
     }
 
     suspend fun disconnectAndForget() {
         val backend = mutableState.value.backend ?: return
+        draftSaveJob?.cancelAndJoin()
+        draftSaveJob = null
+        draftStore.removeBackend(backend.id)
+        mutableState.value = mutableState.value.copy(backend = null, draft = "")
         intentionalDisconnect = true
         reconnectJob?.cancel()
         gateway.disconnect()
@@ -1141,15 +1265,23 @@ class HermesRepository @Inject constructor(
 
     suspend fun selectBackend(id: String) {
         require(mutableState.value.savedBackends.any { it.id == id }) { "Saved Hermes backend was not found" }
+        flushDraft()
         backendRegistry.select(id)
     }
 
     suspend fun forgetBackend(id: String) {
+        if (mutableState.value.backend?.id == id) {
+            draftSaveJob?.cancelAndJoin()
+            draftSaveJob = null
+            mutableState.value = mutableState.value.copy(backend = null, draft = "")
+        }
+        draftStore.removeBackend(id)
         tokenStore.remove(id)
         backendRegistry.remove(id)
     }
 
     private suspend fun connect(backend: BackendConfig) {
+        if (mutableState.value.backend?.id != backend.id) flushDraft()
         intentionalDisconnect = false
         if (backend.authMode != AuthMode.DASHBOARD_SESSION) {
             mutableState.value = HermesState(
@@ -1180,7 +1312,38 @@ class HermesRepository @Inject constructor(
             status to sessions
         }.onSuccess { (status, sessions) ->
             mutableState.value = mutableState.value.copy(status = status, sessions = sessions, loading = false, error = null)
+            loadDraft()
         }.onFailure(::fail)
+    }
+
+    private fun currentDraftContext(): DraftContext? {
+        val current = mutableState.value
+        val backendId = current.backend?.id ?: return null
+        val storedId = current.activeStoredSession?.durableId?.takeIf(String::isNotBlank)
+            ?: current.runtimeInfo.storedSessionId.takeIf(String::isNotBlank)
+        val profile = current.activeStoredSession?.profile ?: current.activeProfile
+        return DraftContext(backendId, profile, storedId)
+    }
+
+    private suspend fun flushDraft() {
+        draftSaveJob?.cancelAndJoin()
+        draftSaveJob = null
+        val context = currentDraftContext() ?: return
+        draftStore.put(context, mutableState.value.draft)
+    }
+
+    private suspend fun loadDraft() {
+        draftSaveJob?.cancelAndJoin()
+        draftSaveJob = null
+        val context = currentDraftContext()
+        mutableState.value = mutableState.value.copy(draft = context?.let { draftStore.get(it) }.orEmpty())
+    }
+
+    private suspend fun clearDraft(contexts: List<DraftContext>) {
+        draftSaveJob?.cancelAndJoin()
+        draftSaveJob = null
+        contexts.forEach { draftStore.remove(it) }
+        mutableState.value = mutableState.value.copy(draft = "")
     }
 
     private suspend fun activeCredentials(): Pair<BackendConfig, String> {
@@ -1215,6 +1378,7 @@ class HermesRepository @Inject constructor(
             managementLoading = false,
             providersLoading = false,
             skillHubLoading = false,
+            sessionSearchLoading = false,
             reconnectRequiredBackendId = if (reconnect) reconnectBackendId else mutableState.value.reconnectRequiredBackendId,
             error = if (reconnect) "Dashboard session expired or was rejected. Reconnect with your username and password." else
                 error.message ?: error::class.simpleName ?: "Hermes operation failed",
@@ -1249,6 +1413,9 @@ class HermesRepository @Inject constructor(
 
 private const val DIAGNOSTIC_POLL_INTERVAL_MILLIS = 1_000L
 private const val DIAGNOSTIC_POLL_LIMIT = 120
+private const val DRAFT_SAVE_DEBOUNCE_MILLIS = 300L
+private const val SESSION_SEARCH_DEBOUNCE_MILLIS = 300L
+private const val MAX_SESSION_SEARCH_RESULTS = 100
 
 private fun String.isSafeModelToken(): Boolean =
     isNotBlank() && length <= 512 && !startsWith('-') && none { it.isWhitespace() || it.isISOControl() }

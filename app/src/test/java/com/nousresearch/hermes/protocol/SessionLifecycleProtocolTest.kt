@@ -48,4 +48,11 @@ class SessionLifecycleProtocolTest {
         assertEquals("Mobile plan", pendingRow.title)
         assertEquals("stored-1", existingRow.sessionKey)
     }
+
+    @Test
+    fun `decodes the exact session deleted by the gateway`() {
+        val result = json.decodeFromString<SessionDeleteResult>("""{"deleted":"stored-1"}""")
+
+        assertEquals("stored-1", result.deleted)
+    }
 }

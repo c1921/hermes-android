@@ -51,11 +51,13 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.SwapHoriz
@@ -73,6 +75,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -94,6 +97,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -109,6 +117,7 @@ import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
+import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.HermesTheme
@@ -236,10 +245,13 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     state = state,
                     connection = connection,
                     onRefresh = viewModel::refresh,
+                    onSearchSessions = viewModel::searchSessions,
                     onSession = viewModel::openSession,
+                    onDeleteSession = viewModel::deleteSession,
                     onNewSession = viewModel::newSession,
                     onSend = viewModel::send,
                     onSteer = viewModel::steer,
+                    onDraftChange = viewModel::updateDraft,
                     onAttach = viewModel::attach,
                     onRemoveAttachment = viewModel::removeAttachment,
                     onInterrupt = viewModel::interrupt,
@@ -424,10 +436,13 @@ private fun HermesWorkspace(
     state: HermesState,
     connection: GatewayConnectionState,
     onRefresh: () -> Unit,
+    onSearchSessions: (String) -> Unit,
     onSession: (StoredSession) -> Unit,
+    onDeleteSession: (StoredSession) -> Unit,
     onNewSession: (String?) -> Unit,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
+    onDraftChange: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
@@ -455,8 +470,9 @@ private fun HermesWorkspace(
         if (wide) {
             Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 SessionRail(
-                    state, connection, onRefresh,
+                    state, connection, onRefresh, onSearchSessions,
                     onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                    onDeleteSession = onDeleteSession,
                     onNewSession = { onNewSession(null); destination = WorkspaceDestination.CHAT },
                     onSkills = { destination = WorkspaceDestination.SKILLS },
                     onCron = { destination = WorkspaceDestination.CRON },
@@ -517,7 +533,7 @@ private fun HermesWorkspace(
                         modifier = Modifier.weight(1f),
                     )
                     else -> ChatSurface(
-                        state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
+                        state, connection, onSend, onSteer, onDraftChange, onAttach, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, modelActions, sessionActions, Modifier.weight(1f),
                     )
                 }
@@ -536,7 +552,7 @@ private fun HermesWorkspace(
             ) { activeDestination ->
                 when (activeDestination) {
                     WorkspaceDestination.CHAT -> ChatSurface(
-                        state, connection, onSend, onSteer, onAttach, onRemoveAttachment, onInterrupt,
+                        state, connection, onSend, onSteer, onDraftChange, onAttach, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, modelActions, sessionActions,
                         Modifier.fillMaxSize(),
                         onBack = { destination = WorkspaceDestination.SESSIONS },
@@ -592,8 +608,9 @@ private fun HermesWorkspace(
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.SESSIONS -> SessionRail(
-                        state, connection, onRefresh,
+                        state, connection, onRefresh, onSearchSessions,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                        onDeleteSession = onDeleteSession,
                         onNewSession = { onNewSession(null); destination = WorkspaceDestination.CHAT },
                         onSkills = { destination = WorkspaceDestination.SKILLS },
                         onCron = { destination = WorkspaceDestination.CRON },
@@ -614,7 +631,9 @@ private fun SessionRail(
     state: HermesState,
     connection: GatewayConnectionState,
     onRefresh: () -> Unit,
+    onSearchSessions: (String) -> Unit,
     onSession: (StoredSession) -> Unit,
+    onDeleteSession: (StoredSession) -> Unit,
     onNewSession: () -> Unit,
     onSkills: () -> Unit,
     onCron: () -> Unit,
@@ -624,6 +643,21 @@ private fun SessionRail(
     onProviders: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var pendingDelete by remember { mutableStateOf<StoredSession?>(null) }
+    val visibleSessions = state.sessions.filter { session ->
+        query.isBlank() || listOf(
+            session.displayTitle,
+            session.profile,
+            session.model,
+            session.provider,
+            session.source,
+        ).filterNotNull().any { it.contains(query.trim(), ignoreCase = true) }
+    }
+    val remoteResults = if (query.isBlank()) emptyList() else state.sessionSearchResults.filterNot { result ->
+        visibleSessions.any { it.durableId == result.sessionId && it.profile == result.profile }
+    }
+    LaunchedEffect(query) { onSearchSessions(query) }
     Column(modifier.background(MaterialTheme.colorScheme.background)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
@@ -692,20 +726,122 @@ private fun SessionRail(
                 Text("Diagnostics")
             }
         }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it.take(200) },
+            placeholder = { Text("Search sessions") },
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            trailingIcon = {
+                if (state.sessionSearchLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        )
         state.error?.let { ErrorBanner(it, Modifier.padding(12.dp)) }
         LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-            items(state.sessions, key = { "${it.profile}:${it.durableId}" }) { session ->
-                SessionRow(session, selected = state.activeStoredSession?.durableId == session.durableId) { onSession(session) }
+            items(visibleSessions, key = { "${it.profile}:${it.durableId}" }) { session ->
+                val selected = state.activeStoredSession?.durableId == session.durableId
+                SessionRow(
+                    session = session,
+                    selected = selected,
+                    onClick = { onSession(session) },
+                    onDelete = if (!selected) ({ pendingDelete = session }) else null,
+                )
             }
-            if (state.sessions.isEmpty() && !state.loading) {
+            items(remoteResults, key = { "search:${it.profile}:${it.sessionId}" }) { result ->
+                SearchResultRow(result) {
+                    onSession(
+                        StoredSession(
+                            sessionId = result.sessionId,
+                            profile = result.profile,
+                            source = result.source,
+                            model = result.model,
+                            startedAt = result.sessionStarted,
+                        ),
+                    )
+                }
+            }
+            if (visibleSessions.isEmpty() && remoteResults.isEmpty() && !state.loading && !state.sessionSearchLoading) {
                 item {
                     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("NO SESSIONS", style = MaterialTheme.typography.titleMedium)
-                        Text("Start a conversation or connect another Hermes surface.", style = MaterialTheme.typography.bodySmall)
+                        Text(if (state.sessions.isEmpty()) "NO SESSIONS" else "NO MATCHES", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (state.sessions.isEmpty()) "Start a conversation or connect another Hermes surface."
+                            else "Try a title, profile, model, provider or source.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }
         }
+    }
+
+    pendingDelete?.let { session ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("DELETE SESSION?") },
+            text = { Text("${session.displayTitle} and its stored transcript will be permanently removed from Hermes. This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDelete = null
+                        onDeleteSession(session)
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun SearchResultRow(result: SessionSearchHit, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(
+                highlightedSearchSnippet(
+                    result.snippet.ifBlank { "Session ${result.sessionId}" },
+                    MaterialTheme.colorScheme.primary,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                listOf(result.profile, result.source, result.model).filterNotNull().filter(String::isNotBlank).joinToString(" / "),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun highlightedSearchSnippet(raw: String, highlight: Color): AnnotatedString = buildAnnotatedString {
+    val text = raw.trim()
+    var cursor = 0
+    while (cursor < text.length) {
+        val start = text.indexOf(">>>", cursor)
+        if (start < 0) {
+            append(text.substring(cursor))
+            break
+        }
+        append(text.substring(cursor, start))
+        val end = text.indexOf("<<<", start + 3)
+        if (end < 0) {
+            append(text.substring(start))
+            break
+        }
+        withStyle(SpanStyle(color = highlight, fontWeight = FontWeight.Bold)) {
+            append(text.substring(start + 3, end))
+        }
+        cursor = end + 3
     }
 }
 
@@ -737,7 +873,12 @@ private fun ConnectionLine(connection: GatewayConnectionState) {
 }
 
 @Composable
-private fun SessionRow(session: StoredSession, selected: Boolean, onClick: () -> Unit) {
+private fun SessionRow(
+    session: StoredSession,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)?,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
@@ -754,6 +895,9 @@ private fun SessionRow(session: StoredSession, selected: Boolean, onClick: () ->
             }
         }
         if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary))
+        onDelete?.let {
+            IconButton(onClick = it) { Icon(Icons.Outlined.Delete, "Delete ${session.displayTitle}") }
+        }
     }
 }
 
@@ -763,6 +907,7 @@ private fun ChatSurface(
     connection: GatewayConnectionState,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
+    onDraftChange: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
@@ -803,6 +948,7 @@ private fun ChatSurface(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             )
             Composer(
+                draft = state.draft,
                 sending = state.sending || state.runtimeInfo.running,
                 attaching = state.attaching,
                 connected = connection is GatewayConnectionState.Open,
@@ -810,6 +956,7 @@ private fun ChatSurface(
                 attachments = state.pendingAttachments,
                 onSend = onSend,
                 onSteer = onSteer,
+                onDraftChange = onDraftChange,
                 onAttach = onAttach,
                 onRemoveAttachment = onRemoveAttachment,
                 onInterrupt = onInterrupt,
@@ -957,6 +1104,7 @@ private fun StatusBlock(status: TimelineItem.Status) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
+    draft: String,
     sending: Boolean,
     attaching: Boolean,
     connected: Boolean,
@@ -964,16 +1112,15 @@ private fun Composer(
     attachments: List<PendingAttachment>,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
+    onDraftChange: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
 ) {
-    var draft by rememberSaveable { mutableStateOf("") }
     val focus = LocalFocusManager.current
     fun submit() {
         if (draft.isBlank()) return
         if (sending) onSteer(draft) else onSend(draft)
-        draft = ""
         focus.clearFocus()
     }
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -1011,7 +1158,7 @@ private fun Composer(
             }
             OutlinedTextField(
                 value = draft,
-                onValueChange = { draft = it },
+                onValueChange = onDraftChange,
                 placeholder = {
                     Text(
                         when {

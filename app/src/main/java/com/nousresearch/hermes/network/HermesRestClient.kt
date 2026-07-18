@@ -15,6 +15,7 @@ import com.nousresearch.hermes.protocol.ProviderValidationResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
+import com.nousresearch.hermes.protocol.SessionSearchPage
 import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.SkillHubPreview
 import com.nousresearch.hermes.protocol.SkillHubScanResult
@@ -72,6 +73,22 @@ class HermesRestClient(
             token,
             "/api/sessions/${encodePathSegment(sessionId)}/messages$profileQuery",
             SessionMessagePage.serializer(),
+        )
+    }
+
+    suspend fun searchSessions(
+        config: BackendConfig,
+        token: String,
+        query: String,
+        profile: String,
+        limit: Int = 30,
+    ): SessionSearchPage {
+        require(query.isNotBlank()) { "Session search query is required" }
+        return get(
+            config,
+            token,
+            "/api/sessions/search?q=${encodePathSegment(query.take(200))}&limit=${limit.coerceIn(1, 100)}&profile=${encodePathSegment(profile)}",
+            SessionSearchPage.serializer(),
         )
     }
 

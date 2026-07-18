@@ -17,6 +17,7 @@ Implementation evidence:
 - Session atlas at 130% text: `/tmp/hermes-android-qa-qxuQgq/nous-brand-atlas-text130.png`
 - Skills management at 130% text: `/tmp/hermes-android-qa-qxuQgq/nous-brand-skills-text130.png`
 - Launcher icon: `/tmp/hermes-android-qa-qxuQgq/hermes-launcher-search.png`
+- Rounded session search: `/tmp/hermes-android-qa-qxuQgq/nous-brand-session-search-v1.png`
 - Full comparison: `/tmp/hermes-android-qa-qxuQgq/design-qa-full-v2.png`
 - Focused comparison: `/tmp/hermes-android-qa-qxuQgq/design-qa-focus-v2.png`
 

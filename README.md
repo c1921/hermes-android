@@ -8,7 +8,7 @@ This repository is an independent work in progress. It is not currently an offic
 
 Last verified: 18 July 2026.
 
-The current `main` checkout passes all unit tests, Android lint, and debug APK assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `main` checkout passes all unit tests, Android lint, and debug APK assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 ### Implemented
 
@@ -21,7 +21,8 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [x] Explicit reconnect state for missing, expired, rejected, or legacy token-only credentials
 - [x] Multiple saved backends with add, reconnect, select, and forget flows
 - [x] HTTPS plus explicitly approved cleartext private-IP transport policy
-- [x] Unified cross-profile session list, resume, create, rename, archive, branch, undo, compression, and steering
+- [x] Unified cross-profile session list, profile-scoped full-text search, resume, create, rename, archive, delete, branch, undo, compression, and steering
+- [x] Backend/profile/session-scoped draft persistence across Android process restart, with debounced writes and cleanup when a backend is forgotten
 - [x] Streamed assistant text, reasoning, status, and structured tool activity
 - [x] Dangerous-command approval, denial, clarification, interruption, and session-only YOLO controls
 - [x] Dynamic Hermes model/provider catalogue, model selection, reasoning effort, and fast mode
@@ -47,8 +48,8 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 
 - [ ] Native OAuth/OIDC sign-in
 - [ ] Background push notifications and notification actions
-- [ ] Draft persistence, pending-message queue, composer history, and slash-command catalogue
-- [ ] Message-level retry, session reset, session search, and deletion
+- [ ] Pending-message queue, composer history, and slash-command catalogue
+- [ ] Message-level retry and session reset
 - [ ] Workspace browser, generated-file delivery, downloads, and sandboxed artifact/WebView previews
 - [ ] Voice recording, transcription, spoken replies, audio focus, and Bluetooth handling
 - [ ] MCP and toolset configuration

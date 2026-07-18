@@ -1,6 +1,6 @@
 # Threat model
 
-Status: living pre-release review, updated 17 July 2026
+Status: living pre-release review, updated 18 July 2026
 
 ## Assets and trust boundaries
 
@@ -12,8 +12,9 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | --- | --- | --- |
 | Backend impersonation/TLS downgrade | HTTPS by default; endpoint validation; no silent HTTPS→HTTP fallback | Implemented |
 | Cleartext LAN token exposure | Explicit opt-in plus literal private-address allow-list; persistent warning | Implemented, warning UI needs strengthening |
-| Query-token logging | Never log WebSocket URLs; recommend proxy query redaction; replace with tickets when upstream supports native auth | Partial/upstream |
+| WebSocket credential leakage | Mint a fresh 30-second single-use Dashboard ticket for each upgrade; never place the session cookie in the upgrade or log WebSocket URLs | Implemented; deployment proxies should still redact query strings |
 | Token theft at rest | AES-GCM key generated in Android Keystore; ciphertext only in private preferences; backups disabled | Implemented |
+| Draft leakage at rest | App-private backend/profile/session-scoped DataStore, hashed preference keys, backup/device-transfer exclusion, bounded size, and backend-forget cleanup | Implemented baseline; rooted-device risk remains |
 | OAuth interception/replay | PKCE S256, state/nonce, exact app link and single-use code | Blocked on native upstream flow |
 | Malicious deep link | Treat route IDs as untrusted; require authenticated backend lookup; no credentials/actions in links | Required before link routing ships |
 | Exported component/intent spoofing | Only launcher activity exported; explicit declarations; validate all inbound content | Implemented baseline |
@@ -35,4 +36,3 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 ## Release gates
 
 Before public release: complete MASVS-aligned review, dependency and secret scans, network interception tests, exported-component audit, WebView/file corpus tests, notification-action replay tests, database extraction test, diagnostic redaction fixtures, SBOM, signed provenance and an independent review of every high-risk finding. No critical or high finding may remain open.
-
