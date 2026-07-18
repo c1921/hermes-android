@@ -1,7 +1,8 @@
 package com.nousresearch.hermes.protocol
 
-import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CheckpointProtocolModelsTest {
@@ -21,13 +22,14 @@ class CheckpointProtocolModelsTest {
             }""",
         )
 
-        assertThat(result.enabled).isTrue()
-        assertThat(result.checkpoints.single()).isEqualTo(
+        assertTrue(result.enabled)
+        assertEquals(
             RollbackCheckpoint(
                 hash = "0123456789abcdef0123456789abcdef01234567",
                 timestamp = "2026-07-18T10:20:30+00:00",
                 message = "before terminal mutation",
             ),
+            result.checkpoints.single(),
         )
     }
 
@@ -37,8 +39,8 @@ class CheckpointProtocolModelsTest {
             """{"enabled":false,"checkpoints":[]}""",
         )
 
-        assertThat(result.enabled).isFalse()
-        assertThat(result.checkpoints).isEmpty()
+        assertTrue(!result.enabled)
+        assertTrue(result.checkpoints.isEmpty())
     }
 
     @Test
@@ -51,8 +53,8 @@ class CheckpointProtocolModelsTest {
             }""",
         )
 
-        assertThat(result.stat).contains("app.kt")
-        assertThat(result.diff).contains("-old")
+        assertTrue(result.stat.contains("app.kt"))
+        assertTrue(result.diff.contains("-old"))
     }
 
     @Test
@@ -68,8 +70,8 @@ class CheckpointProtocolModelsTest {
             }""",
         )
 
-        assertThat(result.success).isTrue()
-        assertThat(result.restoredTo).isEqualTo("01234567")
-        assertThat(result.historyRemoved).isEqualTo(4)
+        assertTrue(result.success)
+        assertEquals("01234567", result.restoredTo)
+        assertEquals(4, result.historyRemoved)
     }
 }

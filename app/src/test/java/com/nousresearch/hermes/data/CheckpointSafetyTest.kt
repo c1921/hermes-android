@@ -1,8 +1,8 @@
 package com.nousresearch.hermes.data
 
-import com.google.common.truth.Truth.assertThat
 import com.nousresearch.hermes.protocol.RollbackCheckpoint
 import com.nousresearch.hermes.protocol.RollbackDiffResult
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.Assert.assertThrows
 
@@ -19,7 +19,7 @@ class CheckpointSafetyTest {
             requestedHash = checkpoint.hash,
         )
 
-        assertThat(selected).isEqualTo(checkpoint)
+        assertEquals(checkpoint, selected)
     }
 
     @Test

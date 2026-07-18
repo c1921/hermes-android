@@ -1,6 +1,5 @@
 package com.nousresearch.hermes.protocol
 
-import com.google.common.truth.Truth.assertThat
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.network.DashboardAuthClient
@@ -11,6 +10,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CheckpointGatewayContractTest {
@@ -50,19 +52,16 @@ class CheckpointGatewayContractTest {
             )
             val history = client.request("session.history", buildJsonObject { put("session_id", sessionId) })
 
-            assertThat(json.decodeFromJsonElement(RollbackListResult.serializer(), listed).enabled).isTrue()
-            assertThat(json.decodeFromJsonElement(RollbackDiffResult.serializer(), diff).diff).contains("-old")
-            assertThat(json.decodeFromJsonElement(RollbackRestoreResult.serializer(), restored).historyRemoved).isEqualTo(3)
-            assertThat(json.decodeFromJsonElement(SessionHistoryResult.serializer(), history).messages).hasSize(1)
+            assertTrue(json.decodeFromJsonElement(RollbackListResult.serializer(), listed).enabled)
+            assertTrue(json.decodeFromJsonElement(RollbackDiffResult.serializer(), diff).diff.contains("-old"))
+            assertEquals(3, json.decodeFromJsonElement(RollbackRestoreResult.serializer(), restored).historyRemoved)
+            assertEquals(1, json.decodeFromJsonElement(SessionHistoryResult.serializer(), history).messages.size)
 
             val requests = backend.requests.associateBy { it.getValue("method").jsonPrimitive.content }
-            assertThat(requests.getValue("rollback.list").getValue("params").jsonObject.keys)
-                .containsExactly("session_id")
-            assertThat(requests.getValue("rollback.diff").getValue("params").jsonObject.keys)
-                .containsExactly("session_id", "hash")
-            assertThat(requests.getValue("rollback.restore").getValue("params").jsonObject.keys)
-                .containsExactly("session_id", "hash")
-            assertThat(requests.getValue("rollback.restore").getValue("params").jsonObject["file_path"]).isNull()
+            assertEquals(setOf("session_id"), requests.getValue("rollback.list").getValue("params").jsonObject.keys)
+            assertEquals(setOf("session_id", "hash"), requests.getValue("rollback.diff").getValue("params").jsonObject.keys)
+            assertEquals(setOf("session_id", "hash"), requests.getValue("rollback.restore").getValue("params").jsonObject.keys)
+            assertNull(requests.getValue("rollback.restore").getValue("params").jsonObject["file_path"])
             client.disconnect()
         }
     }
