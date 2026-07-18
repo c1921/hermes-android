@@ -60,7 +60,7 @@ class FakeHermesBackend(
                                 """{"success":true,"restored_to":"01234567","reason":"checkpoint","directory":"/workspace/project","history_removed":3}""",
                             )
                             "session.history" -> json.parseToJsonElement(
-                                """{"messages":[{"role":"user","content":"Earlier turn"}]}""",
+                                """{"count":1,"messages":[{"role":"user","content":"Earlier turn"}]}""",
                             )
                             else -> buildJsonObject { put("ok", true) }
                             }
