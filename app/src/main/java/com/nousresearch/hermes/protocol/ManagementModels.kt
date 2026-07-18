@@ -238,3 +238,89 @@ data class SkillHubScanResult(
     val findings: List<SkillHubScanFinding> = emptyList(),
     @SerialName("severity_counts") val severityCounts: Map<String, Int> = emptyMap(),
 )
+
+@Serializable
+data class McpServerSummary(
+    val name: String,
+    val transport: String,
+    val command: String? = null,
+    val args: List<String> = emptyList(),
+    val url: String? = null,
+    val auth: String? = null,
+    val enabled: Boolean,
+)
+
+@Serializable
+data class McpServersResponse(
+    val servers: List<McpServerSummary> = emptyList(),
+)
+
+@Serializable
+data class McpToolSummary(
+    val name: String,
+    val description: String = "",
+)
+
+@Serializable
+data class McpServerTestResponse(
+    val ok: Boolean,
+    val error: String? = null,
+    val tools: List<McpToolSummary> = emptyList(),
+    val prompts: Int = 0,
+    val resources: Int = 0,
+)
+
+@Serializable
+data class McpServerToggleResponse(
+    val ok: Boolean,
+    val name: String,
+    val enabled: Boolean,
+)
+
+@Serializable
+data class McpCatalogEnvRequirement(
+    val name: String,
+    val prompt: String,
+    val required: Boolean,
+)
+
+@Serializable
+data class McpCatalogEntry(
+    val name: String,
+    val description: String = "",
+    val source: String = "",
+    val transport: String,
+    @SerialName("auth_type") val authType: String = "none",
+    @SerialName("required_env") val requiredEnv: List<McpCatalogEnvRequirement> = emptyList(),
+    val command: String? = null,
+    val args: List<String> = emptyList(),
+    val url: String? = null,
+    @SerialName("install_url") val installUrl: String? = null,
+    @SerialName("install_ref") val installRef: String? = null,
+    val bootstrap: List<String> = emptyList(),
+    @SerialName("default_enabled") val defaultEnabled: List<String>? = null,
+    @SerialName("post_install") val postInstall: String = "",
+    @SerialName("needs_install") val needsInstall: Boolean = false,
+    val installed: Boolean,
+    val enabled: Boolean,
+)
+
+@Serializable
+data class McpCatalogDiagnostic(
+    val name: String,
+    val kind: String,
+    val message: String,
+)
+
+@Serializable
+data class McpCatalogResponse(
+    val entries: List<McpCatalogEntry> = emptyList(),
+    val diagnostics: List<McpCatalogDiagnostic> = emptyList(),
+)
+
+@Serializable
+data class McpReloadResponse(
+    val status: String,
+    val message: String? = null,
+    @SerialName("turn_isolation") val turnIsolation: Boolean = false,
+)

@@ -110,6 +110,11 @@ class HermesViewModel @Inject constructor(
     }
     fun testMessagingPlatform(platformId: String) = viewModelScope.launch { repository.testMessagingPlatform(platformId) }
     fun restartMessagingGateway() = viewModelScope.launch { repository.restartMessagingGateway() }
+    fun refreshMcp() = viewModelScope.launch { repository.refreshMcp() }
+    fun testMcpServer(name: String) = viewModelScope.launch { repository.testMcpServer(name) }
+    fun setMcpServerEnabled(name: String, enabled: Boolean) = viewModelScope.launch {
+        repository.setMcpServerEnabled(name, enabled)
+    }
     fun refreshAgents() = viewModelScope.launch { repository.refreshAgents() }
     fun setDelegationPaused(paused: Boolean) = viewModelScope.launch { repository.setDelegationPaused(paused) }
     fun interruptSubagent(id: String) = viewModelScope.launch { repository.interruptSubagent(id) }

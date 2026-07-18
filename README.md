@@ -35,6 +35,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Press-to-talk and lockable voice capture through Hermes `/api/audio/transcribe`, with slide-to-lock/cancel, live level feedback, bounded temporary audio, permission recovery, and audio-focus interruption handling
 - [x] Per-reply spoken playback through Hermes' own `/api/audio/speak` provider chain, with pause, resume, stop, system output routing, Bluetooth support, and temporary-audio cleanup
 - [x] Profile-scoped messaging-gateway catalogue, platform status, Hermes-owned credential setup/removal, enable/disable, connection tests, and explicitly confirmed gateway restart
+- [x] Profile-scoped MCP configured-server and Nous catalogue views, backend connection probes, enable/disable, and confirmed live `reload.mcp`
 - [x] Command Center with live Hermes subagent trees, delegation pause/resume, confirmed subagent interruption, current-session background-process output, and confirmed process stop
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
@@ -58,7 +59,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] Background push notifications and notification actions
 - [ ] Pending-message queue and composer history
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
-- [ ] MCP and toolset configuration
+- [ ] MCP add/edit/remove, catalog installation, OAuth setup, per-tool filters, and toolset/general configuration
 - [ ] Persisted spawn-tree replay and mobile background delivery for Agents when Android is suspended
 - [ ] Usage analytics, token accounting, checkpoints, diffs, and filesystem rollback
 - [ ] Local Termux runtime discovery or companion integration
@@ -192,6 +193,7 @@ Current automated coverage includes:
 - Legacy token-only record rejection without network reinterpretation
 - Password non-persistence at the connect-and-save boundary
 - Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, and diagnostic redaction
+- Profile-scoped MCP list/catalog/test/toggle routes, session-cookie reuse, unknown-field tolerance, and compute-host reload responses
 - Sensitive sudo/secret request and expiry reduction plus physical Compose instrumentation for password semantics, exact submission, cancellation, and cross-request value isolation
 - Hermes voice REST payloads, spoken-audio MIME/base64 validation, Desktop-equivalent speech sanitisation, and numeric/string session-history message identifiers
 

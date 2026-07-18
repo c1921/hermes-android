@@ -23,6 +23,10 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.ImageAttachResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
+import com.nousresearch.hermes.protocol.McpCatalogEntry
+import com.nousresearch.hermes.protocol.McpReloadResponse
+import com.nousresearch.hermes.protocol.McpServerSummary
+import com.nousresearch.hermes.protocol.McpServerTestResponse
 import com.nousresearch.hermes.protocol.MessagingPlatformInfo
 import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
 import com.nousresearch.hermes.protocol.PdfAttachResult
@@ -114,6 +118,12 @@ data class HermesState(
     val messagingNotice: String? = null,
     val messagingTests: Map<String, MessagingPlatformTestResponse> = emptyMap(),
     val gatewayRestarting: Boolean = false,
+    val mcpServers: List<McpServerSummary> = emptyList(),
+    val mcpCatalog: List<McpCatalogEntry> = emptyList(),
+    val mcpTests: Map<String, McpServerTestResponse> = emptyMap(),
+    val mcpLoading: Boolean = false,
+    val mcpNotice: String? = null,
+    val mcpError: String? = null,
     val delegationStatus: DelegationStatusResponse? = null,
     val activeSubagents: List<SubagentProgress> = emptyList(),
     val subagentsBySession: Map<String, List<SubagentProgress>> = emptyMap(),
@@ -1390,6 +1400,126 @@ class HermesRepository @Inject constructor(
         }
     }
 
+    suspend fun refreshMcp() {
+        if (mutableState.value.mcpLoading) return
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(mcpLoading = true, mcpError = null)
+        runCatching {
+            val active = restClient.activeProfile(backend, token)
+            val servers = restClient.mcpServers(backend, token, active.active)
+            val catalog = restClient.mcpCatalog(backend, token, active.active)
+            Triple(active, servers, catalog)
+        }.onSuccess { (active, servers, catalog) ->
+            val safeServers = servers.servers
+                .filter { it.name.isNotBlank() && it.name.length <= MAX_MCP_NAME_CHARACTERS }
+                .distinctBy { it.name }
+            val safeCatalog = catalog.entries
+                .filter { it.name.isNotBlank() && it.name.length <= MAX_MCP_NAME_CHARACTERS }
+                .distinctBy { it.name }
+            mutableState.value = mutableState.value.copy(
+                activeProfile = active.active,
+                currentProfile = active.current,
+                mcpServers = safeServers,
+                mcpCatalog = safeCatalog,
+                mcpTests = mutableState.value.mcpTests.filterKeys { name ->
+                    safeServers.any { it.name == name }
+                },
+                mcpLoading = false,
+                mcpError = catalog.diagnostics.takeIf { it.isNotEmpty() }?.joinToString("\n") {
+                    "${it.name}: ${it.message}"
+                },
+                error = null,
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            failMcp(error)
+        }
+    }
+
+    suspend fun testMcpServer(name: String) {
+        val server = advertisedMcpServer(name)
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(mcpLoading = true, mcpError = null)
+        runCatching {
+            restClient.testMcpServer(backend, token, mutableState.value.activeProfile, server.name)
+        }.onSuccess { result ->
+            mutableState.value = mutableState.value.copy(
+                mcpTests = mutableState.value.mcpTests + (server.name to result),
+                mcpLoading = false,
+                mcpError = result.error,
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            failMcp(error)
+        }
+    }
+
+    suspend fun setMcpServerEnabled(name: String, enabled: Boolean) {
+        val server = advertisedMcpServer(name)
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(
+            mcpLoading = true,
+            mcpNotice = null,
+            mcpError = null,
+        )
+        val saved = runCatching {
+            restClient.setMcpServerEnabled(backend, token, profile, server.name, enabled).also {
+                require(it.ok && it.name == server.name && it.enabled == enabled) {
+                    "Hermes returned an inconsistent MCP server state"
+                }
+            }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            failMcp(error)
+            return
+        }
+        if (mutableState.value.activeProfile != profile) {
+            mutableState.value = mutableState.value.copy(mcpLoading = false)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            mcpServers = mutableState.value.mcpServers.map {
+                if (it.name == saved.name) it.copy(enabled = saved.enabled) else it
+            },
+            mcpTests = mutableState.value.mcpTests - saved.name,
+            mcpLoading = false,
+            mcpNotice = "${saved.name} ${if (saved.enabled) "enabled" else "disabled"} in Hermes configuration.",
+        )
+
+        val runtimeProfile = mutableState.value.activeStoredSession?.profile
+            ?: mutableState.value.activeProfile.takeIf { mutableState.value.runtimeSessionId != null }
+        val runtimeSessionId = mutableState.value.runtimeSessionId.takeIf { runtimeProfile == profile }
+        if (runtimeSessionId == null && mutableState.value.currentProfile != profile) {
+            mutableState.value = mutableState.value.copy(
+                mcpNotice = "${saved.name} ${if (saved.enabled) "enabled" else "disabled"}; Hermes will apply it when profile $profile next starts.",
+            )
+            return
+        }
+
+        runCatching {
+            val response = gateway.request(
+                "reload.mcp",
+                buildJsonObject {
+                    put("confirm", true)
+                    runtimeSessionId?.let { put("session_id", it) }
+                },
+            ).let { json.decodeFromJsonElement(McpReloadResponse.serializer(), it) }
+            require(response.status == "reloaded") {
+                response.message ?: "Hermes did not confirm the MCP runtime reload"
+            }
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(
+                mcpNotice = "${saved.name} ${if (saved.enabled) "enabled" else "disabled"}; the live MCP runtime was reloaded.",
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            mutableState.value = mutableState.value.copy(
+                mcpError = "The setting was saved, but the live MCP reload failed: ${error.message ?: "unknown gateway error"}",
+            )
+        }
+    }
+
     suspend fun refreshAgents() {
         if (mutableState.value.agentsLoading) return
         mutableState.value = mutableState.value.copy(agentsLoading = true, agentsError = null)
@@ -1494,6 +1624,10 @@ class HermesRepository @Inject constructor(
     private fun advertisedMessagingPlatform(platformId: String): MessagingPlatformInfo =
         mutableState.value.messagingPlatforms.firstOrNull { it.id == platformId }
             ?: error("Hermes did not advertise this messaging platform")
+
+    private fun advertisedMcpServer(name: String): McpServerSummary =
+        mutableState.value.mcpServers.firstOrNull { it.name == name }
+            ?: error("Hermes did not advertise this MCP server")
 
     private fun updateDiagnostic(action: DiagnosticAction, run: DiagnosticRunState) {
         mutableState.value = mutableState.value.copy(
@@ -1947,6 +2081,7 @@ class HermesRepository @Inject constructor(
             providersLoading = false,
             messagingLoading = false,
             gatewayRestarting = false,
+            mcpLoading = false,
             agentsLoading = false,
             skillHubLoading = false,
             sessionSearchLoading = false,
@@ -1966,6 +2101,19 @@ class HermesRepository @Inject constructor(
         mutableState.value = mutableState.value.copy(
             agentsLoading = false,
             agentsError = error.message ?: error::class.simpleName ?: "Hermes orchestration request failed",
+        )
+    }
+
+    private fun failMcp(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException ||
+            (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        if (reconnect) {
+            fail(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            mcpLoading = false,
+            mcpError = error.message ?: error::class.simpleName ?: "Hermes MCP request failed",
         )
     }
 
@@ -2006,6 +2154,7 @@ private const val MAX_SLASH_OUTPUT_CHARACTERS = 20_000
 private const val MAX_SLASH_SUGGESTIONS = 12
 private const val MAX_SLASH_ALIAS_DEPTH = 5
 private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
+private const val MAX_MCP_NAME_CHARACTERS = 200
 private const val MAX_AGENT_EVENT_SESSIONS = 32
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18

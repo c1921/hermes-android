@@ -17,6 +17,10 @@ import com.nousresearch.hermes.protocol.ProviderValidationResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.ManagedFileReadResponse
 import com.nousresearch.hermes.protocol.ManagedFilesResponse
+import com.nousresearch.hermes.protocol.McpCatalogResponse
+import com.nousresearch.hermes.protocol.McpServerTestResponse
+import com.nousresearch.hermes.protocol.McpServerToggleResponse
+import com.nousresearch.hermes.protocol.McpServersResponse
 import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
 import com.nousresearch.hermes.protocol.MessagingPlatformUpdateResponse
 import com.nousresearch.hermes.protocol.MessagingPlatformsResponse
@@ -217,6 +221,61 @@ class HermesRestClient(
         config,
         token,
         "/api/gateway/restart?profile=${encodePathSegment(profile)}",
+    )
+
+    suspend fun mcpServers(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): McpServersResponse = get(
+        config,
+        token,
+        "/api/mcp/servers?profile=${encodePathSegment(profile)}",
+        McpServersResponse.serializer(),
+    )
+
+    suspend fun mcpCatalog(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): McpCatalogResponse = get(
+        config,
+        token,
+        "/api/mcp/catalog?profile=${encodePathSegment(profile)}",
+        McpCatalogResponse.serializer(),
+    )
+
+    suspend fun testMcpServer(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        name: String,
+    ): McpServerTestResponse = json.decodeFromJsonElement(
+        McpServerTestResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/mcp/servers/${encodePathSegment(name)}/test?profile=${encodePathSegment(profile)}",
+            method = "POST",
+            body = buildJsonObject { },
+        ),
+    )
+
+    suspend fun setMcpServerEnabled(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        name: String,
+        enabled: Boolean,
+    ): McpServerToggleResponse = json.decodeFromJsonElement(
+        McpServerToggleResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/mcp/servers/${encodePathSegment(name)}/enabled?profile=${encodePathSegment(profile)}",
+            method = "PUT",
+            body = buildJsonObject { put("enabled", enabled) },
+        ),
     )
 
     suspend fun downloadManagedFile(

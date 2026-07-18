@@ -31,6 +31,7 @@ For protocol work, inspect the exact upstream Hermes source and cite the commit 
 
 Recent completed slices on `main`:
 
+- MCP management adds profile-scoped configured-server and Nous catalogue inspection, backend connection probes, enable/disable, and live `reload.mcp`; server creation/edit/removal, catalog install, OAuth, and per-tool filters remain follow-up work.
 - `889aa37` adds the mobile Command Center with live delegation status, subagent trees, pause/resume, confirmed interruption, session-owned background processes, and confirmed process stop.
 - `072f2b9` adds messaging gateway management.
 - `17cb866` adds Hermes-native voice transcription and spoken playback. Android does not substitute platform TTS.
@@ -63,7 +64,7 @@ Use the parity matrix for the full list. Prioritise production impact over cosme
 
 Good unblocked candidates include:
 
-- MCP catalogue, configuration, validation, and reload.
+- MCP server creation/edit/removal, catalog installation, OAuth setup, and per-tool filters using the existing audited REST contracts.
 - Toolset and structured general-configuration management.
 - Usage, token accounting, and context breakdown.
 - Checkpoint list, diff, and explicitly confirmed rollback.
@@ -108,6 +109,8 @@ This run is cloud-only.
 - If any test ever reaches a real Hermes agent, the prompt must state that it is a native Android QA test and may be ignored. Do not send such a prompt without explicit access and authority.
 
 Record device-only verification as deferred, with exact steps for the next local pass.
+
+For the MCP slice, the deferred pass must inspect configured and catalog layouts on phone and expanded widths; exercise TalkBack, 130%+ text, keyboard focus, and profile switching; then use a disposable MCP server on a pinned Hermes backend to verify probe success/failure, enable/disable, live-session reload without transcript loss, and the saved-but-reload-failed recovery message. None of those checks are established by the cloud unit/lint/build gate.
 
 ## Working method
 
