@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.data
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.nousresearch.hermes.protocol.ModelCapabilities
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -21,7 +22,7 @@ class PrivacyPreferencesTest {
     val temporaryFolder = TemporaryFolder()
 
     @Test
-    fun `secure screen preference is durable and defaults off`() = runTest {
+    fun `client preferences are durable and isolated`() = runTest {
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val file = File(temporaryFolder.root, "privacy.preferences_pb")
         val store = PreferenceDataStoreFactory.create(scope = scope) { file }
@@ -35,6 +36,20 @@ class PrivacyPreferencesTest {
         assertFalse(preferences.secureScreen.first())
         preferences.setSkin(HermesSkin.EMBER)
         assertEquals(HermesSkin.EMBER, preferences.skin.first())
+        assertEquals(ModelPreset(), preferences.modelPreset("nous", "hermes-4"))
+        preferences.setModelReasoningPreset("nous", "hermes-4", "high")
+        preferences.setModelFastPreset("nous", "hermes-4", true)
+        assertEquals(ModelPreset(effort = "high", fast = true), preferences.modelPreset("nous", "hermes-4"))
+        assertEquals(ModelPreset(), preferences.modelPreset("nous", "hermes-4-fast"))
+        assertTrue(runCatching { preferences.setModelReasoningPreset("nous", "hermes-4", "unsupported") }.isFailure)
+        assertEquals(
+            listOf("reasoning" to "high"),
+            ModelPreset(effort = "high", fast = true).sessionConfigChanges(ModelCapabilities(reasoning = true)),
+        )
+        assertEquals(
+            listOf("reasoning" to "high", "fast" to "normal"),
+            ModelPreset(effort = "high", fast = false).sessionConfigChanges(ModelCapabilities(reasoning = true, fast = true)),
+        )
         scope.cancel()
     }
 }

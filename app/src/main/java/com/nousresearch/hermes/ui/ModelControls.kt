@@ -46,9 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.VALID_REASONING_EFFORTS
 import com.nousresearch.hermes.protocol.ModelProvider
-
-private val reasoningEfforts = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -137,7 +136,7 @@ internal fun ModelControls(
             title = { Text("REASONING EFFORT") },
             text = {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    reasoningEfforts.forEach { effort ->
+                    VALID_REASONING_EFFORTS.forEach { effort ->
                         FilterChip(
                             selected = runtime.reasoningEffort == effort,
                             onClick = {

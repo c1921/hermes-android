@@ -273,6 +273,7 @@ class HermesRepository @Inject constructor(
     private val attachmentReader: AttachmentReader,
     private val draftStore: DraftStore,
     private val composerQueueStore: ComposerQueueStore,
+    private val privacyPreferences: PrivacyPreferences,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(HermesState())
@@ -751,7 +752,7 @@ class HermesRepository @Inject constructor(
         val sessionId = mutableState.value.runtimeSessionId ?: return
         val selection = ModelSelection(provider, model)
         mutableState.value = mutableState.value.copy(modelsLoading = true, error = null)
-        runCatching {
+        val result = runCatching {
             val response = gateway.request(
                 "config.set",
                 buildJsonObject {
@@ -762,25 +763,26 @@ class HermesRepository @Inject constructor(
                 },
             )
             json.decodeFromJsonElement(ConfigSetResult.serializer(), response)
-        }.onSuccess { result ->
-            if (result.confirmRequired) {
-                mutableState.value = mutableState.value.copy(
-                    modelsLoading = false,
-                    pendingModelConfirmation = PendingModelConfirmation(
-                        selection,
-                        result.confirmMessage.ifBlank { "Hermes requires confirmation before using this model." },
-                    ),
-                )
-            } else {
-                mutableState.value = mutableState.value.copy(
-                    modelsLoading = false,
-                    pendingModelConfirmation = null,
-                    runtimeInfo = mutableState.value.runtimeInfo.copy(model = model, provider = provider),
-                )
-            }
-        }.onFailure { error ->
+        }.getOrElse { error ->
             mutableState.value = mutableState.value.copy(modelsLoading = false)
             fail(error)
+            return
+        }
+        if (result.confirmRequired) {
+            mutableState.value = mutableState.value.copy(
+                modelsLoading = false,
+                pendingModelConfirmation = PendingModelConfirmation(
+                    selection,
+                    result.confirmMessage.ifBlank { "Hermes requires confirmation before using this model." },
+                ),
+            )
+        } else {
+            mutableState.value = mutableState.value.copy(
+                modelsLoading = false,
+                pendingModelConfirmation = null,
+                runtimeInfo = mutableState.value.runtimeInfo.copy(model = model, provider = provider),
+            )
+            applyModelPreset(provider, model)
         }
     }
 
@@ -793,15 +795,43 @@ class HermesRepository @Inject constructor(
         mutableState.value = mutableState.value.copy(pendingModelConfirmation = null)
     }
 
-    suspend fun setReasoningEffort(effort: String) = setSessionConfig("reasoning", effort)
+    suspend fun setReasoningEffort(effort: String) {
+        setSessionConfig("reasoning", effort)
+    }
 
-    suspend fun setFastMode(enabled: Boolean) = setSessionConfig("fast", if (enabled) "fast" else "normal")
+    suspend fun setFastMode(enabled: Boolean) {
+        setSessionConfig("fast", if (enabled) "fast" else "normal")
+    }
 
-    suspend fun setYolo(enabled: Boolean) = setSessionConfig("yolo", if (enabled) "on" else "off", "session")
+    suspend fun setYolo(enabled: Boolean) {
+        setSessionConfig("yolo", if (enabled) "on" else "off", "session")
+    }
 
-    private suspend fun setSessionConfig(key: String, value: String, scope: String? = null) {
-        val sessionId = mutableState.value.runtimeSessionId ?: return
-        runCatching {
+    private suspend fun applyModelPreset(provider: String, model: String) {
+        val capabilities = mutableState.value.modelOptions?.providers
+            ?.firstOrNull { it.slug == provider }
+            ?.capabilities
+            ?.get(model)
+            ?: return
+        val preset = runCatching { privacyPreferences.modelPreset(provider, model) }.getOrElse {
+            mutableState.value = mutableState.value.copy(
+                error = "Model changed, but its saved reasoning and fast preset could not be loaded.",
+            )
+            return
+        }
+        for ((key, value) in preset.sessionConfigChanges(capabilities)) {
+            if (!setSessionConfig(key, value, rememberModelPreset = false)) return
+        }
+    }
+
+    private suspend fun setSessionConfig(
+        key: String,
+        value: String,
+        scope: String? = null,
+        rememberModelPreset: Boolean = key == "reasoning" || key == "fast",
+    ): Boolean {
+        val sessionId = mutableState.value.runtimeSessionId ?: return false
+        val result = runCatching {
             val response = gateway.request(
                 "config.set",
                 buildJsonObject {
@@ -812,16 +842,31 @@ class HermesRepository @Inject constructor(
                 },
             )
             json.decodeFromJsonElement(ConfigSetResult.serializer(), response)
-        }.onSuccess { result ->
-            val current = mutableState.value.runtimeInfo
-            val next = when (key) {
-                "reasoning" -> current.copy(reasoningEffort = result.value)
-                "fast" -> current.copy(fast = result.value == "fast", serviceTier = if (result.value == "fast") "priority" else "")
-                "yolo" -> current.copy(yolo = result.value == "1")
-                else -> current
+        }.getOrElse {
+            fail(it)
+            return false
+        }
+        val current = mutableState.value.runtimeInfo
+        val next = when (key) {
+            "reasoning" -> current.copy(reasoningEffort = result.value)
+            "fast" -> current.copy(fast = result.value == "fast", serviceTier = if (result.value == "fast") "priority" else "")
+            "yolo" -> current.copy(yolo = result.value == "1")
+            else -> current
+        }
+        mutableState.value = mutableState.value.copy(runtimeInfo = next, error = null)
+        if (rememberModelPreset && current.provider.isNotBlank() && current.model.isNotBlank()) {
+            runCatching {
+                when (key) {
+                    "reasoning" -> privacyPreferences.setModelReasoningPreset(current.provider, current.model, value)
+                    "fast" -> privacyPreferences.setModelFastPreset(current.provider, current.model, value == "fast")
+                }
+            }.onFailure {
+                mutableState.value = mutableState.value.copy(
+                    error = "Hermes updated the session, but Android could not remember this model preset.",
+                )
             }
-            mutableState.value = mutableState.value.copy(runtimeInfo = next, error = null)
-        }.onFailure(::fail)
+        }
+        return true
     }
 
     suspend fun send(text: String) {
