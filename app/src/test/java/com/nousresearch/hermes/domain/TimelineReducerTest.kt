@@ -64,6 +64,29 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `transient status replaces its predecessor and ready clears it`() {
+        var state = TimelineState(items = listOf(TimelineItem.Message("u1", MessageRole.USER, "Keep me")))
+        state = TimelineReducer.reduce(
+            state,
+            GatewayEvent("status.update", "runtime-1", buildJsonObject { put("kind", "compacting"); put("text", "Summarizing") }),
+        )
+        state = TimelineReducer.reduce(
+            state,
+            GatewayEvent("status.update", "runtime-1", buildJsonObject { put("kind", "context_pressure"); put("text", "85% to compaction") }),
+        )
+
+        assertEquals(1, state.items.filterIsInstance<TimelineItem.Status>().size)
+        assertEquals("85% to compaction", state.items.filterIsInstance<TimelineItem.Status>().single().text)
+
+        state = TimelineReducer.reduce(
+            state,
+            GatewayEvent("status.update", "runtime-1", buildJsonObject { put("kind", "status"); put("text", "ready") }),
+        )
+        assertTrue(state.items.none { it is TimelineItem.Status })
+        assertEquals("Keep me", (state.items.single() as TimelineItem.Message).text)
+    }
+
+    @Test
     fun `approval remains blocking until explicitly cleared`() {
         val event = GatewayEvent(
             "approval.request",

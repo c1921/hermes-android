@@ -147,13 +147,7 @@ object TimelineReducer {
                 ),
             )
 
-            "status.update" -> state.copy(
-                items = state.items + TimelineItem.Status(
-                    id = "status:${state.generation}:${state.items.size}",
-                    kind = payload.text("kind"),
-                    text = payload.text("text"),
-                ),
-            )
+            "status.update" -> updateStatus(state, event.sessionId, payload)
 
             "approval.request" -> state.copy(
                 approval = ApprovalRequest(
@@ -206,6 +200,22 @@ object TimelineReducer {
 
             else -> state
         }
+    }
+
+    private fun updateStatus(state: TimelineState, sessionId: String?, payload: JsonObject): TimelineState {
+        val text = payload.text("text").trim()
+        if (text.isBlank()) return state
+        val items = state.items.filterNot { it is TimelineItem.Status }
+        if (payload.text("kind") == "status" && text.equals("ready", ignoreCase = true)) {
+            return state.copy(items = items)
+        }
+        return state.copy(
+            items = items + TimelineItem.Status(
+                id = "status:${sessionId.orEmpty()}",
+                kind = payload.text("kind").ifBlank { "status" },
+                text = text,
+            ),
+        )
     }
 
     fun appendUserMessage(state: TimelineState, id: String, text: String): TimelineState = state.copy(

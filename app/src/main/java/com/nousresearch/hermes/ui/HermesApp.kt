@@ -1544,7 +1544,29 @@ private fun ReasoningBlock(reasoning: TimelineItem.Reasoning) {
 
 @Composable
 private fun StatusBlock(status: TimelineItem.Status) {
-    Text("${status.kind.uppercase()} / ${status.text}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val colour = when {
+        status.kind == "compacting" || status.kind == "context_pressure" -> WarningColor
+        status.kind == "goal" && status.text.startsWith("✓") -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        color = colour.copy(alpha = 0.10f),
+        contentColor = colour,
+        shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, colour.copy(alpha = 0.35f)),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (status.kind == "compacting") {
+                Icon(Icons.Outlined.AutoAwesome, null, modifier = Modifier.padding(end = 7.dp).size(16.dp))
+            }
+            Text(
+                "${status.kind.replace('_', ' ').uppercase()} / ${status.text}",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
