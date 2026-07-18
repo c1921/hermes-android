@@ -17,6 +17,9 @@ import com.nousresearch.hermes.protocol.ProviderValidationResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.ManagedFileReadResponse
 import com.nousresearch.hermes.protocol.ManagedFilesResponse
+import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
+import com.nousresearch.hermes.protocol.MessagingPlatformUpdateResponse
+import com.nousresearch.hermes.protocol.MessagingPlatformsResponse
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
 import com.nousresearch.hermes.protocol.SessionSearchPage
@@ -41,6 +44,8 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -152,6 +157,66 @@ class HermesRestClient(
             method = "POST",
             body = buildJsonObject { put("text", text) },
         ),
+    )
+
+    suspend fun messagingPlatforms(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): MessagingPlatformsResponse = get(
+        config,
+        token,
+        "/api/messaging/platforms?profile=${encodePathSegment(profile)}",
+        MessagingPlatformsResponse.serializer(),
+    )
+
+    suspend fun updateMessagingPlatform(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        platformId: String,
+        enabled: Boolean? = null,
+        env: Map<String, String> = emptyMap(),
+        clearEnv: List<String> = emptyList(),
+    ): MessagingPlatformUpdateResponse = json.decodeFromJsonElement(
+        MessagingPlatformUpdateResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/messaging/platforms/${encodePathSegment(platformId)}?profile=${encodePathSegment(profile)}",
+            method = "PUT",
+            body = buildJsonObject {
+                enabled?.let { put("enabled", it) }
+                put("env", buildJsonObject { env.forEach { (key, value) -> put(key, value) } })
+                put("clear_env", buildJsonArray { clearEnv.forEach(::add) })
+            },
+        ),
+    )
+
+    suspend fun testMessagingPlatform(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        platformId: String,
+    ): MessagingPlatformTestResponse = json.decodeFromJsonElement(
+        MessagingPlatformTestResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/messaging/platforms/${encodePathSegment(platformId)}/test?profile=${encodePathSegment(profile)}",
+            method = "POST",
+            body = buildJsonObject { },
+        ),
+    )
+
+    suspend fun restartGateway(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+    ): ActionResponse = startAction(
+        config,
+        token,
+        "/api/gateway/restart?profile=${encodePathSegment(profile)}",
     )
 
     suspend fun downloadManagedFile(
@@ -412,12 +477,17 @@ class HermesRestClient(
         token: String,
         name: String,
         lines: Int = 400,
+        profile: String? = null,
     ): ActionStatusResponse {
         require(name in ALLOWED_ACTIONS || SKILL_ACTION.matches(name)) { "Unsupported Hermes background action" }
+        val query = buildList {
+            add("lines=${lines.coerceIn(1, 2_000)}")
+            profile?.let { add("profile=${encodePathSegment(it)}") }
+        }.joinToString("&")
         return get(
             config,
             token,
-            "/api/actions/$name/status?lines=${lines.coerceIn(1, 2_000)}",
+            "/api/actions/$name/status?$query",
             ActionStatusResponse.serializer(),
         )
     }
@@ -604,7 +674,7 @@ class HermesRestClient(
             .build().encodedPath.removePrefix("/")
 
     private companion object {
-        val ALLOWED_ACTIONS = setOf("doctor", "security-audit")
+        val ALLOWED_ACTIONS = setOf("doctor", "security-audit", "gateway-restart")
         val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024

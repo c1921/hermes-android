@@ -16,6 +16,8 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.ImageAttachResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
+import com.nousresearch.hermes.protocol.MessagingPlatformInfo
+import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
 import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfileInfo
@@ -99,6 +101,11 @@ data class HermesState(
     val providerEnv: Map<String, EnvVarInfo> = emptyMap(),
     val providersLoading: Boolean = false,
     val providerNotice: String? = null,
+    val messagingPlatforms: List<MessagingPlatformInfo> = emptyList(),
+    val messagingLoading: Boolean = false,
+    val messagingNotice: String? = null,
+    val messagingTests: Map<String, MessagingPlatformTestResponse> = emptyMap(),
+    val gatewayRestarting: Boolean = false,
     val reconnectRequiredBackendId: String? = null,
     val error: String? = null,
 ) {
@@ -1231,6 +1238,139 @@ class HermesRepository @Inject constructor(
             .onFailure(::fail)
     }
 
+    suspend fun refreshMessaging() {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(messagingLoading = true, error = null)
+        runCatching {
+            val active = restClient.activeProfile(backend, token)
+            active to restClient.messagingPlatforms(backend, token, active.active)
+        }.onSuccess { (active, response) ->
+            mutableState.value = mutableState.value.copy(
+                activeProfile = active.active,
+                currentProfile = active.current,
+                messagingPlatforms = response.platforms,
+                messagingTests = emptyMap(),
+                messagingLoading = false,
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun setMessagingEnabled(platformId: String, enabled: Boolean) {
+        val platform = advertisedMessagingPlatform(platformId)
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(messagingLoading = true, messagingNotice = null, error = null)
+        runCatching {
+            restClient.updateMessagingPlatform(
+                backend,
+                token,
+                mutableState.value.activeProfile,
+                platform.id,
+                enabled = enabled,
+            )
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(
+                messagingNotice = "${platform.name} ${if (enabled) "enabled" else "disabled"}. Restart the Hermes messaging gateway to apply the change.",
+            )
+            refreshMessaging()
+        }.onFailure(::fail)
+    }
+
+    suspend fun saveMessagingSettings(platformId: String, values: Map<String, String>) {
+        val platform = advertisedMessagingPlatform(platformId)
+        val allowed = platform.envVars.mapTo(mutableSetOf()) { it.key }
+        val cleaned = values.mapValues { it.value.trim() }.filterValues(String::isNotEmpty)
+        require(cleaned.isNotEmpty()) { "Enter at least one messaging setting" }
+        require(cleaned.keys.all { it in allowed }) { "Hermes did not advertise one of these messaging settings" }
+        require(cleaned.values.all { it.length <= MAX_MESSAGING_VALUE_CHARACTERS }) { "Messaging settings must not exceed 32,768 characters" }
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(messagingLoading = true, messagingNotice = null, error = null)
+        runCatching {
+            restClient.updateMessagingPlatform(
+                backend,
+                token,
+                mutableState.value.activeProfile,
+                platform.id,
+                env = cleaned,
+            )
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(
+                messagingNotice = "${platform.name} setup saved on Hermes. Restart the messaging gateway to reconnect it.",
+            )
+            refreshMessaging()
+        }.onFailure(::fail)
+    }
+
+    suspend fun clearMessagingSetting(platformId: String, key: String) {
+        val platform = advertisedMessagingPlatform(platformId)
+        require(platform.envVars.any { it.key == key }) { "Hermes did not advertise this messaging setting" }
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(messagingLoading = true, messagingNotice = null, error = null)
+        runCatching {
+            restClient.updateMessagingPlatform(
+                backend,
+                token,
+                mutableState.value.activeProfile,
+                platform.id,
+                clearEnv = listOf(key),
+            )
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(messagingNotice = "$key removed from ${platform.name} on Hermes.")
+            refreshMessaging()
+        }.onFailure(::fail)
+    }
+
+    suspend fun testMessagingPlatform(platformId: String) {
+        val platform = advertisedMessagingPlatform(platformId)
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(messagingLoading = true, error = null)
+        runCatching {
+            restClient.testMessagingPlatform(backend, token, mutableState.value.activeProfile, platform.id)
+        }.onSuccess { result ->
+            mutableState.value = mutableState.value.copy(
+                messagingTests = mutableState.value.messagingTests + (platform.id to result),
+                messagingLoading = false,
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun restartMessagingGateway() {
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(gatewayRestarting = true, messagingNotice = null, error = null)
+        try {
+            val started = restClient.restartGateway(backend, token, profile)
+            require(started.ok && started.name == "gateway-restart") { "Hermes did not start the messaging gateway restart" }
+            repeat(GATEWAY_RESTART_POLL_LIMIT) {
+                delay(GATEWAY_RESTART_POLL_INTERVAL_MILLIS)
+                val status = restClient.actionStatus(backend, token, started.name, lines = 100, profile = profile)
+                if (!status.running) {
+                    require(status.exitCode == null || status.exitCode == 0) { "Hermes messaging gateway restart failed" }
+                    mutableState.value = mutableState.value.copy(
+                        gatewayRestarting = false,
+                        messagingNotice = "Hermes messaging gateway restarted for $profile.",
+                    )
+                    refreshMessaging()
+                    return
+                }
+            }
+            mutableState.value = mutableState.value.copy(
+                gatewayRestarting = false,
+                error = "Gateway restart is still running after the Android polling window. Refresh messaging status before retrying.",
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            mutableState.value = mutableState.value.copy(gatewayRestarting = false)
+            fail(error)
+        }
+    }
+
+    private fun advertisedMessagingPlatform(platformId: String): MessagingPlatformInfo =
+        mutableState.value.messagingPlatforms.firstOrNull { it.id == platformId }
+            ?: error("Hermes did not advertise this messaging platform")
+
     private fun updateDiagnostic(action: DiagnosticAction, run: DiagnosticRunState) {
         mutableState.value = mutableState.value.copy(
             diagnostics = mutableState.value.diagnostics + (action to run),
@@ -1681,6 +1821,8 @@ class HermesRepository @Inject constructor(
             modelsLoading = false,
             managementLoading = false,
             providersLoading = false,
+            messagingLoading = false,
+            gatewayRestarting = false,
             skillHubLoading = false,
             sessionSearchLoading = false,
             reconnectRequiredBackendId = if (reconnect) reconnectBackendId else mutableState.value.reconnectRequiredBackendId,
@@ -1725,6 +1867,9 @@ private const val MAX_SLASH_TEXT_CHARACTERS = 2_000
 private const val MAX_SLASH_OUTPUT_CHARACTERS = 20_000
 private const val MAX_SLASH_SUGGESTIONS = 12
 private const val MAX_SLASH_ALIAS_DEPTH = 5
+private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
+private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
+private const val GATEWAY_RESTART_POLL_LIMIT = 18
 
 private val MOBILE_SLASH_COMMANDS = setOf(
     "/agents", "/background", "/bg", "/btw", "/branch", "/compress", "/debug",

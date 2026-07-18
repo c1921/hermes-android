@@ -32,6 +32,7 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [x] Managed workspace browsing with directory navigation, bounded text/source/image/PDF previews, network-isolated HTML rendering, streamed SAF downloads, cancellation, and MIME/path validation
 - [x] Press-to-talk and lockable voice capture through Hermes `/api/audio/transcribe`, with slide-to-lock/cancel, live level feedback, bounded temporary audio, permission recovery, and audio-focus interruption handling
 - [x] Per-reply spoken playback through Hermes' own `/api/audio/speak` provider chain, with pause, resume, stop, system output routing, Bluetooth support, and temporary-audio cleanup
+- [x] Profile-scoped messaging-gateway catalogue, platform status, Hermes-owned credential setup/removal, enable/disable, connection tests, and explicitly confirmed gateway restart
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
@@ -55,7 +56,6 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [ ] Pending-message queue and composer history
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
 - [ ] MCP and toolset configuration
-- [ ] Messaging-gateway management
 - [ ] Agents, subagents, background tasks, and Command Center
 - [ ] Usage analytics, token accounting, checkpoints, diffs, and filesystem rollback
 - [ ] Local Termux runtime discovery or companion integration

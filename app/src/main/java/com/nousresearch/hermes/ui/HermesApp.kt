@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
@@ -151,7 +152,7 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -198,6 +199,12 @@ private data class ManagementActions(
     val refreshProviders: () -> Unit,
     val saveProviderSetting: (String, String, String) -> Unit,
     val deleteProviderSetting: (String) -> Unit,
+    val refreshMessaging: () -> Unit,
+    val setMessagingEnabled: (String, Boolean) -> Unit,
+    val saveMessagingSettings: (String, Map<String, String>) -> Unit,
+    val clearMessagingSetting: (String, String) -> Unit,
+    val testMessagingPlatform: (String) -> Unit,
+    val restartMessagingGateway: () -> Unit,
 )
 
 @Composable
@@ -252,6 +259,12 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             refreshProviders = viewModel::refreshProviders,
             saveProviderSetting = viewModel::saveProviderSetting,
             deleteProviderSetting = viewModel::deleteProviderSetting,
+            refreshMessaging = viewModel::refreshMessaging,
+            setMessagingEnabled = viewModel::setMessagingEnabled,
+            saveMessagingSettings = viewModel::saveMessagingSettings,
+            clearMessagingSetting = viewModel::clearMessagingSetting,
+            testMessagingPlatform = viewModel::testMessagingPlatform,
+            restartMessagingGateway = viewModel::restartMessagingGateway,
         )
     }
     HermesTheme {
@@ -521,6 +534,7 @@ private fun HermesWorkspace(
                     onFiles = { destination = WorkspaceDestination.FILES },
                     onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                     onProviders = { destination = WorkspaceDestination.PROVIDERS },
+                    onMessaging = { destination = WorkspaceDestination.MESSAGING },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -576,6 +590,17 @@ private fun HermesWorkspace(
                         onRefresh = managementActions.refreshProviders,
                         onSave = managementActions.saveProviderSetting,
                         onDelete = managementActions.deleteProviderSetting,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.MESSAGING -> MessagingScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshMessaging,
+                        onSetEnabled = managementActions.setMessagingEnabled,
+                        onSave = managementActions.saveMessagingSettings,
+                        onClear = managementActions.clearMessagingSetting,
+                        onTest = managementActions.testMessagingPlatform,
+                        onRestartGateway = managementActions.restartMessagingGateway,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -662,6 +687,17 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    WorkspaceDestination.MESSAGING -> MessagingScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshMessaging,
+                        onSetEnabled = managementActions.setMessagingEnabled,
+                        onSave = managementActions.saveMessagingSettings,
+                        onClear = managementActions.clearMessagingSetting,
+                        onTest = managementActions.testMessagingPlatform,
+                        onRestartGateway = managementActions.restartMessagingGateway,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh, onSearchSessions,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
@@ -674,6 +710,7 @@ private fun HermesWorkspace(
                         onFiles = { destination = WorkspaceDestination.FILES },
                         onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                         onProviders = { destination = WorkspaceDestination.PROVIDERS },
+                        onMessaging = { destination = WorkspaceDestination.MESSAGING },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                 }
@@ -698,6 +735,7 @@ private fun SessionRail(
     onFiles: () -> Unit,
     onDiagnostics: () -> Unit,
     onProviders: () -> Unit,
+    onMessaging: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -795,6 +833,14 @@ private fun SessionRail(
                 Spacer(Modifier.width(6.dp))
                 Text("Diagnostics")
             }
+        }
+        OutlinedButton(
+            onClick = onMessaging,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            Icon(Icons.Outlined.Forum, null)
+            Spacer(Modifier.width(6.dp))
+            Text("Messaging gateway")
         }
         OutlinedTextField(
             value = query,

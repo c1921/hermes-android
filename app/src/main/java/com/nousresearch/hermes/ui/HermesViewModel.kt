@@ -98,6 +98,18 @@ class HermesViewModel @Inject constructor(
         repository.saveProviderSetting(key, value, apiKey)
     }
     fun deleteProviderSetting(key: String) = viewModelScope.launch { repository.deleteProviderSetting(key) }
+    fun refreshMessaging() = viewModelScope.launch { repository.refreshMessaging() }
+    fun setMessagingEnabled(platformId: String, enabled: Boolean) = viewModelScope.launch {
+        repository.setMessagingEnabled(platformId, enabled)
+    }
+    fun saveMessagingSettings(platformId: String, values: Map<String, String>) = viewModelScope.launch {
+        repository.saveMessagingSettings(platformId, values)
+    }
+    fun clearMessagingSetting(platformId: String, key: String) = viewModelScope.launch {
+        repository.clearMessagingSetting(platformId, key)
+    }
+    fun testMessagingPlatform(platformId: String) = viewModelScope.launch { repository.testMessagingPlatform(platformId) }
+    fun restartMessagingGateway() = viewModelScope.launch { repository.restartMessagingGateway() }
     fun selectBackend(id: String) = viewModelScope.launch { repository.selectBackend(id) }
     fun forgetBackend(id: String) = viewModelScope.launch { repository.forgetBackend(id) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }
