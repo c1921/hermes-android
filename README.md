@@ -46,6 +46,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Profile-scoped Hermes toolset catalogue with server-advertised platform, setup state, tools, and enable/disable controls for future sessions
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
 - [x] Doctor and security-audit actions with bounded status polling and output redaction
+- [x] Optional durable secure-screen mode that blocks screenshots, screen recording, and recent-app thumbnails
 - [x] Phone master/detail and expanded tablet two-pane layouts
 - [x] Official Hermes site palette and artwork, Courier Prime utility typography, licensed serif fallback, rounded component geometry, and official Desktop launcher icon
 - [x] Unknown protocol fields and event types fail safely instead of crashing the client
@@ -66,7 +67,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, per-tool filters, and structured general configuration
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
-- [ ] Biometric lock, secure-screen option, Android share target, deep links, shortcuts, widgets, and other platform integrations
+- [ ] Biometric lock, Android share target, deep links, shortcuts, widgets, and other platform integrations
 - [ ] Signed release APK, release AAB, reproducibility verification, Baseline Profile, and macrobenchmarks
 
 The detailed, current source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md).

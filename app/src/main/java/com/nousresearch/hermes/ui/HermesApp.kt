@@ -248,7 +248,11 @@ private data class ManagementActions(
 )
 
 @Composable
-fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
+fun HermesApp(
+    secureScreen: Boolean = false,
+    onSecureScreenChange: (Boolean) -> Unit = {},
+    viewModel: HermesViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val modelActions = remember(viewModel) {
@@ -378,6 +382,8 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                         onConnectBackend = viewModel::connect,
                         onSelectBackend = viewModel::selectBackend,
                         onForgetBackend = viewModel::forgetBackend,
+                        secureScreen = secureScreen,
+                        onSecureScreenChange = onSecureScreenChange,
                     )
                 }
             }
@@ -574,6 +580,8 @@ private fun HermesWorkspace(
     onConnectBackend: (String, String, String, String, Boolean) -> Unit,
     onSelectBackend: (String) -> Unit,
     onForgetBackend: (String) -> Unit,
+    secureScreen: Boolean,
+    onSecureScreenChange: (Boolean) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
@@ -653,6 +661,8 @@ private fun HermesWorkspace(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
+                        secureScreen = secureScreen,
+                        onSecureScreenChange = onSecureScreenChange,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -776,6 +786,8 @@ private fun HermesWorkspace(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
+                        secureScreen = secureScreen,
+                        onSecureScreenChange = onSecureScreenChange,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
