@@ -57,7 +57,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 
 - [ ] **Partial:** reconnect uses bounded backoff and authoritative session rehydration, but exact in-flight delta replay needs a server event cursor.
 - [ ] **Partial:** tool activity is structured and expandable; specialised renderers for every Hermes tool are not complete.
-- [ ] **Partial:** attachment sending and managed downloads/previews work; upload progress, camera capture, large streamed uploads, share actions, and canonical generated-artifact delivery are not complete.
+- [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews work; upload progress, large streamed uploads, share actions, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
 - [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report; SBOM and release provenance remain.
 

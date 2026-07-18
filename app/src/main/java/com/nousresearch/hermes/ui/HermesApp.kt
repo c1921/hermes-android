@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -165,6 +166,7 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
+import com.nousresearch.hermes.platform.newCameraCaptureUri
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
@@ -1602,6 +1604,8 @@ private fun Composer(
 ) {
     var pendingDestructiveSlash by rememberSaveable { mutableStateOf<String?>(null) }
     var microphoneDenied by rememberSaveable { mutableStateOf(false) }
+    var capturedCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var cameraError by rememberSaveable { mutableStateOf<String?>(null) }
     var historyMenuOpen by rememberSaveable(historySessionId) { mutableStateOf(false) }
     var historyCursor by rememberSaveable(historySessionId) { mutableIntStateOf(-1) }
     var historyDraftSnapshot by rememberSaveable(historySessionId) { mutableStateOf("") }
@@ -1683,6 +1687,15 @@ private fun Composer(
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(onAttach)
     }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val uri = capturedCameraUri?.let(Uri::parse)
+        capturedCameraUri = null
+        if (captured && uri != null) {
+            onAttach(uri)
+        } else if (uri != null) {
+            context.contentResolver.delete(uri, null, null)
+        }
+    }
     Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(12.dp)) {
         if (queuedPrompts.isNotEmpty() || queueNotice != null) {
             PendingMessageQueue(
@@ -1758,6 +1771,24 @@ private fun Composer(
             if (attachmentEnabled) {
                 IconButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, enabled = connected && !attaching) {
                     Icon(Icons.Outlined.AttachFile, "Attach a file")
+                }
+                IconButton(
+                    onClick = {
+                        cameraError = null
+                        runCatching {
+                            newCameraCaptureUri(context).also { uri ->
+                                capturedCameraUri = uri.toString()
+                                camera.launch(uri)
+                            }
+                        }.onFailure { error ->
+                            capturedCameraUri?.let(Uri::parse)?.let { context.contentResolver.delete(it, null, null) }
+                            capturedCameraUri = null
+                            cameraError = error.message ?: "Android could not open the camera"
+                        }
+                    },
+                    enabled = connected && !attaching,
+                ) {
+                    Icon(Icons.Outlined.PhotoCamera, "Take a photo")
                 }
             }
             Box {
@@ -1861,6 +1892,14 @@ private fun Composer(
                 "Pending-message queue is text-only; send or remove attachments first.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        cameraError?.let { error ->
+            Text(
+                error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
