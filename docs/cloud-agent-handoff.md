@@ -2,7 +2,7 @@
 
 - Snapshot date: 18 July 2026
 - Expected starting branch: `main`
-- Baseline before the latest cloud slice: `0900caf98ff44c29136c8e3361468b00c06ab542`
+- Baseline before the spawn-tree and secure-screen slices: `0900caf98ff44c29136c8e3361468b00c06ab542`
 
 ## Objective
 
