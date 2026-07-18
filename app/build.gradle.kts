@@ -7,6 +7,37 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+fun signingProperty(name: String): String? =
+    providers.gradleProperty(name).orNull
+        ?: providers.environmentVariable(name).orNull
+
+val debugKeystorePath = signingProperty("HERMES_DEBUG_KEYSTORE_PATH")
+val debugKeystorePassword = signingProperty("HERMES_DEBUG_KEYSTORE_PASSWORD")
+val debugKeyAlias = signingProperty("HERMES_DEBUG_KEY_ALIAS")
+val debugKeyPassword = signingProperty("HERMES_DEBUG_KEY_PASSWORD")
+val releaseKeystorePath = signingProperty("HERMES_RELEASE_KEYSTORE_PATH")
+val releaseKeystorePassword = signingProperty("HERMES_RELEASE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingProperty("HERMES_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = signingProperty("HERMES_RELEASE_KEY_PASSWORD")
+
+val hasDebugSigning = debugKeystorePath != null &&
+    debugKeystorePassword != null &&
+    debugKeyAlias != null &&
+    debugKeyPassword != null &&
+    file(debugKeystorePath).isFile
+val hasReleaseSigning = releaseKeystorePath != null &&
+    releaseKeystorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null &&
+    file(releaseKeystorePath).isFile
+
+check(signingProperty("HERMES_REQUIRE_DEBUG_SIGNING") != "true" || hasDebugSigning) {
+    "Stable debug signing was required, but the Hermes debug keystore configuration is incomplete."
+}
+check(signingProperty("HERMES_REQUIRE_RELEASE_SIGNING") != "true" || hasReleaseSigning) {
+    "Release signing was required, but the Hermes release keystore configuration is incomplete."
+}
+
 android {
     namespace = "com.nousresearch.hermes"
     compileSdk = 35
@@ -16,7 +47,7 @@ android {
         minSdk = 28
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0-dev"
+        versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "AUDITED_HERMES_COMMIT", "\"5122ddd478143a6901bb752cf8ebcd1c5154b6da\"")
@@ -27,6 +58,25 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        if (hasDebugSigning) {
+            getByName("debug") {
+                storeFile = file(debugKeystorePath!!)
+                storePassword = debugKeystorePassword
+                keyAlias = debugKeyAlias
+                keyPassword = debugKeyPassword
+            }
+        }
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -35,6 +85,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

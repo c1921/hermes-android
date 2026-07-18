@@ -8,5 +8,6 @@ captures/
 .DS_Store
 *.jks
 *.keystore
+*.p12
 release/
 upstream-hermes/

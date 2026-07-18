@@ -1,6 +1,7 @@
 # Hermes for Android
 
-[![Download latest APK and AAB](https://img.shields.io/badge/download-latest%20APK%20%2B%20AAB-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Amain+status%3Asuccess)
+[![Download latest release APK and AAB](https://img.shields.io/badge/main-release%20APK%20%2B%20AAB-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Amain+status%3Asuccess)
+[![Download latest dev APK and AAB](https://img.shields.io/badge/dev-debug%20APK%20%2B%20AAB-3158ad?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Adev+status%3Asuccess)
 
 Native Android client for [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent). The project targets first-party-quality integration with the same Dashboard backend, sessions, profiles, skills, tools, models, providers, and automations used by Hermes Desktop, CLI, and TUI.
 
@@ -10,7 +11,9 @@ This repository is an independent work in progress. It is not currently an offic
 
 Last verified: 18 July 2026.
 
-The current `main` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly locally with JDK 17. Pushes to `dev` publish artifacts under one stable debug certificate. Pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+
+See [Android signing and branch flow](docs/release-signing.md) for the public certificate fingerprints, artifact names, and promotion contract.
 
 ### Implemented
 
@@ -56,6 +59,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Phone master/detail and expanded tablet two-pane layouts
 - [x] Official Hermes site palette and artwork, Courier Prime utility typography, licensed serif fallback, rounded component geometry, and official Desktop launcher icon
 - [x] Nous-only ambient field backdrop with three main plates, three dedicated transition plates, 8-second crossfades, lifecycle pause, reduced-motion handling, and battery-saver freeze
+- [x] Stable branch-specific signing: update-compatible debug APK/AAB artifacts from `dev` and dedicated release APK/AAB artifacts plus R8 mapping from `main`
 - [x] Unknown protocol fields and event types fail safely instead of crashing the client
 
 ### Partial foundations
@@ -84,7 +88,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
 - [ ] Biometric lock, deep links, shortcuts, widgets, and other platform integrations
-- [ ] Signed release APK, release AAB, reproducibility verification, Baseline Profile, and macrobenchmarks
+- [ ] Reproducibility verification, Play App Signing handoff, Baseline Profile, and macrobenchmarks
 
 The detailed, current source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md).
 

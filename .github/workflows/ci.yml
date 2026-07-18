@@ -2,15 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main, dev]
   pull_request:
+    branches: [main, dev]
 
 permissions:
   contents: read
-  statuses: write
 
 jobs:
-  android:
+  quality:
+    name: Tests and lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,26 +22,113 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@v3
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleDebug
+      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug
+
+  dev-artifacts:
+    name: Dev debug APK and AAB
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Restore stable debug keystore
+        env:
+          HERMES_DEBUG_KEYSTORE_BASE64: ${{ secrets.HERMES_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$HERMES_DEBUG_KEYSTORE_BASE64"
+          mkdir -p "$RUNNER_TEMP/hermes-signing"
+          printf '%s' "$HERMES_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hermes-signing/debug.p12"
+          chmod 600 "$RUNNER_TEMP/hermes-signing/debug.p12"
+      - name: Build stable debug artifacts
+        env:
+          HERMES_DEBUG_KEYSTORE_PATH: ${{ runner.temp }}/hermes-signing/debug.p12
+          HERMES_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.HERMES_DEBUG_KEYSTORE_PASSWORD }}
+          HERMES_DEBUG_KEY_ALIAS: hermes-debug
+          HERMES_DEBUG_KEY_PASSWORD: ${{ secrets.HERMES_DEBUG_KEYSTORE_PASSWORD }}
+          HERMES_REQUIRE_DEBUG_SIGNING: "true"
+        run: ./gradlew --no-daemon :app:assembleDebug :app:bundleDebug
+      - name: Sign debug app bundle
+        env:
+          HERMES_DEBUG_KEYSTORE_PATH: ${{ runner.temp }}/hermes-signing/debug.p12
+          HERMES_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.HERMES_DEBUG_KEYSTORE_PASSWORD }}
+          HERMES_DEBUG_KEY_PASSWORD: ${{ secrets.HERMES_DEBUG_KEYSTORE_PASSWORD }}
+        run: |
+          jarsigner \
+            -keystore "$HERMES_DEBUG_KEYSTORE_PATH" \
+            -storetype PKCS12 \
+            -storepass:env HERMES_DEBUG_KEYSTORE_PASSWORD \
+            -keypass:env HERMES_DEBUG_KEY_PASSWORD \
+            -sigalg SHA384withRSA \
+            -digestalg SHA-384 \
+            app/build/outputs/bundle/debug/app-debug.aab \
+            hermes-debug
+      - name: Verify stable debug signatures
+        run: |
+          set -euo pipefail
+          debug_fingerprint="2a46d00222f6d6faf30b86b9fc0647998b25a82a2ba1531c70a84a91bbb1650c"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -F "$debug_fingerprint"
+          keytool -printcert -jarfile app/build/outputs/bundle/debug/app-debug.aab | tr -d ': ' | grep -iF "$debug_fingerprint"
       - uses: actions/upload-artifact@v4
         with:
-          name: hermes-android-debug
+          name: hermes-android-dev-debug
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
-      - name: Publish validation status
-        if: always()
-        uses: actions/github-script@v7
+
+  release-artifacts:
+    name: Main release APK and AAB
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          script: |
-            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure'
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state,
-              context: 'Hermes Android / CI',
-              description: state === 'success' ? 'Tests, lint, APK and AAB passed' : 'Android validation failed',
-              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            })
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Restore release keystore
+        env:
+          HERMES_RELEASE_KEYSTORE_BASE64: ${{ secrets.HERMES_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$HERMES_RELEASE_KEYSTORE_BASE64"
+          mkdir -p "$RUNNER_TEMP/hermes-signing"
+          printf '%s' "$HERMES_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hermes-signing/release.p12"
+          chmod 600 "$RUNNER_TEMP/hermes-signing/release.p12"
+      - name: Build release artifacts
+        env:
+          HERMES_RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/hermes-signing/release.p12
+          HERMES_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.HERMES_RELEASE_KEYSTORE_PASSWORD }}
+          HERMES_RELEASE_KEY_ALIAS: hermes-release
+          HERMES_RELEASE_KEY_PASSWORD: ${{ secrets.HERMES_RELEASE_KEYSTORE_PASSWORD }}
+          HERMES_REQUIRE_RELEASE_SIGNING: "true"
+        run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+      - name: Verify release signatures
+        run: |
+          set -euo pipefail
+          release_fingerprint="3138e711ef881291c1c39495c7b55fe816b4155a97735116bc36a72097dc202d"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -F "$release_fingerprint"
+          keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | tr -d ': ' | grep -iF "$release_fingerprint"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hermes-android-release
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
+            app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
