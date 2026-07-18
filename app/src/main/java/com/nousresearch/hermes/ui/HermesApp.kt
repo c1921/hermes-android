@@ -1,6 +1,8 @@
 package com.nousresearch.hermes.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -53,6 +55,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -63,6 +66,8 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -78,6 +83,7 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
@@ -167,10 +173,12 @@ import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
 import com.nousresearch.hermes.platform.newCameraCaptureUri
+import com.nousresearch.hermes.platform.textShareIntent
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 
 private val WideLayout = 840.dp
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
@@ -1449,13 +1457,22 @@ private fun Timeline(
 }
 
 @Composable
-private fun MessageBlock(
+internal fun MessageBlock(
     message: TimelineItem.Message,
     speechState: SpeechUiState,
     onSpeak: () -> Unit,
     onStopSpeaking: () -> Unit,
 ) {
     val user = message.role == MessageRole.USER
+    val context = LocalContext.current
+    var copied by rememberSaveable(message.id) { mutableStateOf(false) }
+    var actionError by rememberSaveable(message.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1_500)
+            copied = false
+        }
+    }
     val label = when (message.role) {
         MessageRole.USER -> "YOU"
         MessageRole.ASSISTANT -> "HERMES"
@@ -1472,13 +1489,47 @@ private fun MessageBlock(
             Column(Modifier.padding(if (user) 14.dp else 6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    if (!message.streaming && message.text.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                actionError = null
+                                runCatching {
+                                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
+                                        ClipData.newPlainText("Hermes message", message.text),
+                                    )
+                                }.onSuccess {
+                                    copied = true
+                                }.onFailure {
+                                    actionError = "Android could not copy this message"
+                                }
+                            },
+                        ) {
+                            Icon(
+                                if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                                if (copied) "Copied message" else "Copy message",
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                actionError = null
+                                runCatching {
+                                    context.startActivity(Intent.createChooser(textShareIntent(message.text), "Share message"))
+                                }.onFailure {
+                                    actionError = "Android could not share this message"
+                                }
+                            },
+                        ) {
+                            Icon(Icons.Outlined.Share, "Share message", modifier = Modifier.size(19.dp))
+                        }
+                    }
                     if (!user && message.role == MessageRole.ASSISTANT && !message.streaming && message.text.isNotBlank()) {
                         val active = speechState.messageId == message.id && speechState.phase != SpeechPhase.IDLE
                         if (active && speechState.phase == SpeechPhase.LOADING) {
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(4.dp))
                         }
-                        IconButton(onClick = if (active) onStopSpeaking else onSpeak, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = if (active) onStopSpeaking else onSpeak) {
                             Icon(
                                 if (active) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp,
                                 if (active) "Stop reading this reply" else "Read this reply aloud",
@@ -1488,7 +1539,12 @@ private fun MessageBlock(
                     }
                 }
                 Spacer(Modifier.height(5.dp))
-                RichText(message.text.ifBlank { if (message.streaming) "▍" else "" })
+                SelectionContainer {
+                    RichText(message.text.ifBlank { if (message.streaming) "▍" else "" })
+                }
+                actionError?.let { error ->
+                    Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }

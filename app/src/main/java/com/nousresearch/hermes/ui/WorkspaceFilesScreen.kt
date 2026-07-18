@@ -33,11 +33,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -54,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,9 +76,13 @@ import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.WorkspaceFilePreview
 import com.nousresearch.hermes.data.WorkspacePreviewKind
 import com.nousresearch.hermes.protocol.ManagedFileEntry
+import com.nousresearch.hermes.platform.fileOpenIntent
+import com.nousresearch.hermes.platform.fileShareIntent
+import com.nousresearch.hermes.platform.sharedFileUri
 import java.io.ByteArrayInputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -89,6 +96,10 @@ internal fun WorkspaceFilesScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var pathInput by rememberSaveable { mutableStateOf(initialPath.orEmpty()) }
     var pendingDownload by remember { mutableStateOf<ManagedFileEntry?>(null) }
+    var externalActionBusy by remember { mutableStateOf(false) }
+    var externalActionError by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val entry = pendingDownload
         pendingDownload = null
@@ -107,6 +118,27 @@ internal fun WorkspaceFilesScreen(
     }
     BackHandler(enabled = internalBack != null) { internalBack?.invoke() }
 
+    fun openExternally(preview: WorkspaceFilePreview, share: Boolean) {
+        scope.launch {
+            externalActionBusy = true
+            externalActionError = null
+            runCatching {
+                val uri = withContext(Dispatchers.IO) {
+                    sharedFileUri(context, preview.entry.name, preview.contentBytes())
+                }
+                val intent = if (share) {
+                    Intent.createChooser(fileShareIntent(uri, preview.mimeType, preview.entry.name), "Share ${preview.entry.name}")
+                } else {
+                    Intent.createChooser(fileOpenIntent(uri, preview.mimeType, preview.entry.name), "Open ${preview.entry.name} with")
+                }
+                context.startActivity(intent)
+            }.onFailure { error ->
+                externalActionError = error.message ?: "Android could not open another app for this file"
+            }
+            externalActionBusy = false
+        }
+    }
+
     Column(modifier.fillMaxSize()) {
         FilesHeader(
             path = state.preview?.entry?.name ?: state.listing?.path.orEmpty(),
@@ -115,6 +147,7 @@ internal fun WorkspaceFilesScreen(
             onBack = internalBack ?: onBack,
         )
         state.error?.let { FileStatusSurface(it, error = true) }
+        externalActionError?.let { FileStatusSurface(it, error = true) }
         state.notice?.let { FileStatusSurface(it, error = false) }
         state.downloading?.let { entry ->
             Surface(
@@ -136,11 +169,13 @@ internal fun WorkspaceFilesScreen(
         if (preview != null) {
             FilePreviewPane(
                 preview = preview,
-                downloading = state.downloading != null,
+                busy = state.downloading != null || externalActionBusy,
                 onSave = {
                     pendingDownload = preview.entry
                     createDocument.launch(createDocumentIntent(preview.entry))
                 },
+                onShare = { openExternally(preview, share = true) },
+                onOpenWith = { openExternally(preview, share = false) },
                 modifier = Modifier.weight(1f),
             )
         } else {
@@ -261,8 +296,10 @@ private fun FileRow(
 @Composable
 private fun FilePreviewPane(
     preview: WorkspaceFilePreview,
-    downloading: Boolean,
+    busy: Boolean,
     onSave: () -> Unit,
+    onShare: () -> Unit,
+    onOpenWith: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -276,7 +313,13 @@ private fun FilePreviewPane(
                     Text(preview.entry.name, style = MaterialTheme.typography.titleMedium)
                     Text("${preview.mimeType} / ${preview.entry.size?.formatBytes().orEmpty()}", style = MaterialTheme.typography.bodySmall)
                 }
-                OutlinedButton(onClick = onSave, enabled = !downloading) {
+                IconButton(onClick = onShare, enabled = !busy) {
+                    Icon(Icons.Outlined.Share, "Share ${preview.entry.name}")
+                }
+                IconButton(onClick = onOpenWith, enabled = !busy) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open ${preview.entry.name} with another app")
+                }
+                OutlinedButton(onClick = onSave, enabled = !busy) {
                     Icon(Icons.Outlined.Download, null)
                     Spacer(Modifier.width(6.dp))
                     Text("Save")
@@ -303,6 +346,15 @@ private fun FilePreviewPane(
             }
         }
     }
+}
+
+private fun WorkspaceFilePreview.contentBytes(): ByteArray = when (kind) {
+    WorkspacePreviewKind.TEXT,
+    WorkspacePreviewKind.HTML,
+    -> text.toByteArray(Charsets.UTF_8)
+    WorkspacePreviewKind.IMAGE,
+    WorkspacePreviewKind.PDF,
+    -> bytes
 }
 
 @Composable

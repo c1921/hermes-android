@@ -37,6 +37,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Managed workspace browsing with directory navigation, bounded text/source/image/PDF previews, network-isolated HTML rendering, streamed SAF downloads, cancellation, and MIME/path validation
 - [x] Press-to-talk and lockable voice capture through Hermes `/api/audio/transcribe`, with slide-to-lock/cancel, live level feedback, bounded temporary audio, permission recovery, and audio-focus interruption handling
 - [x] Per-reply spoken playback through Hermes' own `/api/audio/speak` provider chain, with pause, resume, stop, system output routing, Bluetooth support, and temporary-audio cleanup
+- [x] Completed-message text selection, whole-message copy/share, and previewed workspace-file save/share/open-with actions
 - [x] Profile-scoped messaging-gateway catalogue, platform status, Hermes-owned credential setup/removal, enable/disable, connection tests, and explicitly confirmed gateway restart
 - [x] Profile-scoped MCP configured-server and Nous catalogue views, backend probes, reviewed catalog installation, confirmed removal, enable/disable, background-install polling, and live `reload.mcp`
 - [x] Profile-scoped 7/30/90-day token, API-call, model, tool, skill, cost, and live-session context breakdowns
@@ -57,7 +58,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 
 - [ ] **Partial:** reconnect uses bounded backoff and authoritative session rehydration, but exact in-flight delta replay needs a server event cursor.
 - [ ] **Partial:** tool activity is structured and expandable; specialised renderers for every Hermes tool are not complete.
-- [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews work; upload progress, large streamed uploads, share actions, and canonical generated-artifact delivery are not complete.
+- [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews/actions work; upload progress, large streamed uploads, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
 - [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report; SBOM and release provenance remain.
 

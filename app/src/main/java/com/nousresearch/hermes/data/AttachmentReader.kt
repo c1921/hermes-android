@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Base64
+import com.nousresearch.hermes.platform.safeContentName
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,7 +27,7 @@ class AttachmentReader @Inject constructor(
         try {
             val displayName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
-            }?.take(200)?.replace(UNSAFE_NAME_CHARS, "_")?.ifBlank { null } ?: "attachment"
+            }.let { safeContentName(it, "attachment") }
             val declaredSize = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
             require(declaredSize == null || declaredSize < 0 || declaredSize <= MAX_BYTES.toLong()) {
                 "Attachment is too large. Android uploads are currently capped at ${MAX_BYTES / 1_048_576} MiB."
@@ -58,6 +59,5 @@ class AttachmentReader @Inject constructor(
 
     private companion object {
         const val MAX_BYTES = 10 * 1_048_576
-        val UNSAFE_NAME_CHARS = Regex("[^A-Za-z0-9._() -]")
     }
 }
