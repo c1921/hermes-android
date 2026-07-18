@@ -47,6 +47,7 @@ class FakeHermesBackend(
                                 put("status", "queued")
                                 put("text", request["params"]?.jsonObject?.get("text") ?: json.parseToJsonElement("\"\""))
                             }
+                            "prompt.submit" -> buildJsonObject { put("status", "streaming") }
                             "model.options" -> json.parseToJsonElement(
                                 """{"model":"hermes-4","provider":"nous","providers":[{"slug":"nous","name":"Nous Portal","authenticated":true,"models":["hermes-4"],"capabilities":{"hermes-4":{"fast":true,"reasoning":true}}}]}""",
                             )

@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Forum
@@ -153,6 +154,8 @@ import com.nousresearch.hermes.data.SlashSuggestion
 import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.ComposerBrowseState
 import com.nousresearch.hermes.domain.ComposerHistory
+import com.nousresearch.hermes.domain.ComposerQueue
+import com.nousresearch.hermes.domain.QueuedPrompt
 import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
@@ -188,6 +191,13 @@ private data class SessionActionCallbacks(
     val refreshCheckpoints: () -> Unit,
     val previewCheckpoint: (String) -> Unit,
     val restoreCheckpoint: (String) -> Unit,
+)
+
+private data class QueueActions(
+    val enqueueDraft: () -> Unit,
+    val update: (String, String) -> Unit,
+    val remove: (String) -> Unit,
+    val sendNow: (String) -> Unit,
 )
 
 private data class ManagementActions(
@@ -258,6 +268,14 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             refreshCheckpoints = viewModel::refreshCheckpoints,
             previewCheckpoint = viewModel::previewCheckpoint,
             restoreCheckpoint = viewModel::restoreCheckpoint,
+        )
+    }
+    val queueActions = remember(viewModel) {
+        QueueActions(
+            enqueueDraft = viewModel::queueDraft,
+            update = viewModel::updateQueuedPrompt,
+            remove = viewModel::removeQueuedPrompt,
+            sendNow = viewModel::sendQueuedPromptNow,
         )
     }
     val managementActions = remember(viewModel) {
@@ -343,6 +361,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                         onSensitiveInput = viewModel::submitSensitiveInput,
                         modelActions = modelActions,
                         sessionActions = sessionActions,
+                        queueActions = queueActions,
                         managementActions = managementActions,
                         onConnectBackend = viewModel::connect,
                         onSelectBackend = viewModel::selectBackend,
@@ -538,6 +557,7 @@ private fun HermesWorkspace(
     onSensitiveInput: (String) -> Unit,
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
+    queueActions: QueueActions,
     managementActions: ManagementActions,
     onConnectBackend: (String, String, String, String, Boolean) -> Unit,
     onSelectBackend: (String) -> Unit,
@@ -669,7 +689,7 @@ private fun HermesWorkspace(
                     else -> ChatSurface(
                         state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
                         onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, Modifier.weight(1f),
+                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions, Modifier.weight(1f),
                     )
                 }
             }
@@ -689,7 +709,7 @@ private fun HermesWorkspace(
                     WorkspaceDestination.CHAT -> ChatSurface(
                         state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
                         onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions,
+                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions,
                         Modifier.fillMaxSize(),
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                     )
@@ -1164,6 +1184,7 @@ private fun ChatSurface(
     onSensitiveInput: (String) -> Unit,
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
+    queueActions: QueueActions,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
@@ -1217,13 +1238,22 @@ private fun ChatSurface(
                 draft = state.draft,
                 slashSuggestions = state.slashSuggestions,
                 slashLoading = state.slashLoading,
-                sending = state.sending || state.runtimeInfo.running,
+                sending = state.sending || state.runtimeInfo.running || state.timeline.items.any {
+                    it is TimelineItem.Message && it.streaming
+                },
                 attaching = state.attaching,
                 connected = connection is GatewayConnectionState.Open,
                 attachmentEnabled = state.supportsRemoteAttachments,
                 attachments = state.pendingAttachments,
+                queuedPrompts = state.queuedPrompts,
+                queueDraining = state.queueDraining,
+                queueNotice = state.queueNotice,
                 onSend = onSend,
                 onSteer = onSteer,
+                onQueue = queueActions.enqueueDraft,
+                onUpdateQueued = queueActions.update,
+                onRemoveQueued = queueActions.remove,
+                onSendQueuedNow = queueActions.sendNow,
                 onDraftChange = onDraftChange,
                 onCompleteSlash = onCompleteSlash,
                 onExecuteSlash = onExecuteSlash,
@@ -1437,8 +1467,15 @@ private fun Composer(
     connected: Boolean,
     attachmentEnabled: Boolean,
     attachments: List<PendingAttachment>,
+    queuedPrompts: List<QueuedPrompt>,
+    queueDraining: Boolean,
+    queueNotice: String?,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
+    onQueue: () -> Unit,
+    onUpdateQueued: (String, String) -> Unit,
+    onRemoveQueued: (String) -> Unit,
+    onSendQueuedNow: (String) -> Unit,
     onDraftChange: (String) -> Unit,
     onCompleteSlash: (String) -> Unit,
     onExecuteSlash: (String) -> Unit,
@@ -1452,6 +1489,8 @@ private fun Composer(
     var historyMenuOpen by rememberSaveable(historySessionId) { mutableStateOf(false) }
     var historyCursor by rememberSaveable(historySessionId) { mutableIntStateOf(-1) }
     var historyDraftSnapshot by rememberSaveable(historySessionId) { mutableStateOf("") }
+    var queuedEditId by rememberSaveable(historySessionId) { mutableStateOf<String?>(null) }
+    var queuedEditText by rememberSaveable(historySessionId) { mutableStateOf("") }
     val focus = LocalFocusManager.current
     val softwareKeyboard = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
@@ -1529,6 +1568,21 @@ private fun Composer(
         uri?.let(onAttach)
     }
     Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(12.dp)) {
+        if (queuedPrompts.isNotEmpty() || queueNotice != null) {
+            PendingMessageQueue(
+                entries = queuedPrompts,
+                busy = sending,
+                draining = queueDraining,
+                notice = queueNotice,
+                onEdit = { entry ->
+                    queuedEditId = entry.id
+                    queuedEditText = entry.text
+                },
+                onRemove = onRemoveQueued,
+                onSendNow = onSendQueuedNow,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         if (slashSuggestions.isNotEmpty() || slashLoading) {
             SlashSuggestions(
                 suggestions = slashSuggestions,
@@ -1668,6 +1722,17 @@ private fun Composer(
                 IconButton(onClick = onInterrupt, modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" }) {
                     Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
                 }
+                IconButton(
+                    onClick = {
+                        onQueue()
+                        resetHistoryBrowse()
+                        focus.clearFocus()
+                    },
+                    enabled = connected && draft.isNotBlank() && attachments.isEmpty() &&
+                        queuedPrompts.size < ComposerQueue.MAX_ENTRIES && !queueDraining,
+                ) {
+                    Icon(Icons.Outlined.Schedule, "Queue for the next turn")
+                }
                 IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) {
                     Icon(Icons.AutoMirrored.Outlined.Send, "Steer the current run")
                 }
@@ -1675,6 +1740,39 @@ private fun Composer(
                 IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.AutoMirrored.Outlined.Send, "Send message") }
             }
         }
+        if (sending && attachments.isNotEmpty()) {
+            Text(
+                "Pending-message queue is text-only; send or remove attachments first.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+    queuedEditId?.let { entryId ->
+        AlertDialog(
+            onDismissRequest = { queuedEditId = null },
+            title = { Text("EDIT PENDING MESSAGE") },
+            text = {
+                OutlinedTextField(
+                    value = queuedEditText,
+                    onValueChange = { queuedEditText = it.take(ComposerQueue.MAX_TEXT_CHARACTERS) },
+                    label = { Text("Message") },
+                    minLines = 3,
+                    maxLines = 8,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onUpdateQueued(entryId, queuedEditText)
+                        queuedEditId = null
+                    },
+                    enabled = queuedEditText.isNotBlank() && !queueDraining,
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { queuedEditId = null }) { Text("Cancel") } },
+        )
     }
     pendingDestructiveSlash?.let { command ->
         val restoresSnapshot = command.lowercase().startsWith("/rollback restore")
@@ -1700,6 +1798,77 @@ private fun Composer(
             },
             dismissButton = { TextButton(onClick = { pendingDestructiveSlash = null }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun PendingMessageQueue(
+    entries: List<QueuedPrompt>,
+    busy: Boolean,
+    draining: Boolean,
+    notice: String?,
+    onEdit: (QueuedPrompt) -> Unit,
+    onRemove: (String) -> Unit,
+    onSendNow: (String) -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("PENDING MESSAGES", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                if (draining) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(entries.size.toString(), style = MaterialTheme.typography.labelMedium)
+            }
+            notice?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            if (entries.isNotEmpty()) {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 180.dp)) {
+                    items(entries, key = { it.id }) { entry ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        ) {
+                            Text(
+                                entry.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (entry.autoDrainFailures >= ComposerQueue.MAX_AUTO_DRAIN_ATTEMPTS && !busy) {
+                                IconButton(
+                                    onClick = { onSendNow(entry.id) },
+                                    enabled = !draining,
+                                    modifier = Modifier.size(36.dp),
+                                ) { Icon(Icons.Outlined.Refresh, "Retry pending message", modifier = Modifier.size(17.dp)) }
+                            }
+                            IconButton(
+                                onClick = { onEdit(entry) },
+                                enabled = !draining,
+                                modifier = Modifier.size(36.dp),
+                            ) { Icon(Icons.Outlined.Edit, "Edit pending message", modifier = Modifier.size(17.dp)) }
+                            IconButton(
+                                onClick = { onRemove(entry.id) },
+                                enabled = !draining,
+                                modifier = Modifier.size(36.dp),
+                            ) { Icon(Icons.Outlined.Delete, "Remove pending message", modifier = Modifier.size(17.dp)) }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

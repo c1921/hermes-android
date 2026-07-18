@@ -270,3 +270,8 @@ data class SessionSteerResult(
     val status: String,
     val text: String,
 )
+
+@Serializable
+data class PromptSubmitResult(
+    val status: String,
+)

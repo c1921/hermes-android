@@ -26,6 +26,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Unified cross-profile session list, profile-scoped full-text search, resume, confirmed reset, retry, rename, archive, delete, branch, undo, compression, and steering
 - [x] Backend/profile/session-scoped draft persistence across Android process restart, with debounced writes and cleanup when a backend is forgotten
 - [x] Session-scoped composer history derived from authoritative user messages, with a mobile picker and Ctrl+Up/Ctrl+Down navigation
+- [x] Durable active-session pending-message queue with FIFO drain, edit/remove/retry controls, and bounded failure handling through Hermes `prompt.submit`
 - [x] Gateway-backed slash command catalogue, live completions, argument replacement, curated mobile execution, skill and quick-command dispatch, inline output, and composer prefill
 - [x] Streamed assistant text, reasoning, status, and structured tool activity
 - [x] Dangerous-command approval, denial, clarification, interruption, session-only YOLO, and non-persistent masked sudo/secret prompts with expiry handling
@@ -60,7 +61,6 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 
 - [ ] Native OAuth/OIDC sign-in
 - [ ] Background push notifications and notification actions
-- [ ] Pending-message queue
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
 - [ ] MCP add/edit/remove, catalog installation, OAuth setup, per-tool filters, and toolset/general configuration
 - [ ] Persisted spawn-tree replay and mobile background delivery for Agents when Android is suspended

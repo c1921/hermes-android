@@ -2,6 +2,8 @@ package com.nousresearch.hermes.data
 
 import android.net.Uri
 import com.nousresearch.hermes.domain.SensitiveInputKind
+import com.nousresearch.hermes.domain.ComposerQueue
+import com.nousresearch.hermes.domain.QueuedPrompt
 import com.nousresearch.hermes.domain.SubagentProgress
 import com.nousresearch.hermes.domain.SubagentReducer
 import com.nousresearch.hermes.domain.TimelineReducer
@@ -34,6 +36,7 @@ import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
 import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfileInfo
+import com.nousresearch.hermes.protocol.PromptSubmitResult
 import com.nousresearch.hermes.protocol.RollbackCheckpoint
 import com.nousresearch.hermes.protocol.RollbackDiffResult
 import com.nousresearch.hermes.protocol.RollbackListResult
@@ -76,6 +79,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -95,6 +100,9 @@ data class HermesState(
     val sending: Boolean = false,
     val attaching: Boolean = false,
     val pendingAttachments: List<PendingAttachment> = emptyList(),
+    val queuedPrompts: List<QueuedPrompt> = emptyList(),
+    val queueDraining: Boolean = false,
+    val queueNotice: String? = null,
     val draft: String = "",
     val slashSuggestions: List<SlashSuggestion> = emptyList(),
     val slashLoading: Boolean = false,
@@ -238,6 +246,7 @@ class HermesRepository @Inject constructor(
     private val json: Json,
     private val attachmentReader: AttachmentReader,
     private val draftStore: DraftStore,
+    private val composerQueueStore: ComposerQueueStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(HermesState())
@@ -245,6 +254,8 @@ class HermesRepository @Inject constructor(
     private var draftSaveJob: Job? = null
     private var sessionSearchJob: Job? = null
     private var slashCompletionJob: Job? = null
+    private var queueDrainJob: Job? = null
+    private val queueMutex = Mutex()
     private var extensionSlashCommands: Set<String>? = null
     private var cachedSlashCatalog: List<SlashSuggestion>? = null
     private var intentionalDisconnect = false
@@ -304,6 +315,9 @@ class HermesRepository @Inject constructor(
                         activeStoredSession = activeStoredSession,
                         timeline = TimelineReducer.reduce(current.timeline, event),
                     )
+                    if (event.type == "message.complete" || (event.type == "session.info" && !runtimeInfo.running)) {
+                        scheduleQueueDrain()
+                    }
                 }
             }
         }
@@ -428,7 +442,7 @@ class HermesRepository @Inject constructor(
             opened = true
         }.onFailure(::fail)
         if (opened) {
-            loadDraft()
+            loadComposerState()
             refreshModelOptions()
         }
     }
@@ -460,7 +474,9 @@ class HermesRepository @Inject constructor(
                 activeStoredSession = null,
                 runtimeSessionId = created.runtimeSessionId,
                 timeline = TimelineReducer.hydrate(created.messages),
-                runtimeInfo = created.info,
+                runtimeInfo = created.info.copy(
+                    storedSessionId = created.durableSessionId.orEmpty().ifBlank { created.info.storedSessionId },
+                ),
                 activeProfile = profile ?: mutableState.value.activeProfile,
                 checkpointsEnabled = null,
                 checkpoints = emptyList(),
@@ -474,7 +490,7 @@ class HermesRepository @Inject constructor(
             opened = true
         }.onFailure(::fail)
         if (opened) {
-            loadDraft()
+            loadComposerState()
             refreshModelOptions()
         }
     }
@@ -488,6 +504,73 @@ class HermesRepository @Inject constructor(
             delay(DRAFT_SAVE_DEBOUNCE_MILLIS)
             draftStore.put(context, bounded)
         }
+    }
+
+    suspend fun queueDraft() {
+        runCatching {
+            val current = mutableState.value
+            require(isRunBusy(current)) { "Pending messages can only be queued while Hermes is running" }
+            require(current.pendingAttachments.isEmpty()) {
+                "Pending-message queue is text-only. Send or remove attachments first."
+            }
+            val context = requireNotNull(currentComposerQueueContext()) {
+                "Open a Hermes session before queueing a message"
+            }
+            val entry = QueuedPrompt(
+                id = "queued:${UUID.randomUUID()}",
+                text = current.draft,
+                queuedAtEpochMillis = System.currentTimeMillis(),
+            )
+            queueMutex.withLock {
+                val next = ComposerQueue.enqueue(mutableState.value.queuedPrompts, entry)
+                composerQueueStore.put(context, next)
+                mutableState.value = mutableState.value.copy(
+                    queuedPrompts = next,
+                    queueNotice = null,
+                )
+            }
+            clearCurrentDraft()
+        }.onFailure(::fail)
+    }
+
+    suspend fun updateQueuedPrompt(id: String, text: String) {
+        runCatching {
+            val context = requireNotNull(currentComposerQueueContext()) { "Queued message session is unavailable" }
+            queueMutex.withLock {
+                val next = ComposerQueue.updateText(mutableState.value.queuedPrompts, id, text)
+                composerQueueStore.put(context, next)
+                mutableState.value = mutableState.value.copy(queuedPrompts = next, queueNotice = null)
+            }
+            scheduleQueueDrain()
+        }.onFailure(::fail)
+    }
+
+    suspend fun removeQueuedPrompt(id: String) {
+        runCatching {
+            val context = requireNotNull(currentComposerQueueContext()) { "Queued message session is unavailable" }
+            queueMutex.withLock {
+                val current = mutableState.value.queuedPrompts
+                require(current.any { it.id == id }) { "Queued message was not found" }
+                val next = ComposerQueue.remove(current, id)
+                composerQueueStore.put(context, next)
+                mutableState.value = mutableState.value.copy(queuedPrompts = next, queueNotice = null)
+            }
+        }.onFailure(::fail)
+    }
+
+    suspend fun sendQueuedPromptNow(id: String) {
+        runCatching {
+            require(!isRunBusy(mutableState.value)) { "Stop the current run before sending a queued message now" }
+            val context = requireNotNull(currentComposerQueueContext()) { "Queued message session is unavailable" }
+            queueMutex.withLock {
+                val current = mutableState.value.queuedPrompts
+                require(current.any { it.id == id }) { "Queued message was not found" }
+                val next = ComposerQueue.resetFailures(ComposerQueue.promote(current, id), id)
+                composerQueueStore.put(context, next)
+                mutableState.value = mutableState.value.copy(queuedPrompts = next, queueNotice = null)
+            }
+            scheduleQueueDrain()
+        }.onFailure(::fail)
     }
 
     fun completeSlash(text: String) {
@@ -809,7 +892,7 @@ class HermesRepository @Inject constructor(
             opened = true
         }.onFailure(::fail)
         if (opened) {
-            loadDraft()
+            loadComposerState()
             refreshModelOptions()
         }
     }
@@ -2067,7 +2150,7 @@ class HermesRepository @Inject constructor(
         val (backend, token) = activeCredentials()
         restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         mutableState.value = mutableState.value.copy(activeStoredSession = null, runtimeSessionId = null, timeline = TimelineState())
-        loadDraft()
+        loadComposerState()
         refreshSessions()
     }
 
@@ -2087,7 +2170,9 @@ class HermesRepository @Inject constructor(
         }.onSuccess {
             val backendId = mutableState.value.backend?.id
             if (backendId != null) {
-                draftStore.remove(DraftContext(backendId, session.profile ?: mutableState.value.activeProfile, session.durableId))
+                val profile = session.profile ?: mutableState.value.activeProfile
+                draftStore.remove(DraftContext(backendId, profile, session.durableId))
+                composerQueueStore.remove(ComposerQueueContext(backendId, profile, session.durableId))
             }
             mutableState.value = mutableState.value.copy(
                 sessions = mutableState.value.sessions.filterNot {
@@ -2103,7 +2188,14 @@ class HermesRepository @Inject constructor(
         draftSaveJob?.cancelAndJoin()
         draftSaveJob = null
         draftStore.removeBackend(backend.id)
-        mutableState.value = mutableState.value.copy(backend = null, draft = "")
+        composerQueueStore.removeBackend(backend.id)
+        mutableState.value = mutableState.value.copy(
+            backend = null,
+            draft = "",
+            queuedPrompts = emptyList(),
+            queueDraining = false,
+            queueNotice = null,
+        )
         intentionalDisconnect = true
         reconnectJob?.cancel()
         gateway.disconnect()
@@ -2121,9 +2213,16 @@ class HermesRepository @Inject constructor(
         if (mutableState.value.backend?.id == id) {
             draftSaveJob?.cancelAndJoin()
             draftSaveJob = null
-            mutableState.value = mutableState.value.copy(backend = null, draft = "")
+            mutableState.value = mutableState.value.copy(
+                backend = null,
+                draft = "",
+                queuedPrompts = emptyList(),
+                queueDraining = false,
+                queueNotice = null,
+            )
         }
         draftStore.removeBackend(id)
+        composerQueueStore.removeBackend(id)
         tokenStore.remove(id)
         backendRegistry.remove(id)
     }
@@ -2162,7 +2261,7 @@ class HermesRepository @Inject constructor(
             status to sessions
         }.onSuccess { (status, sessions) ->
             mutableState.value = mutableState.value.copy(status = status, sessions = sessions, loading = false, error = null)
-            loadDraft()
+            loadComposerState()
         }.onFailure(::fail)
     }
 
@@ -2174,6 +2273,113 @@ class HermesRepository @Inject constructor(
         val profile = current.activeStoredSession?.profile ?: current.activeProfile
         return DraftContext(backendId, profile, storedId)
     }
+
+    private fun currentComposerQueueContext(state: HermesState = mutableState.value): ComposerQueueContext? {
+        val backendId = state.backend?.id ?: return null
+        val sessionId = state.activeStoredSession?.durableId?.takeIf(String::isNotBlank)
+            ?: state.runtimeInfo.storedSessionId.takeIf(String::isNotBlank)
+            ?: state.runtimeSessionId?.takeIf(String::isNotBlank)
+            ?: return null
+        val profile = state.activeStoredSession?.profile ?: state.activeProfile
+        return ComposerQueueContext(backendId, profile, sessionId)
+    }
+
+    private suspend fun loadComposerState() {
+        loadDraft()
+        queueDrainJob?.cancelAndJoin()
+        queueDrainJob = null
+        val context = currentComposerQueueContext()
+        val queue = context?.let { composerQueueStore.get(it) }.orEmpty()
+        mutableState.value = mutableState.value.copy(
+            queuedPrompts = queue,
+            queueDraining = false,
+            queueNotice = null,
+        )
+        scheduleQueueDrain()
+    }
+
+    private fun scheduleQueueDrain() {
+        if (queueDrainJob?.isActive == true) return
+        if (gateway.connectionState.value !is GatewayConnectionState.Open) return
+        if (!ComposerQueue.shouldAutoDrain(isRunBusy(mutableState.value), mutableState.value.queuedPrompts)) return
+        queueDrainJob = scope.launch { drainQueuedPrompt() }
+    }
+
+    private suspend fun drainQueuedPrompt() {
+        while (true) {
+            val stateBefore = mutableState.value
+            if (gateway.connectionState.value !is GatewayConnectionState.Open) return
+            if (!ComposerQueue.shouldAutoDrain(isRunBusy(stateBefore), stateBefore.queuedPrompts)) return
+            val context = currentComposerQueueContext(stateBefore) ?: return
+            val sessionId = stateBefore.runtimeSessionId ?: return
+            val entry = stateBefore.queuedPrompts.first()
+            mutableState.value = stateBefore.copy(queueDraining = true, queueNotice = null)
+
+            val submitted = runCatching {
+                val response = gateway.request(
+                    "prompt.submit",
+                    buildJsonObject {
+                        put("session_id", sessionId)
+                        put("text", entry.text)
+                    },
+                )
+                json.decodeFromJsonElement(PromptSubmitResult.serializer(), response).also { result ->
+                    require(result.status in ACCEPTED_PROMPT_STATUSES) {
+                        "Hermes rejected the queued message"
+                    }
+                }
+            }
+
+            if (submitted.isSuccess) {
+                queueMutex.withLock {
+                    val liveContext = currentComposerQueueContext()
+                    if (liveContext == context) {
+                        val current = mutableState.value
+                        val next = ComposerQueue.remove(current.queuedPrompts, entry.id)
+                        composerQueueStore.put(context, next)
+                        mutableState.value = current.copy(
+                            queuedPrompts = next,
+                            queueDraining = false,
+                            queueNotice = null,
+                            timeline = TimelineReducer.insertAcceptedUserMessage(
+                                current.timeline,
+                                "local:${entry.id}",
+                                entry.text,
+                            ),
+                            error = null,
+                        )
+                    } else {
+                        composerQueueStore.put(context, ComposerQueue.remove(stateBefore.queuedPrompts, entry.id))
+                    }
+                }
+                return
+            }
+
+            val failedQueue = queueMutex.withLock {
+                if (currentComposerQueueContext() != context) return
+                val current = mutableState.value
+                val next = ComposerQueue.markAutoDrainFailure(current.queuedPrompts, entry.id)
+                composerQueueStore.put(context, next)
+                mutableState.value = current.copy(
+                    queuedPrompts = next,
+                    queueDraining = false,
+                    queueNotice = if (next.firstOrNull()?.autoDrainFailures == ComposerQueue.MAX_AUTO_DRAIN_ATTEMPTS) {
+                        "Hermes did not accept the pending message after ${ComposerQueue.MAX_AUTO_DRAIN_ATTEMPTS} attempts. Review it and send again."
+                    } else {
+                        "Hermes did not accept the pending message; retrying shortly."
+                    },
+                )
+                next
+            }
+            if (!ComposerQueue.shouldAutoDrain(isRunBusy(mutableState.value), failedQueue)) return
+            delay(QUEUE_DRAIN_RETRY_MILLIS)
+        }
+    }
+
+    private fun isRunBusy(state: HermesState): Boolean =
+        state.sending || state.runtimeInfo.running || state.timeline.items.any {
+            it is com.nousresearch.hermes.domain.TimelineItem.Message && it.streaming
+        }
 
     private suspend fun flushDraft() {
         draftSaveJob?.cancelAndJoin()
@@ -2429,6 +2635,7 @@ class HermesRepository @Inject constructor(
 private const val DIAGNOSTIC_POLL_INTERVAL_MILLIS = 1_000L
 private const val DIAGNOSTIC_POLL_LIMIT = 120
 private const val DRAFT_SAVE_DEBOUNCE_MILLIS = 300L
+private const val QUEUE_DRAIN_RETRY_MILLIS = 750L
 private const val SESSION_SEARCH_DEBOUNCE_MILLIS = 300L
 private const val MAX_SESSION_SEARCH_RESULTS = 100
 private const val SLASH_COMPLETION_DEBOUNCE_MILLIS = 60L
@@ -2448,6 +2655,7 @@ private const val MAX_AGENT_EVENT_SESSIONS = 32
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
 private val USAGE_PERIODS = setOf(7, 30, 90)
+private val ACCEPTED_PROMPT_STATUSES = setOf("streaming", "queued", "steered")
 
 private val MOBILE_SLASH_COMMANDS = setOf(
     "/agents", "/background", "/bg", "/btw", "/branch", "/compress", "/debug",

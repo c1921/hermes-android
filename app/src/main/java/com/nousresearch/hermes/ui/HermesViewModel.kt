@@ -42,6 +42,10 @@ class HermesViewModel @Inject constructor(
     fun newSession(profile: String? = null) = viewModelScope.launch { repository.newSession(profile) }
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
     fun steer(text: String) = viewModelScope.launch { repository.steer(text) }
+    fun queueDraft() = viewModelScope.launch { repository.queueDraft() }
+    fun updateQueuedPrompt(id: String, text: String) = viewModelScope.launch { repository.updateQueuedPrompt(id, text) }
+    fun removeQueuedPrompt(id: String) = viewModelScope.launch { repository.removeQueuedPrompt(id) }
+    fun sendQueuedPromptNow(id: String) = viewModelScope.launch { repository.sendQueuedPromptNow(id) }
     fun updateDraft(value: String) = repository.updateDraft(value)
     fun completeSlash(text: String) = repository.completeSlash(text)
     fun executeSlash(command: String) = viewModelScope.launch { repository.executeSlash(command) }

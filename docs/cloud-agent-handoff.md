@@ -31,6 +31,7 @@ For protocol work, inspect the exact upstream Hermes source and cite the commit 
 
 Recent completed slices on `main`:
 
+- Pending-message queue mirrors Desktop's client-owned FIFO semantics for the selected session: text entries are durably scoped by hashed backend/profile/session identity, can be edited or removed while the current run is active, drain through the audited `prompt.submit` contract only after the runtime settles, and stop after four failures for explicit recovery. Queued attachments and off-screen cross-session drain remain omitted.
 - Composer history derives the current session's prior user prompts from authoritative timeline messages, provides a bounded mobile picker, and mirrors Desktop's draft-preserving backward/forward cursor semantics on Ctrl+Up/Ctrl+Down without creating another persisted transcript.
 - Checkpoint management adds session-scoped checkpoint listing, mandatory bounded diff preview, explicit full-workspace restore confirmation, busy-session rejection, full-hash allowlisting, and authoritative history rehydration after Hermes removes the affected turn. File-scoped rollback remains omitted until a safe server file selector can supply the exact relative path.
 - Usage management adds profile-scoped 7/30/90-day token, API-call, model, tool, skill and cost summaries plus the live session's `session.context_breakdown`.
@@ -69,7 +70,6 @@ Good unblocked candidates include:
 
 - MCP server creation/edit/removal, catalog installation, OAuth setup, and per-tool filters using the existing audited REST contracts.
 - Toolset and structured general-configuration management.
-- Pending-message queue.
 - Persisted spawn-tree replay using the existing server contract.
 - Platform integrations that do not require a new upstream contract.
 - The exact Desktop appearance presets (`nous`, `midnight`, `ember`, `mono`, `cyberpunk`, `slate`) after higher-impact functional work.
@@ -118,6 +118,8 @@ For the usage slice, the deferred pass must inspect 7/30/90-day, empty, large-nu
 For the checkpoint slice, the deferred pass must use a disposable workspace and checkpoint-enabled session on the pinned backend; create at least two file mutations, compare Android's list and raw diff with `/rollback` and `/rollback diff`, verify that an active run disables restore, confirm a full rollback changes only the expected server files, confirm the affected last turn disappears after history reload, and verify the pre-rollback snapshot can restore the prior state. Inspect disabled, empty, long-diff, error and post-restore states at phone and expanded widths with TalkBack, 130%+ text and keyboard focus. File-scoped restore is not exposed. The cloud gate does not establish visual layout, accessibility, live filesystem mutation, or rollback recovery.
 
 For the composer-history slice, the deferred pass must inspect empty, one-entry, duplicate, multiline and 20-entry picker states at phone and expanded widths; verify that selecting an entry updates the composer without sending; verify Ctrl+Up walks older prompts, Ctrl+Down returns toward the present and restores the exact unfinished draft; verify typing resets browse state; then exercise TalkBack, 130%+ text and hardware-keyboard focus. The cloud gate does not establish visual layout, key delivery from real hardware, IME interaction or accessibility traversal.
+
+For the pending-message queue slice, the deferred pass must use the pinned backend to hold a run active, enqueue at least three text turns, edit and remove non-head entries, then verify FIFO submission and authoritative transcript order after each settle. Force one rejected submission to verify bounded retry and manual recovery; kill and recreate Android before the run settles to verify durable scope and no duplicate drain; switch sessions and profiles to verify isolation; and confirm attachments disable queueing with the stated explanation. Inspect empty, full, long, multiline, draining and stuck states at phone and expanded widths with TalkBack, 130%+ text, IME open and hardware-keyboard focus. The cloud gate does not establish layout, accessibility, process-death timing or live runtime ordering.
 
 ## Working method
 

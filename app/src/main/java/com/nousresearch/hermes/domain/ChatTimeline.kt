@@ -212,6 +212,19 @@ object TimelineReducer {
         items = state.items + TimelineItem.Message(id, MessageRole.USER, text),
     )
 
+    fun insertAcceptedUserMessage(state: TimelineState, id: String, text: String): TimelineState {
+        if (state.items.any { it.id == id }) return state
+        val assistantIndex = state.items.indexOfLast {
+            it is TimelineItem.Message && it.role == MessageRole.ASSISTANT && it.streaming
+        }
+        val user = TimelineItem.Message(id, MessageRole.USER, text)
+        return if (assistantIndex < 0) {
+            state.copy(items = state.items + user)
+        } else {
+            state.copy(items = state.items.toMutableList().apply { add(assistantIndex, user) })
+        }
+    }
+
     fun appendSystemMessage(state: TimelineState, id: String, text: String): TimelineState = state.copy(
         items = state.items + TimelineItem.Message(id, MessageRole.SYSTEM, text),
     )

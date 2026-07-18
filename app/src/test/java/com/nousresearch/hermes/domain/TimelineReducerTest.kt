@@ -13,6 +13,18 @@ import org.junit.Test
 
 class TimelineReducerTest {
     @Test
+    fun `accepted queued prompt is inserted before an already streaming assistant`() {
+        val streaming = TimelineReducer.reduce(TimelineState(), GatewayEvent("message.start", "runtime-1"))
+
+        val result = TimelineReducer.insertAcceptedUserMessage(streaming, "local:queued-1", "Next turn")
+
+        assertEquals(
+            listOf(MessageRole.USER, MessageRole.ASSISTANT),
+            result.items.filterIsInstance<TimelineItem.Message>().map(TimelineItem.Message::role),
+        )
+    }
+
+    @Test
     fun `stream deltas settle into one assistant message`() {
         var state = TimelineReducer.reduce(TimelineState(), GatewayEvent("message.start", "runtime-1"))
         state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Hello "))
