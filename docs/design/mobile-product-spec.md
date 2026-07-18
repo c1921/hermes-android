@@ -85,7 +85,7 @@ The app is not an offline agent. Previously hydrated transcripts, drafts and exp
 - Approval/clarification: a blocking prompt is owned by its originating runtime session and cannot be dismissed into a lost state.
 - Connection loss changes a narrow status line; the transcript does not flash or relayout.
 - Reduced-motion mode replaces spatial transitions with immediate changes or short fades. Streaming content never animates each token.
-- Ambient field art holds each anchor for 150 seconds, crosses through a 12-second bridge plate, pauses off-screen, and remains static when the system motion scale is zero.
+- Ambient Nous field art loops through Orbit, its Orbit-to-Neural bridge, Neural, its Neural-to-Portal bridge, Portal, and its Portal-to-Orbit bridge. Each main plate holds for 150 seconds, each dedicated bridge holds for 12 seconds, and plate changes crossfade for 8 seconds. Playback pauses off-screen and freezes on the current plate during system reduced motion or battery saver.
 - Recording feedback uses a stable level bar rather than decorative waveform motion. Reduced-motion users receive the same elapsed time, recording mode and text instructions without relying on animation.
 
 Interrupted animations settle to semantic state. Process recreation restores the destination, not an animation phase.

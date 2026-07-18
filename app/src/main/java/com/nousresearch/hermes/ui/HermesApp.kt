@@ -398,7 +398,7 @@ fun HermesApp(
     HermesTheme(skin) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize()) {
-                NousBackdrop(Modifier.fillMaxSize())
+                NousBackdrop(skin = skin, modifier = Modifier.fillMaxSize())
                 if (state.backend == null && state.savedBackends.isEmpty()) {
                     OnboardingScreen(
                         busy = state.loading,

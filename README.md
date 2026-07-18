@@ -55,6 +55,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Optional durable secure-screen mode that blocks screenshots, screen recording, and recent-app thumbnails
 - [x] Phone master/detail and expanded tablet two-pane layouts
 - [x] Official Hermes site palette and artwork, Courier Prime utility typography, licensed serif fallback, rounded component geometry, and official Desktop launcher icon
+- [x] Nous-only ambient field backdrop with three main plates, three dedicated transition plates, 8-second crossfades, lifecycle pause, reduced-motion handling, and battery-saver freeze
 - [x] Unknown protocol fields and event types fail safely instead of crashing the client
 
 ### Partial foundations
