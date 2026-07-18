@@ -19,6 +19,8 @@ import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.ManagedFileReadResponse
 import com.nousresearch.hermes.protocol.ManagedFilesResponse
 import com.nousresearch.hermes.protocol.McpCatalogResponse
+import com.nousresearch.hermes.protocol.McpCatalogInstallResponse
+import com.nousresearch.hermes.protocol.McpOperationResponse
 import com.nousresearch.hermes.protocol.McpServerTestResponse
 import com.nousresearch.hermes.protocol.McpServerToggleResponse
 import com.nousresearch.hermes.protocol.McpServersResponse
@@ -276,6 +278,42 @@ class HermesRestClient(
             "/api/mcp/servers/${encodePathSegment(name)}/enabled?profile=${encodePathSegment(profile)}",
             method = "PUT",
             body = buildJsonObject { put("enabled", enabled) },
+        ),
+    )
+
+    suspend fun removeMcpServer(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        name: String,
+    ): McpOperationResponse = json.decodeFromJsonElement(
+        McpOperationResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/mcp/servers/${encodePathSegment(name)}?profile=${encodePathSegment(profile)}",
+            method = "DELETE",
+        ),
+    )
+
+    suspend fun installMcpCatalogEntry(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        name: String,
+        env: Map<String, String>,
+    ): McpCatalogInstallResponse = json.decodeFromJsonElement(
+        McpCatalogInstallResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/mcp/catalog/install?profile=${encodePathSegment(profile)}",
+            method = "POST",
+            body = buildJsonObject {
+                put("name", name)
+                put("env", buildJsonObject { env.forEach { (key, value) -> put(key, value) } })
+                put("enable", true)
+            },
         ),
     )
 
@@ -554,7 +592,9 @@ class HermesRestClient(
         lines: Int = 400,
         profile: String? = null,
     ): ActionStatusResponse {
-        require(name in ALLOWED_ACTIONS || SKILL_ACTION.matches(name)) { "Unsupported Hermes background action" }
+        require(name in ALLOWED_ACTIONS || SKILL_ACTION.matches(name) || MCP_INSTALL_ACTION.matches(name)) {
+            "Unsupported Hermes background action"
+        }
         val query = buildList {
             add("lines=${lines.coerceIn(1, 2_000)}")
             profile?.let { add("profile=${encodePathSegment(it)}") }
@@ -751,6 +791,7 @@ class HermesRestClient(
     private companion object {
         val ALLOWED_ACTIONS = setOf("doctor", "security-audit", "gateway-restart")
         val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
+        val MCP_INSTALL_ACTION = Regex("mcp-install-[a-z0-9-]{1,48}-[a-f0-9]{8}")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
     }

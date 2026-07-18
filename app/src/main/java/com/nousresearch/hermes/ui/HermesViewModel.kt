@@ -119,6 +119,10 @@ class HermesViewModel @Inject constructor(
     fun setMcpServerEnabled(name: String, enabled: Boolean) = viewModelScope.launch {
         repository.setMcpServerEnabled(name, enabled)
     }
+    fun removeMcpServer(name: String) = viewModelScope.launch { repository.removeMcpServer(name) }
+    fun installMcpCatalogEntry(name: String, env: Map<String, String>) = viewModelScope.launch {
+        repository.installMcpCatalogEntry(name, env)
+    }
     fun refreshUsage(days: Int) = viewModelScope.launch { repository.refreshUsage(days) }
     fun refreshCheckpoints() = viewModelScope.launch { repository.refreshCheckpoints() }
     fun previewCheckpoint(hash: String) = viewModelScope.launch { repository.previewCheckpoint(hash) }

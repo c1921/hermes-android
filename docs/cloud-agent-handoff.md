@@ -35,7 +35,7 @@ Recent completed slices on `main`:
 - Composer history derives the current session's prior user prompts from authoritative timeline messages, provides a bounded mobile picker, and mirrors Desktop's draft-preserving backward/forward cursor semantics on Ctrl+Up/Ctrl+Down without creating another persisted transcript.
 - Checkpoint management adds session-scoped checkpoint listing, mandatory bounded diff preview, explicit full-workspace restore confirmation, busy-session rejection, full-hash allowlisting, and authoritative history rehydration after Hermes removes the affected turn. File-scoped rollback remains omitted until a safe server file selector can supply the exact relative path.
 - Usage management adds profile-scoped 7/30/90-day token, API-call, model, tool, skill and cost summaries plus the live session's `session.context_breakdown`.
-- MCP management adds profile-scoped configured-server and Nous catalogue inspection, backend connection probes, enable/disable, and live `reload.mcp`; server creation/edit/removal, catalog install, OAuth, and per-tool filters remain follow-up work.
+- MCP management adds profile-scoped configured-server and Nous catalogue inspection, backend probes, reviewed non-OAuth catalog installation, canonical background-action polling, confirmed removal, enable/disable, and live `reload.mcp`; custom creation/edit, remote OAuth and per-tool filters remain follow-up work.
 - `889aa37` adds the mobile Command Center with live delegation status, subagent trees, pause/resume, confirmed interruption, session-owned background processes, and confirmed process stop.
 - `072f2b9` adds messaging gateway management.
 - `17cb866` adds Hermes-native voice transcription and spoken playback. Android does not substitute platform TTS.
@@ -68,7 +68,7 @@ Use the parity matrix for the full list. Prioritise production impact over cosme
 
 Good unblocked candidates include:
 
-- MCP server creation/edit/removal, catalog installation, OAuth setup, and per-tool filters using the existing audited REST contracts.
+- MCP custom-server creation, safe per-server editing, remote-client OAuth setup, and per-tool filters; edit/OAuth require the upstream changes recorded in the change plan.
 - Toolset and structured general-configuration management.
 - Persisted spawn-tree replay using the existing server contract.
 - Platform integrations that do not require a new upstream contract.
@@ -111,7 +111,7 @@ This run is cloud-only.
 
 Record device-only verification as deferred, with exact steps for the next local pass.
 
-For the MCP slice, the deferred pass must inspect configured and catalog layouts on phone and expanded widths; exercise TalkBack, 130%+ text, keyboard focus, and profile switching; then use a disposable MCP server on a pinned Hermes backend to verify probe success/failure, enable/disable, live-session reload without transcript loss, and the saved-but-reload-failed recovery message. None of those checks are established by the cloud unit/lint/build gate.
+For the MCP slice, the deferred pass must inspect configured, catalog, install-review, credential, background-progress, removal-confirmation and error layouts on phone and expanded widths; exercise TalkBack, 130%+ text, keyboard focus, process recreation with a credential dialog open, and profile switching; then use a disposable pinned backend to install one synchronous and one git-backed non-OAuth catalog entry, verify required/optional credential delivery without local persistence, probe success/failure, enable/disable, confirmed removal, live-session reload without transcript loss, and saved-but-reload-failed recovery. None of those checks are established by the cloud unit/lint/build gate.
 
 For the usage slice, the deferred pass must inspect 7/30/90-day, empty, large-number and partial-context states on phone and expanded widths; exercise TalkBack traversal, 130%+ text and keyboard focus; compare one disposable profile's totals with the pinned Dashboard; and verify an open session's context category total and capacity before and after a message. The cloud gate does not establish those visual, accessibility or live-accounting checks.
 

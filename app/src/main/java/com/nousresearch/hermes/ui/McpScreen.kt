@@ -10,12 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
@@ -35,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.McpCatalogEntry
@@ -55,6 +60,8 @@ internal fun McpScreen(
     onRefresh: () -> Unit,
     onTest: (String) -> Unit,
     onSetEnabled: (String, Boolean) -> Unit,
+    onRemove: (String) -> Unit,
+    onInstall: (String, Map<String, String>) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -62,6 +69,9 @@ internal fun McpScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var pendingToggleName by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingToggleEnabled by rememberSaveable { mutableStateOf(false) }
+    var pendingRemoveName by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingInstall by remember { mutableStateOf<McpCatalogEntry?>(null) }
+    var installEnv by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(Unit) { onRefresh() }
 
     Column(modifier.fillMaxSize()) {
@@ -128,8 +138,16 @@ internal fun McpScreen(
                     pendingToggleName = name
                     pendingToggleEnabled = enabled
                 },
+                onRemove = { pendingRemoveName = it },
             )
-            McpView.CATALOG -> McpCatalogList(state, query)
+            McpView.CATALOG -> McpCatalogList(
+                state,
+                query,
+                onInstall = { entry ->
+                    installEnv = emptyMap()
+                    pendingInstall = entry
+                },
+            )
         }
     }
 
@@ -170,6 +188,97 @@ internal fun McpScreen(
             dismissButton = { TextButton(onClick = { pendingToggleName = null }) { Text("Cancel") } },
         )
     }
+    pendingRemoveName?.let { name ->
+        val runtimeProfile = state.activeStoredSession?.profile
+            ?: state.activeProfile.takeIf { state.runtimeSessionId != null }
+        val reloadsNow = state.currentProfile == state.activeProfile || runtimeProfile == state.activeProfile
+        AlertDialog(
+            onDismissRequest = { pendingRemoveName = null },
+            title = { Text("REMOVE MCP SERVER?") },
+            text = {
+                Text(
+                    if (reloadsNow) {
+                        "Hermes will remove $name from ${state.activeProfile} and reload the live MCP runtime. Stored server credentials and OAuth state may also become unusable."
+                    } else {
+                        "Hermes will remove $name from ${state.activeProfile}. The change applies when that profile next starts."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingRemoveName = null
+                        onRemove(name)
+                    },
+                ) { Text(if (reloadsNow) "Remove and reload" else "Remove") }
+            },
+            dismissButton = { TextButton(onClick = { pendingRemoveName = null }) { Text("Cancel") } },
+        )
+    }
+    pendingInstall?.let { entry ->
+        val requiredComplete = entry.requiredEnv.filter { it.required }.all { installEnv[it.name]?.isNotBlank() == true }
+        AlertDialog(
+            onDismissRequest = {
+                pendingInstall = null
+                installEnv = emptyMap()
+            },
+            title = { Text("INSTALL ${entry.name.uppercase()}?") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Source: ${entry.source.take(MAX_MCP_DISPLAY_CHARACTERS)}", style = MaterialTheme.typography.bodySmall)
+                    Text(entry.targetSummary(), style = MaterialTheme.typography.bodySmall)
+                    if (entry.bootstrap.isNotEmpty()) {
+                        Text(
+                            "Server bootstrap: ${entry.bootstrap.joinToString(" ").take(MAX_MCP_DISPLAY_CHARACTERS)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Text(
+                        "Hermes will install and enable this server for ${state.activeProfile}. Review the source and command before continuing. Credential values are sent once to Hermes and are not saved by Android.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    entry.requiredEnv.forEach { requirement ->
+                        OutlinedTextField(
+                            value = installEnv[requirement.name].orEmpty(),
+                            onValueChange = { value ->
+                                installEnv = installEnv + (requirement.name to value.take(MAX_MCP_ENV_VALUE_CHARACTERS))
+                            },
+                            label = {
+                                Text(
+                                    requirement.prompt.ifBlank { requirement.name } +
+                                        if (requirement.required) " (required)" else " (optional)",
+                                )
+                            },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val values = installEnv
+                        pendingInstall = null
+                        installEnv = emptyMap()
+                        onInstall(entry.name, values)
+                    },
+                    enabled = requiredComplete && !state.mcpLoading,
+                ) { Text("Install and enable") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingInstall = null
+                        installEnv = emptyMap()
+                    },
+                ) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -178,6 +287,7 @@ private fun ConfiguredMcpList(
     query: String,
     onTest: (String) -> Unit,
     onSetEnabled: (String, Boolean) -> Unit,
+    onRemove: (String) -> Unit,
 ) {
     val visible = state.mcpServers.filter { server ->
         query.isBlank() || listOf(server.name, server.transport, server.command, server.url, server.auth)
@@ -234,6 +344,15 @@ private fun ConfiguredMcpList(
                         enabled = server.enabled && !state.mcpLoading,
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Test on Hermes") }
+                    TextButton(
+                        onClick = { onRemove(server.name) },
+                        enabled = !state.mcpLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Remove from Hermes")
+                    }
                 }
             }
         }
@@ -251,7 +370,11 @@ private fun ConfiguredMcpList(
 }
 
 @Composable
-private fun McpCatalogList(state: HermesState, query: String) {
+private fun McpCatalogList(
+    state: HermesState,
+    query: String,
+    onInstall: (McpCatalogEntry) -> Unit,
+) {
     val visible = state.mcpCatalog.filter { entry ->
         query.isBlank() || listOf(entry.name, entry.description, entry.source, entry.transport, entry.authType)
             .any { it.contains(query.trim(), ignoreCase = true) }
@@ -261,7 +384,9 @@ private fun McpCatalogList(state: HermesState, query: String) {
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(visible, key = McpCatalogEntry::name) { entry -> McpCatalogCard(entry) }
+        items(visible, key = McpCatalogEntry::name) { entry ->
+            McpCatalogCard(entry, state.mcpLoading, onInstall)
+        }
         if (visible.isEmpty() && !state.mcpLoading) {
             item {
                 Text(
@@ -276,7 +401,11 @@ private fun McpCatalogList(state: HermesState, query: String) {
 }
 
 @Composable
-private fun McpCatalogCard(entry: McpCatalogEntry) {
+private fun McpCatalogCard(
+    entry: McpCatalogEntry,
+    loading: Boolean,
+    onInstall: (McpCatalogEntry) -> Unit,
+) {
     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,7 +437,7 @@ private fun McpCatalogCard(entry: McpCatalogEntry) {
                 )
             }
             if (entry.needsInstall) {
-                Text("Requires a server-side install step. Review the source and bootstrap in Hermes Desktop or CLI.", style = MaterialTheme.typography.bodySmall)
+                Text("Requires a server-side clone/bootstrap step. Android waits for Hermes to finish before reloading MCP.", style = MaterialTheme.typography.bodySmall)
             }
             if (entry.postInstall.isNotBlank()) {
                 Text(entry.postInstall.take(MAX_MCP_DISPLAY_CHARACTERS), style = MaterialTheme.typography.bodySmall)
@@ -318,6 +447,19 @@ private fun McpCatalogCard(entry: McpCatalogEntry) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            when {
+                entry.installed -> Unit
+                entry.authType == "oauth" -> Text(
+                    "Install and authentication require Hermes Desktop or CLI because the current flow opens a browser on the server host.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> Button(
+                    onClick = { onInstall(entry) },
+                    enabled = !loading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Review and install") }
+            }
         }
     }
 }
@@ -351,3 +493,4 @@ private fun String.safeEndpoint(): String = substringBefore('?').substringBefore
     .take(MAX_MCP_DISPLAY_CHARACTERS)
 
 private const val MAX_MCP_DISPLAY_CHARACTERS = 1_000
+private const val MAX_MCP_ENV_VALUE_CHARACTERS = 32_768

@@ -128,6 +128,82 @@ class HermesRestClientMcpTest {
         }
     }
 
+    @Test
+    fun `catalog install is profile scoped and sends only reviewed env values`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"ok":true,"name":"github","background":true,"action":"mcp-install-github-0123abcd"}""",
+                ),
+            )
+
+            val result = client().installMcpCatalogEntry(
+                config(server),
+                COOKIE,
+                "work profile",
+                "github",
+                mapOf("GITHUB_TOKEN" to "secret-value"),
+            )
+
+            assertTrue(result.ok)
+            assertTrue(result.background)
+            assertEquals("mcp-install-github-0123abcd", result.action)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("/api/mcp/catalog/install?profile=work%20profile", request.path)
+            assertEquals(COOKIE, request.getHeader("Cookie"))
+            val body = json.parseToJsonElement(request.body.readUtf8()).jsonObject
+            assertEquals(setOf("name", "env", "enable"), body.keys)
+            assertEquals("github", body.getValue("name").jsonPrimitive.content)
+            assertEquals("secret-value", body.getValue("env").jsonObject.getValue("GITHUB_TOKEN").jsonPrimitive.content)
+            assertTrue(body.getValue("enable").jsonPrimitive.boolean)
+        }
+    }
+
+    @Test
+    fun `server removal uses encoded advertised identity and profile`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+
+            val result = client().removeMcpServer(config(server), COOKIE, "work profile", "file server")
+
+            assertTrue(result.ok)
+            val request = server.takeRequest()
+            assertEquals("DELETE", request.method)
+            assertEquals("/api/mcp/servers/file%20server?profile=work%20profile", request.path)
+            assertEquals(COOKIE, request.getHeader("Cookie"))
+            assertTrue(request.body.readUtf8().isBlank())
+        }
+    }
+
+    @Test
+    fun `catalog background action accepts only canonical install action names`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"name":"mcp-install-github-0123abcd","pid":42,"running":false,"exit_code":0,"lines":[]}""",
+                ),
+            )
+
+            val result = client().actionStatus(
+                config(server),
+                COOKIE,
+                "mcp-install-github-0123abcd",
+                profile = "work profile",
+            )
+
+            assertFalse(result.running)
+            assertEquals(0, result.exitCode)
+            assertEquals(
+                "/api/actions/mcp-install-github-0123abcd/status?lines=400&profile=work%20profile",
+                server.takeRequest().path,
+            )
+        }
+    }
+
     private fun client() = HermesRestClient(OkHttpClient(), json)
 
     private fun config(server: MockWebServer) = BackendConfig(

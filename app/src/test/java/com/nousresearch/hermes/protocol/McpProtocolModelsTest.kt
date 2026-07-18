@@ -30,5 +30,18 @@ class McpProtocolModelsTest {
         val server = response.servers.single()
         assertEquals("header", server.auth)
         assertFalse(server.enabled)
+        assertEquals(listOf("search"), server.tools)
+    }
+
+    @Test
+    fun `catalog install response preserves background action identity`() {
+        val response = json.decodeFromString(
+            McpCatalogInstallResponse.serializer(),
+            """{"ok":true,"name":"github","background":true,"action":"mcp-install-github-0123abcd"}""",
+        )
+
+        assertTrue(response.ok)
+        assertTrue(response.background)
+        assertEquals("mcp-install-github-0123abcd", response.action)
     }
 }

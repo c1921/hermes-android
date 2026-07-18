@@ -61,3 +61,17 @@ Security: preview IDs must be unpredictable, short-lived, single-use after succe
 Tests: matching restore, workspace change, checkpoint mismatch, session/profile mismatch, expiry, replay, concurrent restore, busy-session rejection and legacy restore without a precondition.
 
 Suggested commits: capability and preview-store contract → atomic restore enforcement/tests → protocol documentation. No upstream pull request is opened by this repository.
+
+## 6. Safe MCP patch and remote OAuth hand-off
+
+Existing limitation: configured MCP reads intentionally redact environment and header values, while the only general edit route replaces the entire raw `mcp_servers` map. A remote client cannot safely round-trip that summary without destroying hidden credentials or stale fields. The existing MCP OAuth action opens a browser on the Hermes server host and blocks, so a remote Android browser cannot own or complete the flow.
+
+Proposal: add a profile-scoped per-server PATCH contract with explicit optional operations for transport fields, enabled tools and secret replacement/removal; omitted secret fields remain unchanged. Separately, expose an MCP OAuth start/status/cancel flow that returns an authorization URL to the authenticated client and binds the callback state to the selected profile and server. The server continues storing tokens and performing discovery; Android only opens the returned URL and polls opaque status.
+
+Compatibility: existing whole-map replace and host-browser OAuth remain unchanged. New routes are additive and capability-advertised. Catalog install/delete/toggle paths require no change.
+
+Security: validate server identity and transport with the existing MCP security layer; never return stored secrets; require an explicit sentinel to remove a secret; bind OAuth state to authenticated profile/server, expire it, reject replay and cross-device completion, and redact URLs/tokens from logs and diagnostics.
+
+Tests: redacted no-op patch, secret replace/remove, concurrent edit conflict, profile isolation, suspicious command rejection, OAuth start/status/cancel, expiry, replay, wrong profile/server and callback forgery.
+
+Suggested commits: per-server patch model/handler/tests → remote OAuth transaction/tests → Desktop/docs adoption. No upstream pull request is opened by this repository.

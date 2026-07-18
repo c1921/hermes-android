@@ -248,6 +248,7 @@ data class McpServerSummary(
     val url: String? = null,
     val auth: String? = null,
     val enabled: Boolean,
+    val tools: List<String>? = null,
 )
 
 @Serializable
@@ -275,6 +276,19 @@ data class McpServerToggleResponse(
     val ok: Boolean,
     val name: String,
     val enabled: Boolean,
+)
+
+@Serializable
+data class McpOperationResponse(
+    val ok: Boolean,
+)
+
+@Serializable
+data class McpCatalogInstallResponse(
+    val ok: Boolean,
+    val name: String = "",
+    val background: Boolean = false,
+    val action: String? = null,
 )
 
 @Serializable

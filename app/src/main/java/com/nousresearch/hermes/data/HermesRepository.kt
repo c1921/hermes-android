@@ -1614,13 +1614,98 @@ class HermesRepository @Inject constructor(
             mcpLoading = false,
             mcpNotice = "${saved.name} ${if (saved.enabled) "enabled" else "disabled"} in Hermes configuration.",
         )
+        reloadMcpAfterSaved(
+            profile,
+            "${saved.name} ${if (saved.enabled) "enabled" else "disabled"}",
+        )
+    }
+
+    suspend fun removeMcpServer(name: String) {
+        val server = runCatching { advertisedMcpServer(name) }.getOrElse {
+            failMcp(it)
+            return
+        }
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(mcpLoading = true, mcpNotice = null, mcpError = null)
+        val removed = runCatching {
+            restClient.removeMcpServer(backend, token, profile, server.name).also {
+                require(it.ok) { "Hermes did not confirm MCP server removal" }
+            }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            failMcp(error)
+            return
+        }
+        if (!removed.ok || mutableState.value.activeProfile != profile) {
+            mutableState.value = mutableState.value.copy(mcpLoading = false)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            mcpServers = mutableState.value.mcpServers.filterNot { it.name == server.name },
+            mcpTests = mutableState.value.mcpTests - server.name,
+            mcpLoading = false,
+            mcpNotice = "${server.name} removed from Hermes configuration.",
+        )
+        reloadMcpAfterSaved(profile, "${server.name} removed")
+    }
+
+    suspend fun installMcpCatalogEntry(name: String, env: Map<String, String>) {
+        val (entry, cleanedEnv) = runCatching {
+            advertisedMcpCatalogEntry(name).let { it to validateMcpInstall(it, env) }
+        }.getOrElse {
+            failMcp(it)
+            return
+        }
+        val (backend, token) = activeCredentials()
+        val profile = mutableState.value.activeProfile
+        mutableState.value = mutableState.value.copy(mcpLoading = true, mcpNotice = null, mcpError = null)
+        runCatching {
+            val installed = restClient.installMcpCatalogEntry(backend, token, profile, entry.name, cleanedEnv)
+            require(installed.ok && installed.name == entry.name) { "Hermes did not confirm the catalog install" }
+            if (installed.background) {
+                val action = requireNotNull(installed.action) { "Hermes omitted the MCP install action identity" }
+                var completed = false
+                var polls = 0
+                while (polls < MCP_INSTALL_POLL_LIMIT) {
+                    polls += 1
+                    val status = restClient.actionStatus(backend, token, action, profile = profile)
+                    if (!status.running) {
+                        require(status.exitCode == 0) {
+                            "Hermes MCP install process exited ${status.exitCode ?: "without a status"}"
+                        }
+                        completed = true
+                        break
+                    }
+                    delay(MCP_INSTALL_POLL_INTERVAL_MILLIS)
+                }
+                require(completed) { "Hermes MCP install is still running after the Android polling window" }
+            }
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            failMcp(error)
+            return
+        }
+        if (mutableState.value.activeProfile != profile) {
+            mutableState.value = mutableState.value.copy(mcpLoading = false)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            mcpLoading = false,
+            mcpNotice = "${entry.name} installed in Hermes configuration.",
+        )
+        refreshMcp()
+        reloadMcpAfterSaved(profile, "${entry.name} installed")
+    }
+
+    private suspend fun reloadMcpAfterSaved(profile: String, mutation: String) {
 
         val runtimeProfile = mutableState.value.activeStoredSession?.profile
             ?: mutableState.value.activeProfile.takeIf { mutableState.value.runtimeSessionId != null }
         val runtimeSessionId = mutableState.value.runtimeSessionId.takeIf { runtimeProfile == profile }
         if (runtimeSessionId == null && mutableState.value.currentProfile != profile) {
             mutableState.value = mutableState.value.copy(
-                mcpNotice = "${saved.name} ${if (saved.enabled) "enabled" else "disabled"}; Hermes will apply it when profile $profile next starts.",
+                mcpNotice = "$mutation; Hermes will apply it when profile $profile next starts.",
             )
             return
         }
@@ -1638,7 +1723,7 @@ class HermesRepository @Inject constructor(
             }
         }.onSuccess {
             mutableState.value = mutableState.value.copy(
-                mcpNotice = "${saved.name} ${if (saved.enabled) "enabled" else "disabled"}; the live MCP runtime was reloaded.",
+                mcpNotice = "$mutation; the live MCP runtime was reloaded.",
             )
         }.onFailure { error ->
             if (error is CancellationException) throw error
@@ -1968,6 +2053,10 @@ class HermesRepository @Inject constructor(
     private fun advertisedMcpServer(name: String): McpServerSummary =
         mutableState.value.mcpServers.firstOrNull { it.name == name }
             ?: error("Hermes did not advertise this MCP server")
+
+    private fun advertisedMcpCatalogEntry(name: String): McpCatalogEntry =
+        mutableState.value.mcpCatalog.firstOrNull { it.name == name }
+            ?: error("Hermes did not advertise this MCP catalog entry")
 
     private fun updateDiagnostic(action: DiagnosticAction, run: DiagnosticRunState) {
         mutableState.value = mutableState.value.copy(
@@ -2645,6 +2734,9 @@ private const val MAX_SLASH_SUGGESTIONS = 12
 private const val MAX_SLASH_ALIAS_DEPTH = 5
 private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
 private const val MAX_MCP_NAME_CHARACTERS = 200
+private const val MAX_MCP_ENV_VALUE_CHARACTERS = 32_768
+private const val MCP_INSTALL_POLL_INTERVAL_MILLIS = 1_000L
+private const val MCP_INSTALL_POLL_LIMIT = 240
 private const val MAX_USAGE_LABEL_CHARACTERS = 200
 private const val MAX_CONTEXT_CATEGORIES = 32
 private const val MAX_CHECKPOINTS = 100
@@ -2656,6 +2748,21 @@ private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
 private val USAGE_PERIODS = setOf(7, 30, 90)
 private val ACCEPTED_PROMPT_STATUSES = setOf("streaming", "queued", "steered")
+
+internal fun validateMcpInstall(entry: McpCatalogEntry, env: Map<String, String>): Map<String, String> {
+    require(!entry.installed) { "This MCP catalog entry is already installed" }
+    require(entry.authType != "oauth") {
+        "This MCP requires a server-host OAuth flow that Android cannot complete remotely"
+    }
+    val requirements = entry.requiredEnv.associateBy { it.name }
+    require(env.keys.all { it in requirements }) { "The MCP install contained an unadvertised environment value" }
+    val cleaned = env.mapValues { (_, value) -> value.trim().take(MAX_MCP_ENV_VALUE_CHARACTERS) }
+        .filterValues(String::isNotBlank)
+    require(entry.requiredEnv.filter { it.required }.all { it.name in cleaned }) {
+        "Complete every required MCP credential before installing"
+    }
+    return cleaned
+}
 
 private val MOBILE_SLASH_COMMANDS = setOf(
     "/agents", "/background", "/bg", "/btw", "/branch", "/compress", "/debug",
