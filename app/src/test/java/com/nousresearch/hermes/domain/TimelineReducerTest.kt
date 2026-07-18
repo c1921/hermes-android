@@ -1,7 +1,10 @@
 package com.nousresearch.hermes.domain
 
 import com.nousresearch.hermes.protocol.GatewayEvent
+import com.nousresearch.hermes.protocol.ProtocolMessage
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,6 +61,40 @@ class TimelineReducerTest {
         val state = TimelineReducer.reduce(TimelineState(), event)
         assertTrue(state.approval != null)
         assertTrue(TimelineReducer.clearApproval(state).approval == null)
+    }
+
+    @Test
+    fun `removing the last exchange keeps earlier turns and drops tool output`() {
+        val state = TimelineState(
+            items = listOf(
+                TimelineItem.Message("u1", MessageRole.USER, "First"),
+                TimelineItem.Message("a1", MessageRole.ASSISTANT, "Done"),
+                TimelineItem.Message("u2", MessageRole.USER, "Retry this"),
+                TimelineItem.Tool("tool", "terminal", state = ToolState.COMPLETE),
+                TimelineItem.Message("a2", MessageRole.ASSISTANT, "Failed", failed = true),
+            ),
+        )
+
+        val trimmed = TimelineReducer.removeLastExchange(state)
+
+        assertEquals(listOf("u1", "a1"), trimmed.items.map(TimelineItem::id))
+    }
+
+    @Test
+    fun `retry text uses the last authoritative user message including text parts`() {
+        val messages = listOf(
+            ProtocolMessage(role = "user", text = "Old"),
+            ProtocolMessage(role = "assistant", text = "Answer"),
+            ProtocolMessage(
+                role = "user",
+                content = buildJsonArray {
+                    add(buildJsonObject { put("type", "text"); put("text", "Retry this") })
+                    add(buildJsonObject { put("type", "text"); put("text", "@file:notes.txt") })
+                },
+            ),
+        )
+
+        assertEquals("Retry this @file:notes.txt", lastUserPrompt(messages))
     }
 
     private fun event(type: String, sessionId: String, key: String, value: String) = GatewayEvent(

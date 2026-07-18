@@ -18,6 +18,8 @@ Implementation evidence:
 - Skills management at 130% text: `/tmp/hermes-android-qa-qxuQgq/nous-brand-skills-text130.png`
 - Launcher icon: `/tmp/hermes-android-qa-qxuQgq/hermes-launcher-search.png`
 - Rounded session search: `/tmp/hermes-android-qa-qxuQgq/nous-brand-session-search-v1.png`
+- Rounded session action menu: `/tmp/hermes-android-qa-qxuQgq/hermes-session-actions.png`
+- Confirmed fresh-session dialog: `/tmp/hermes-android-qa-qxuQgq/hermes-reset-confirm2.png`
 - Full comparison: `/tmp/hermes-android-qa-qxuQgq/design-qa-full-v2.png`
 - Focused comparison: `/tmp/hermes-android-qa-qxuQgq/design-qa-focus-v2.png`
 

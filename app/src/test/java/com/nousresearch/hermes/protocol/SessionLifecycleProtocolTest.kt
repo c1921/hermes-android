@@ -19,6 +19,17 @@ class SessionLifecycleProtocolTest {
     }
 
     @Test
+    fun `decodes lazy session create identities returned by Hermes 0 18 2`() {
+        val result = json.decodeFromString<SessionCreateResult>(
+            """{"session_id":"live-new","stored_session_id":"stored-new","messages":[],"info":{"model":"hermes-4","desktop_contract":4}}""",
+        )
+
+        assertEquals("live-new", result.runtimeSessionId)
+        assertEquals("stored-new", result.durableSessionId)
+        assertEquals(4, result.info.desktopContract)
+    }
+
+    @Test
     fun `decodes compression with refreshed transcript and runtime info`() {
         val result = json.decodeFromString<SessionCompressResult>(
             """{"status":"compressed","removed":8,"before_messages":12,"after_messages":4,"messages":[{"role":"system","content":"summary"}],"info":{"model":"hermes-4","provider":"nous","running":false}}""",
@@ -54,5 +65,10 @@ class SessionLifecycleProtocolTest {
         val result = json.decodeFromString<SessionDeleteResult>("""{"deleted":"stored-1"}""")
 
         assertEquals("stored-1", result.deleted)
+    }
+
+    @Test
+    fun `decodes idempotent live session close result`() {
+        assertTrue(json.decodeFromString<SessionCloseResult>("""{"closed":true}""").closed)
     }
 }

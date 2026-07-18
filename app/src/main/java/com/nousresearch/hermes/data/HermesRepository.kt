@@ -3,6 +3,7 @@ package com.nousresearch.hermes.data
 import android.net.Uri
 import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
+import com.nousresearch.hermes.domain.lastUserPrompt
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.ConfigSetResult
 import com.nousresearch.hermes.protocol.CronJob
@@ -20,6 +21,7 @@ import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionBranchResult
 import com.nousresearch.hermes.protocol.SessionCompressResult
+import com.nousresearch.hermes.protocol.SessionCloseResult
 import com.nousresearch.hermes.protocol.SessionDeleteResult
 import com.nousresearch.hermes.protocol.SessionHistoryResult
 import com.nousresearch.hermes.protocol.SessionResumeResult
@@ -347,6 +349,13 @@ class HermesRepository @Inject constructor(
         setLoading(true)
         var opened = false
         runCatching {
+            mutableState.value.runtimeSessionId?.let { currentSessionId ->
+                val closed = gateway.request(
+                    "session.close",
+                    buildJsonObject { put("session_id", currentSessionId) },
+                )
+                json.decodeFromJsonElement(SessionCloseResult.serializer(), closed)
+            }
             val result = gateway.request(
                 "session.create",
                 buildJsonObject {
@@ -612,15 +621,61 @@ class HermesRepository @Inject constructor(
         val sessionId = mutableState.value.runtimeSessionId ?: return
         runCatching {
             val undo = gateway.request("session.undo", buildJsonObject { put("session_id", sessionId) })
-            val removed = json.decodeFromJsonElement(SessionUndoResult.serializer(), undo)
-            val history = gateway.request("session.history", buildJsonObject { put("session_id", sessionId) })
-            removed to json.decodeFromJsonElement(SessionHistoryResult.serializer(), history)
-        }.onSuccess { (undo, history) ->
+            json.decodeFromJsonElement(SessionUndoResult.serializer(), undo)
+        }.onSuccess { undo ->
             mutableState.value = mutableState.value.copy(
-                timeline = TimelineReducer.hydrate(history.messages),
+                timeline = if (undo.removed > 0) {
+                    TimelineReducer.removeLastExchange(mutableState.value.timeline)
+                } else {
+                    mutableState.value.timeline
+                },
                 error = if (undo.removed == 0) "Hermes had no completed turn to undo." else null,
             )
         }.onFailure(::fail)
+    }
+
+    suspend fun retryLastMessage() {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        require(!mutableState.value.runtimeInfo.running && !mutableState.value.sending) {
+            "Interrupt the current Hermes run before retrying"
+        }
+        setLoading(true)
+        var retryText: String? = null
+        runCatching {
+            val before = gateway.request("session.history", buildJsonObject { put("session_id", sessionId) })
+            val historyBefore = json.decodeFromJsonElement(SessionHistoryResult.serializer(), before)
+            retryText = requireNotNull(lastUserPrompt(historyBefore.messages)) { "Hermes has no user message to retry" }
+
+            val undo = gateway.request("session.undo", buildJsonObject { put("session_id", sessionId) })
+            val removed = json.decodeFromJsonElement(SessionUndoResult.serializer(), undo)
+            require(removed.removed > 0) { "Hermes had no completed turn to retry" }
+
+            val currentTimeline = mutableState.value.timeline
+            val localBase = TimelineReducer.removeLastExchange(currentTimeline)
+            val hydratedBase = TimelineReducer.removeLastExchange(TimelineReducer.hydrate(historyBefore.messages))
+            mutableState.value = mutableState.value.copy(
+                timeline = TimelineReducer.appendUserMessage(
+                    if (localBase.items.size < currentTimeline.items.size) localBase else hydratedBase,
+                    "local:${UUID.randomUUID()}",
+                    requireNotNull(retryText),
+                ),
+                loading = false,
+                sending = true,
+                error = null,
+            )
+            gateway.request(
+                "prompt.submit",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("text", requireNotNull(retryText))
+                },
+            )
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(loading = false, sending = false, error = null)
+        }.onFailure { error ->
+            retryText?.let(::updateDraft)
+            fail(error)
+        }
     }
 
     suspend fun compressActive(focusTopic: String = "") {

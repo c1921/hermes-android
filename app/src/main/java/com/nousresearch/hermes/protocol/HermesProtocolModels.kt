@@ -108,7 +108,7 @@ data class ProtocolMessage(
 @Serializable
 data class SessionCreateResult(
     @SerialName("session_id") val runtimeSessionId: String,
-    @SerialName("session_key") val durableSessionId: String? = null,
+    @SerialName("stored_session_id") val durableSessionId: String? = null,
     val messages: List<ProtocolMessage> = emptyList(),
     val status: String = "idle",
     val running: Boolean = false,
@@ -202,6 +202,11 @@ data class SessionUndoResult(
 @Serializable
 data class SessionDeleteResult(
     val deleted: String,
+)
+
+@Serializable
+data class SessionCloseResult(
+    val closed: Boolean,
 )
 
 @Serializable

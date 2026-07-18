@@ -60,6 +60,8 @@ class HermesViewModel @Inject constructor(
     fun renameActive(title: String) = viewModelScope.launch { repository.renameActive(title) }
     fun branchActive(name: String) = viewModelScope.launch { repository.branchActive(name) }
     fun undoLastTurn() = viewModelScope.launch { repository.undoLastTurn() }
+    fun retryLastMessage() = viewModelScope.launch { repository.retryLastMessage() }
+    fun resetActive() = viewModelScope.launch { repository.newSession(repository.state.value.activeStoredSession?.profile) }
     fun compressActive(focusTopic: String) = viewModelScope.launch { repository.compressActive(focusTopic) }
     fun refreshSkills() = viewModelScope.launch { repository.refreshSkills() }
     fun toggleSkill(name: String, enabled: Boolean) = viewModelScope.launch { repository.toggleSkill(name, enabled) }

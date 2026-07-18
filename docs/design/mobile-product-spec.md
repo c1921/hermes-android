@@ -35,6 +35,7 @@ The launcher uses Hermes Desktop's official application icon. Product screens us
 - Unsupported capabilities are absent from primary UI; diagnostics explain the required server version.
 - Tool and provider errors retain technical status codes with secrets removed.
 - Process recreation restores selected backend metadata and backend/profile/session-scoped drafts; live state and navigation are rehydrated from Hermes rather than trusted from a stale local process snapshot.
+- Retry, undo and reset are explicit confirmed session actions. Reset closes the old live runtime before opening a clean one, while its durable transcript remains available in the session list.
 
 ## Notifications and permissions
 

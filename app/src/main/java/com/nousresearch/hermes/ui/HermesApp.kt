@@ -139,8 +139,10 @@ private data class ModelActions(
 private data class SessionActionCallbacks(
     val rename: (String) -> Unit,
     val branch: (String) -> Unit,
+    val retry: () -> Unit,
     val undo: () -> Unit,
     val compress: (String) -> Unit,
+    val reset: () -> Unit,
     val archive: () -> Unit,
 )
 
@@ -190,8 +192,10 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
         SessionActionCallbacks(
             rename = viewModel::renameActive,
             branch = viewModel::branchActive,
+            retry = viewModel::retryLastMessage,
             undo = viewModel::undoLastTurn,
             compress = viewModel::compressActive,
+            reset = viewModel::resetActive,
             archive = viewModel::archiveActive,
         )
     }
@@ -645,6 +649,7 @@ private fun SessionRail(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<StoredSession?>(null) }
+    var confirmNewSession by rememberSaveable { mutableStateOf(false) }
     val visibleSessions = state.sessions.filter { session ->
         query.isBlank() || listOf(
             session.displayTitle,
@@ -670,7 +675,11 @@ private fun SessionRail(
                 Text(state.backend?.label.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh sessions") }
-            IconButton(onClick = onNewSession) { Icon(Icons.Outlined.Add, "New session") }
+            IconButton(
+                onClick = {
+                    if (state.runtimeSessionId == null) onNewSession() else confirmNewSession = true
+                },
+            ) { Icon(Icons.Outlined.Add, "New session") }
         }
         ConnectionLine(connection)
         Row(
@@ -790,6 +799,22 @@ private fun SessionRail(
                 ) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+        )
+    }
+    if (confirmNewSession) {
+        AlertDialog(
+            onDismissRequest = { confirmNewSession = false },
+            title = { Text("START FRESH?") },
+            text = { Text("Hermes will end the current live conversation and open a clean session. Its stored transcript remains available in the session list.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmNewSession = false
+                        onNewSession()
+                    },
+                ) { Text("Start new session") }
+            },
+            dismissButton = { TextButton(onClick = { confirmNewSession = false }) { Text("Cancel") } },
         )
     }
 }
@@ -996,8 +1021,10 @@ private fun ChatHeader(
             state = state,
             onRename = sessionActions.rename,
             onBranch = sessionActions.branch,
+            onRetry = sessionActions.retry,
             onUndo = sessionActions.undo,
             onCompress = sessionActions.compress,
+            onReset = sessionActions.reset,
             onArchive = sessionActions.archive,
         )
     }

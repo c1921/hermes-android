@@ -8,6 +8,8 @@ import androidx.compose.material.icons.outlined.CallSplit
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -25,15 +27,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.nousresearch.hermes.data.HermesState
 
-private enum class SessionDialog { RENAME, BRANCH, COMPRESS, UNDO }
+private enum class SessionDialog { RENAME, BRANCH, COMPRESS, RETRY, RESET, UNDO }
 
 @Composable
 internal fun SessionActions(
     state: HermesState,
     onRename: (String) -> Unit,
     onBranch: (String) -> Unit,
+    onRetry: () -> Unit,
     onUndo: () -> Unit,
     onCompress: (String) -> Unit,
+    onReset: () -> Unit,
     onArchive: () -> Unit,
 ) {
     var menuOpen by rememberSaveable { mutableStateOf(false) }
@@ -64,6 +68,15 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
+            text = { Text("Retry last message") },
+            leadingIcon = { Icon(Icons.Outlined.Refresh, null) },
+            enabled = hasHistory && !running,
+            onClick = {
+                menuOpen = false
+                dialog = SessionDialog.RETRY
+            },
+        )
+        DropdownMenuItem(
             text = { Text("Undo last turn") },
             leadingIcon = { Icon(Icons.Outlined.Undo, null) },
             enabled = hasHistory && !running,
@@ -80,6 +93,15 @@ internal fun SessionActions(
                 input = ""
                 menuOpen = false
                 dialog = SessionDialog.COMPRESS
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Start fresh session") },
+            leadingIcon = { Icon(Icons.Outlined.RestartAlt, null) },
+            enabled = !running,
+            onClick = {
+                menuOpen = false
+                dialog = SessionDialog.RESET
             },
         )
         if (!state.activeStoredSession?.durableId.isNullOrBlank()) {
@@ -145,6 +167,34 @@ internal fun SessionActions(
                         onUndo()
                     },
                 ) { Text("Undo turn") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
+        SessionDialog.RETRY -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("RETRY LAST MESSAGE?") },
+            text = { Text("Hermes will remove the latest completed exchange and submit the same user message again.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        dialog = null
+                        onRetry()
+                    },
+                ) { Text("Retry message") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
+        SessionDialog.RESET -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            title = { Text("START FRESH?") },
+            text = { Text("Hermes will end the current live conversation and open a clean session. Its stored transcript remains available in the session list.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        dialog = null
+                        onReset()
+                    },
+                ) { Text("Start new session") }
             },
             dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
         )

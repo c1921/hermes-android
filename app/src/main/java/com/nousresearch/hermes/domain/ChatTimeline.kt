@@ -172,6 +172,17 @@ object TimelineReducer {
         items = state.items + TimelineItem.Message(id, MessageRole.USER, text),
     )
 
+    fun removeLastExchange(state: TimelineState): TimelineState {
+        val lastUserIndex = state.items.indexOfLast {
+            it is TimelineItem.Message && it.role == MessageRole.USER
+        }
+        return if (lastUserIndex < 0) state else state.copy(
+            items = state.items.take(lastUserIndex),
+            approval = null,
+            clarification = null,
+        )
+    }
+
     fun clearApproval(state: TimelineState) = state.copy(approval = null)
     fun clearClarification(state: TimelineState) = state.copy(clarification = null)
 
@@ -250,6 +261,18 @@ object TimelineReducer {
         "assistant:${sessionId.orEmpty()}:$generation"
 }
 
+fun lastUserPrompt(messages: List<ProtocolMessage>): String? = messages.asReversed()
+    .firstOrNull { it.role.equals("user", ignoreCase = true) }
+    ?.let { retryText(it.content, it.text).trim() }
+    ?.takeIf(String::isNotEmpty)
+
+private fun retryText(content: JsonElement?, fallback: String?): String = when (content) {
+    is JsonArray -> content.joinToString(" ") { part ->
+        (part as? JsonObject)?.text("text").orEmpty()
+    }
+    else -> displayText(content, fallback)
+}
+
 private fun String.toMessageRole() = when (lowercase()) {
     "user" -> MessageRole.USER
     "assistant" -> MessageRole.ASSISTANT
@@ -272,4 +295,3 @@ private fun JsonObject.stringList(key: String): List<String> =
     (this[key] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
 
 private fun <T> List<T>.replaced(index: Int, value: T): List<T> = toMutableList().also { it[index] = value }
-
