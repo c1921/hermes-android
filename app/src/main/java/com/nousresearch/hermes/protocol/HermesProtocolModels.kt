@@ -157,6 +157,7 @@ data class ModelCapabilities(
 
 @Serializable
 data class SessionRuntimeInfo(
+    val cwd: String = "",
     val model: String = "",
     val provider: String = "",
     @SerialName("reasoning_effort") val reasoningEffort: String = "",

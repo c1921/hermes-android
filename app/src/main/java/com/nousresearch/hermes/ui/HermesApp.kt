@@ -54,6 +54,7 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
@@ -125,7 +126,7 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, DIAGNOSTICS, PROVIDERS }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -230,47 +231,50 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
     }
     HermesTheme {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            if (state.backend == null && state.savedBackends.isEmpty()) {
-                OnboardingScreen(
-                    busy = state.loading,
-                    error = state.error,
-                    onConnect = viewModel::connect,
-                )
-            } else if (state.backend == null) {
-                BackendsScreen(
-                    state = state,
-                    onConnect = viewModel::connect,
-                    onSelect = viewModel::selectBackend,
-                    onForget = viewModel::forgetBackend,
-                    onBack = null,
-                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
-                )
-            } else {
-                HermesWorkspace(
-                    state = state,
-                    connection = connection,
-                    onRefresh = viewModel::refresh,
-                    onSearchSessions = viewModel::searchSessions,
-                    onSession = viewModel::openSession,
-                    onDeleteSession = viewModel::deleteSession,
-                    onNewSession = viewModel::newSession,
-                    onSend = viewModel::send,
-                    onSteer = viewModel::steer,
-                    onDraftChange = viewModel::updateDraft,
-                    onCompleteSlash = viewModel::completeSlash,
-                    onExecuteSlash = viewModel::executeSlash,
-                    onAttach = viewModel::attach,
-                    onRemoveAttachment = viewModel::removeAttachment,
-                    onInterrupt = viewModel::interrupt,
-                    onApprove = viewModel::approve,
-                    onClarify = viewModel::clarify,
-                    modelActions = modelActions,
-                    sessionActions = sessionActions,
-                    managementActions = managementActions,
-                    onConnectBackend = viewModel::connect,
-                    onSelectBackend = viewModel::selectBackend,
-                    onForgetBackend = viewModel::forgetBackend,
-                )
+            Box(Modifier.fillMaxSize()) {
+                NousBackdrop(Modifier.fillMaxSize())
+                if (state.backend == null && state.savedBackends.isEmpty()) {
+                    OnboardingScreen(
+                        busy = state.loading,
+                        error = state.error,
+                        onConnect = viewModel::connect,
+                    )
+                } else if (state.backend == null) {
+                    BackendsScreen(
+                        state = state,
+                        onConnect = viewModel::connect,
+                        onSelect = viewModel::selectBackend,
+                        onForget = viewModel::forgetBackend,
+                        onBack = null,
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                    )
+                } else {
+                    HermesWorkspace(
+                        state = state,
+                        connection = connection,
+                        onRefresh = viewModel::refresh,
+                        onSearchSessions = viewModel::searchSessions,
+                        onSession = viewModel::openSession,
+                        onDeleteSession = viewModel::deleteSession,
+                        onNewSession = viewModel::newSession,
+                        onSend = viewModel::send,
+                        onSteer = viewModel::steer,
+                        onDraftChange = viewModel::updateDraft,
+                        onCompleteSlash = viewModel::completeSlash,
+                        onExecuteSlash = viewModel::executeSlash,
+                        onAttach = viewModel::attach,
+                        onRemoveAttachment = viewModel::removeAttachment,
+                        onInterrupt = viewModel::interrupt,
+                        onApprove = viewModel::approve,
+                        onClarify = viewModel::clarify,
+                        modelActions = modelActions,
+                        sessionActions = sessionActions,
+                        managementActions = managementActions,
+                        onConnectBackend = viewModel::connect,
+                        onSelectBackend = viewModel::selectBackend,
+                        onForgetBackend = viewModel::forgetBackend,
+                    )
+                }
             }
         }
     }
@@ -487,6 +491,7 @@ private fun HermesWorkspace(
                     onCron = { destination = WorkspaceDestination.CRON },
                     onProfiles = { destination = WorkspaceDestination.PROFILES },
                     onBackends = { destination = WorkspaceDestination.BACKENDS },
+                    onFiles = { destination = WorkspaceDestination.FILES },
                     onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                     onProviders = { destination = WorkspaceDestination.PROVIDERS },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
@@ -523,6 +528,12 @@ private fun HermesWorkspace(
                         onConnect = onConnectBackend,
                         onSelect = onSelectBackend,
                         onForget = onForgetBackend,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.FILES -> WorkspaceFilesScreen(
+                        backend = requireNotNull(state.backend),
+                        initialPath = state.runtimeInfo.cwd.takeIf(String::isNotBlank),
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -603,6 +614,12 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    WorkspaceDestination.FILES -> WorkspaceFilesScreen(
+                        backend = requireNotNull(state.backend),
+                        initialPath = state.runtimeInfo.cwd.takeIf(String::isNotBlank),
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                    )
                     WorkspaceDestination.DIAGNOSTICS -> DiagnosticsScreen(
                         state = state,
                         connection = connection,
@@ -627,6 +644,7 @@ private fun HermesWorkspace(
                         onCron = { destination = WorkspaceDestination.CRON },
                         onProfiles = { destination = WorkspaceDestination.PROFILES },
                         onBackends = { destination = WorkspaceDestination.BACKENDS },
+                        onFiles = { destination = WorkspaceDestination.FILES },
                         onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                         onProviders = { destination = WorkspaceDestination.PROVIDERS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
@@ -650,6 +668,7 @@ private fun SessionRail(
     onCron: () -> Unit,
     onProfiles: () -> Unit,
     onBackends: () -> Unit,
+    onFiles: () -> Unit,
     onDiagnostics: () -> Unit,
     onProviders: () -> Unit,
     modifier: Modifier = Modifier,
@@ -670,7 +689,7 @@ private fun SessionRail(
         visibleSessions.any { it.durableId == result.sessionId && it.profile == result.profile }
     }
     LaunchedEffect(query) { onSearchSessions(query) }
-    Column(modifier.background(MaterialTheme.colorScheme.background)) {
+    Column(modifier.background(Color.Transparent)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -735,8 +754,16 @@ private fun SessionRail(
                 Text("Providers")
             }
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-            OutlinedButton(onClick = onDiagnostics, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = onFiles, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Folder, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Files")
+            }
+            OutlinedButton(onClick = onDiagnostics, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Outlined.Info, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Diagnostics")

@@ -8,7 +8,7 @@ This repository is an independent work in progress. It is not currently an offic
 
 Last verified: 18 July 2026.
 
-The current `main` checkout passes all unit tests, Android lint, and debug APK assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `main` checkout passes all unit tests, Android lint, and debug APK assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 ### Implemented
 
@@ -29,6 +29,7 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [x] Dynamic Hermes model/provider catalogue, model selection, reasoning effort, and fast mode
 - [x] Provider API-key and custom-endpoint management through Hermes-owned APIs
 - [x] SAF file, image, and PDF attachments with bounded reads and server-queue cleanup
+- [x] Managed workspace browsing with directory navigation, bounded text/source/image/PDF previews, network-isolated HTML rendering, streamed SAF downloads, cancellation, and MIME/path validation
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
@@ -41,7 +42,7 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 
 - [ ] **Partial:** reconnect uses bounded backoff and authoritative session rehydration, but exact in-flight delta replay needs a server event cursor.
 - [ ] **Partial:** tool activity is structured and expandable; specialised renderers for every Hermes tool are not complete.
-- [ ] **Partial:** attachment sending works; upload progress, camera capture, large streamed uploads, downloads, and safe artifact previews are not complete.
+- [ ] **Partial:** attachment sending and managed downloads/previews work; upload progress, camera capture, large streamed uploads, share actions, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
 - [ ] **Partial:** diagnostics expose versions, connection state, doctor, and security-audit results; diagnostic export, SBOM, and release provenance remain.
 
@@ -50,7 +51,7 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [ ] Native OAuth/OIDC sign-in
 - [ ] Background push notifications and notification actions
 - [ ] Pending-message queue and composer history
-- [ ] Workspace browser, generated-file delivery, downloads, and sandboxed artifact/WebView previews
+- [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
 - [ ] Voice recording, transcription, spoken replies, audio focus, and Bluetooth handling
 - [ ] MCP and toolset configuration
 - [ ] Messaging-gateway management

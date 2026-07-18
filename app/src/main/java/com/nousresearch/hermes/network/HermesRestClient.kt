@@ -13,6 +13,8 @@ import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfilesResponse
 import com.nousresearch.hermes.protocol.ProviderValidationResult
 import com.nousresearch.hermes.protocol.ModelOptionsResult
+import com.nousresearch.hermes.protocol.ManagedFileReadResponse
+import com.nousresearch.hermes.protocol.ManagedFilesResponse
 import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionPage
 import com.nousresearch.hermes.protocol.SessionSearchPage
@@ -24,7 +26,11 @@ import com.nousresearch.hermes.protocol.SkillHubSourcesResponse
 import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import java.io.IOException
+import java.io.OutputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
@@ -90,6 +96,78 @@ class HermesRestClient(
             "/api/sessions/search?q=${encodePathSegment(query.take(200))}&limit=${limit.coerceIn(1, 100)}&profile=${encodePathSegment(profile)}",
             SessionSearchPage.serializer(),
         )
+    }
+
+    suspend fun managedFiles(
+        config: BackendConfig,
+        token: String,
+        path: String? = null,
+    ): ManagedFilesResponse {
+        val query = path?.takeIf(String::isNotBlank)?.let { "?path=${encodePathSegment(it)}" }.orEmpty()
+        return get(config, token, "/api/files$query", ManagedFilesResponse.serializer())
+    }
+
+    suspend fun readManagedFile(
+        config: BackendConfig,
+        token: String,
+        path: String,
+    ): ManagedFileReadResponse = get(
+        config,
+        token,
+        "/api/files/read?path=${encodePathSegment(path)}",
+        ManagedFileReadResponse.serializer(),
+    )
+
+    suspend fun downloadManagedFile(
+        config: BackendConfig,
+        token: String,
+        path: String,
+        output: OutputStream,
+        onProgress: (bytesCopied: Long, totalBytes: Long?) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+        val request = Request.Builder()
+            .url("$base/api/files/download?path=${encodePathSegment(path)}")
+            .get()
+            .header("Accept", "application/octet-stream")
+            .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == com.nousresearch.hermes.data.AuthMode.DASHBOARD_SESSION) {
+                    header("Cookie", token)
+                } else {
+                    header("Authorization", "Bearer $token")
+                }
+            }
+            .build()
+        val call = client.newCall(request)
+        val cancellation = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) call.cancel()
+        }
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    val detail = response.body?.string().orEmpty().take(500)
+                    throw HermesHttpException(response.code, detail.ifBlank { response.message })
+                }
+                val body = response.body ?: throw IOException("Hermes returned an empty file response")
+                val total = body.contentLength().takeIf { it >= 0 }
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                    var copied = 0L
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        copied += read
+                        onProgress(copied, total)
+                    }
+                    output.flush()
+                }
+            }
+        } finally {
+            cancellation?.dispose()
+        }
     }
 
     suspend fun renameSession(
@@ -493,6 +571,7 @@ class HermesRestClient(
         val ALLOWED_ACTIONS = setOf("doctor", "security-audit")
         val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
     }
 }
 

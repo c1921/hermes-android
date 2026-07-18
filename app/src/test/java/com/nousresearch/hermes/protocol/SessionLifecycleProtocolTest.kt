@@ -21,11 +21,12 @@ class SessionLifecycleProtocolTest {
     @Test
     fun `decodes lazy session create identities returned by Hermes 0 18 2`() {
         val result = json.decodeFromString<SessionCreateResult>(
-            """{"session_id":"live-new","stored_session_id":"stored-new","messages":[],"info":{"model":"hermes-4","desktop_contract":4}}""",
+            """{"session_id":"live-new","stored_session_id":"stored-new","messages":[],"info":{"cwd":"/srv/hermes/workspace","model":"hermes-4","desktop_contract":4}}""",
         )
 
         assertEquals("live-new", result.runtimeSessionId)
         assertEquals("stored-new", result.durableSessionId)
+        assertEquals("/srv/hermes/workspace", result.info.cwd)
         assertEquals(4, result.info.desktopContract)
     }
 

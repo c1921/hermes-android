@@ -26,6 +26,8 @@ Display headings use a high-contrast editorial serif. The site uses licensed Sig
 
 The launcher uses Hermes Desktop's official application icon. Product screens use the official site badge and hero artwork. Source and license details live in `THIRD_PARTY_NOTICES.md` and `licenses/`.
 
+Dark surfaces carry a low-opacity carousel of six purpose-built Nous field plates: three long-held anchor compositions and three short bridge compositions. The bridge plates share geometry with both neighbours so the eight-second crossfade reads as one evolving technical engraving rather than unrelated wallpaper. The centre stays quiet behind conversation content, the sequence advances only while the app is resumed, and Android's zero-duration motion setting freezes it on the first plate.
+
 ## States
 
 - Loading never replaces the whole shell after initial connection.
@@ -37,6 +39,7 @@ The launcher uses Hermes Desktop's official application icon. Product screens us
 - Process recreation restores selected backend metadata and backend/profile/session-scoped drafts; live state and navigation are rehydrated from Hermes rather than trusted from a stale local process snapshot.
 - Retry, undo and reset are explicit confirmed session actions. Reset closes the old live runtime before opening a clean one, while its durable transcript remains available in the session list.
 - Typing `/` opens Hermes' own categorized command catalogue above the composer. Suggestions and arguments come from the gateway, but Android filters terminal-only built-ins and supports every structured dispatch result: inline output, alias, send, skill, and editable prefill.
+- Nous is the default appearance. A lower-priority cosmetic follow-up will expose the exact client-owned Hermes Desktop presets (`nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate`) through a native appearance picker without changing server configuration.
 
 ## Notifications and permissions
 
@@ -56,6 +59,7 @@ The app is not an offline agent. Previously hydrated transcripts and drafts may 
 - Approval/clarification: a blocking prompt is owned by its originating runtime session and cannot be dismissed into a lost state.
 - Connection loss changes a narrow status line; the transcript does not flash or relayout.
 - Reduced-motion mode replaces spatial transitions with immediate changes or short fades. Streaming content never animates each token.
+- Ambient field art holds each anchor for 150 seconds, crosses through a 12-second bridge plate, pauses off-screen, and remains static when the system motion scale is zero.
 
 Interrupted animations settle to semantic state. Process recreation restores the destination, not an animation phase.
 

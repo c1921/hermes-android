@@ -138,6 +138,38 @@ data class ProviderValidationResult(
 )
 
 @Serializable
+data class ManagedFileEntry(
+    val name: String,
+    val path: String,
+    @SerialName("is_directory") val isDirectory: Boolean,
+    val size: Long? = null,
+    val mtime: Double = 0.0,
+    @SerialName("mime_type") val mimeType: String? = null,
+)
+
+@Serializable
+data class ManagedFilesResponse(
+    val root: String? = null,
+    val path: String,
+    val parent: String? = null,
+    @SerialName("locked_root") val lockedRoot: String? = null,
+    @SerialName("can_change_path") val canChangePath: Boolean = false,
+    val entries: List<ManagedFileEntry> = emptyList(),
+)
+
+@Serializable
+data class ManagedFileReadResponse(
+    val name: String,
+    val path: String,
+    val size: Long,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("data_url") val dataUrl: String,
+    val root: String? = null,
+    @SerialName("locked_root") val lockedRoot: String? = null,
+    @SerialName("can_change_path") val canChangePath: Boolean = false,
+)
+
+@Serializable
 data class SkillHubResult(
     val name: String,
     val description: String = "",
