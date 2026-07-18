@@ -6,17 +6,17 @@ This repository is an independent work in progress. It is not currently an offic
 
 ## Project status
 
-Last verified: 17 July 2026.
+Last verified: 18 July 2026.
 
-The current development branch is `codex/build-validation`. The Dashboard-authentication slice at `e166ee3b2283c284437b028e06dfe85d4fc3cc38` passed all 42 unit tests, Android lint, and debug APK assembly in [Android CI](https://github.com/luinbytes/hermes-android/actions/runs/29618908513).
+The current `main` checkout passes all unit tests, Android lint, and debug APK assembly locally with JDK 17. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 ### Implemented
 
 - [x] Dashboard username/password onboarding through `POST /auth/password-login`
 - [x] Required `hermes_session_at` session-cookie extraction and validation
 - [x] Authenticated `/api/status` REST validation using the Dashboard cookie
-- [x] Authenticated `/api/ws` JSON-RPC WebSocket handshake using the same cookie
-- [x] Save only after login, REST, and WebSocket validation all succeed
+- [x] Cookie-authenticated `POST /api/auth/ws-ticket` followed by authenticated `/api/ws?ticket=` JSON-RPC WebSocket handshake
+- [x] Save only after login, REST, ticket minting, and WebSocket validation all succeed
 - [x] Android Keystore-backed AES-GCM session-cookie storage; passwords are never persisted
 - [x] Explicit reconnect state for missing, expired, rejected, or legacy token-only credentials
 - [x] Multiple saved backends with add, reconnect, select, and forget flows
@@ -32,6 +32,7 @@ The current development branch is `codex/build-validation`. The Dashboard-authen
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
 - [x] Doctor and security-audit actions with bounded status polling and output redaction
 - [x] Phone master/detail and expanded tablet two-pane layouts
+- [x] Official Hermes site palette and artwork, Courier Prime utility typography, licensed serif fallback, rounded component geometry, and official Desktop launcher icon
 - [x] Unknown protocol fields and event types fail safely instead of crashing the client
 
 ### Partial foundations
@@ -58,7 +59,7 @@ The current development branch is `codex/build-validation`. The Dashboard-authen
 - [ ] Biometric lock, secure-screen option, Android share target, deep links, shortcuts, widgets, and other platform integrations
 - [ ] Signed release APK, release AAB, reproducibility verification, Baseline Profile, and macrobenchmarks
 
-The detailed source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md). That matrix predates the completed Dashboard-authentication slice; the current authentication status in this README and the implementation are authoritative until the next full parity refresh.
+The detailed, current source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md).
 
 ## Connect to an existing Hermes install
 
@@ -68,6 +69,7 @@ The supplied URL must expose these standard Dashboard paths:
 
 - `POST /auth/password-login`
 - `GET /api/status`
+- `POST /api/auth/ws-ticket`
 - WebSocket `/api/ws`
 
 In **Backend Link**, enter:
@@ -77,7 +79,7 @@ In **Backend Link**, enter:
 3. The existing Dashboard username.
 4. The existing Dashboard password.
 
-The app submits the credentials to the Dashboard login endpoint, requires its secure Hermes session cookie, then validates authenticated REST and WebSocket access. It saves the backend and encrypted cookie only after all three operations succeed. The password exists only long enough to submit the login request and is cleared from the transient input state; it is not written to DataStore, preferences, backups, diagnostics, or logs.
+The app submits the credentials to the Dashboard login endpoint, requires its secure Hermes session cookie, validates authenticated REST, mints a fresh single-use WebSocket ticket, then validates `/api/ws?ticket=`. It saves the backend and encrypted cookie only after every step succeeds. The password exists only long enough to submit the login request and is cleared from the transient input state; it is not written to DataStore, preferences, backups, diagnostics, or logs.
 
 ### Normal HTTPS
 
@@ -126,7 +128,7 @@ If the Dashboard expires or rejects a saved cookie, the app removes it, disconne
 - `android:allowBackup` is disabled and the secret preferences file is excluded from device transfer.
 - Session-cookie string representations are redacted.
 - REST authentication uses the `Cookie` header; Dashboard sessions are not converted into bearer tokens.
-- WebSocket authentication uses the same `Cookie` header and does not place the session in a query parameter.
+- WebSocket authentication mints a fresh cookie-authenticated single-use ticket and places only that short-lived ticket in the upgrade query. The session cookie is not sent on the WebSocket upgrade.
 - Passwords and session cookies are not included in backend metadata, UI diagnostics, or application logs.
 - Failed login, missing/malformed cookies, REST failure, or WebSocket failure leaves no newly saved backend or credential.
 - Cleartext transport has no silent fallback and requires both explicit consent and a private literal address.
@@ -177,26 +179,26 @@ Current automated coverage includes:
 - Login request payload and accepted Hermes session-cookie variants
 - Successful cookie extraction plus missing and malformed cookie rejection
 - Cookie reuse for authenticated REST without bearer authorization
-- Cookie reuse for the WebSocket handshake without a token query parameter
-- Login → REST → WebSocket → save ordering
+- Cookie-authenticated single-use WebSocket ticket minting without a legacy token query or WebSocket cookie
+- Login → REST → ticket → WebSocket → save ordering
 - REST and WebSocket validation failures without persistence
 - Expired saved-session reconnect behavior
 - Legacy token-only record rejection without network reinterpretation
 - Password non-persistence at the connect-and-save boundary
 - Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, and diagnostic redaction
 
-Automated tests do not require a paid provider key or production credentials. A final smoke test against the intended real secured Dashboard is still required before calling a particular deployment verified.
+Automated tests do not require a paid provider key or production credentials. A physical-device smoke against an isolated secured Dashboard from the pinned upstream source has passed. A final smoke against any intended production deployment is still required before calling that deployment verified.
 
 ## Current issues and blockers
 
 Open issues were last reconciled on 17 July 2026.
 
 - [#1 — Spec: authenticate Hermes Android through Dashboard sign-in](https://github.com/luinbytes/hermes-android/issues/1): implemented by the current branch; still open for owner review and closure.
-- [#2 — Connect Hermes Android to a secured Dashboard](https://github.com/luinbytes/hermes-android/issues/2): acceptance criteria are implemented and CI is green at `e166ee3`; still open pending a live-install smoke test and owner review.
+- [#2 — Connect Hermes Android to a secured Dashboard](https://github.com/luinbytes/hermes-android/issues/2): acceptance criteria are implemented and the isolated physical-device upstream smoke passed; still open for owner review and closure.
 
 Current concrete blockers:
 
-- **Live deployment verification:** this environment has no user Dashboard credentials or private/Tailscale route. The production code targets the real endpoints, but the owner must perform the final smoke test against an existing secured install.
+- **Production deployment verification:** the isolated pinned-upstream smoke passed, including login, authenticated status, two fresh WebSocket ticket mints, saved-backend reconnect, session creation, and management reads. A particular public, private, or Tailscale deployment still needs its own route and credential smoke before that deployment is declared verified.
 - **Native OAuth/OIDC:** browser cookies cannot safely be imported from Custom Tabs. A general upstream native code/session exchange with PKCE is required.
 - **Exact reconnect replay:** Hermes does not currently expose a universal ordered event cursor/replay contract for every in-flight stream.
 - **Background mobile delivery:** approvals, clarifications, completions, failures, and cron results need an upstream device-registration, revocation, acknowledgement, and single-use action-token contract.
@@ -209,7 +211,7 @@ Unimplemented items that do not depend on an upstream change remain local engine
 
 The client uses Hermes REST APIs for backend-owned management data and the TUI Gateway JSON-RPC/WebSocket protocol for interactive sessions. It is not a WebView wrapper, an OpenAI-compatible chat-only client, or a messaging-platform adapter.
 
-The source audit is pinned to Hermes Agent commit `0f102fa4dc04b7dfdab048169aaaa640d09d7523` (Hermes Agent `0.18.2`, Desktop `0.17.0`) from 17 July 2026. That version is the verified source contract. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
+The source audit is pinned to Hermes Agent commit `5122ddd478143a6901bb752cf8ebcd1c5154b6da` (Hermes Agent `0.18.2`, Desktop `0.17.0`) from 18 July 2026. That exact commit is the verified source contract; version strings alone are insufficient because it is 120 commits ahead of the previous baseline without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
 
 Upstream Hermes remains read-only from this repository. Proposed general protocol changes are documented locally for owner-led upstream review.
 

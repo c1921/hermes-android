@@ -1,12 +1,12 @@
 # Desktop parity matrix
 
-Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2`, Desktop `0.17.0`. Status is intentionally strict: **implemented** means a real client path exists in this repository; **foundation** is tested domain/transport work without a complete surface; **blocked** identifies a concrete upstream contract gap; **not implemented** is not shipped as decorative UI.
+Baseline: Hermes Agent `5122ddd478143a6901bb752cf8ebcd1c5154b6da`, Agent `0.18.2`, Desktop `0.17.0`, verified 18 July 2026. Status is intentionally strict: **implemented** means a real client path exists in this repository; **foundation** is tested domain/transport work without a complete surface; **blocked** identifies a concrete upstream contract gap; **not implemented** is not shipped as decorative UI.
 
 | Desktop capability | Source / backend contract | Android status | Mobile adaptation | Test / limitation | Upstream change |
 | --- | --- | --- | --- | --- | --- |
-| Remote static-token backend | `electron/connection-config.ts`; `/api/status`, `/api/ws?token=` | Implemented | Manual endpoint with explicit private HTTP opt-in | Transport policy unit tests; real backend test pending | No |
+| Remote static-token backend | `electron/connection-config.ts`; `/api/status`, `/api/ws?token=` | Transport only; saved legacy records require reconnect | Dashboard-authenticated onboarding is the supported product path | Static-token gateway tests remain for protocol compatibility; no token onboarding UI | No |
 | OAuth remote backend | `dashboard_auth/routes.py`; `/api/auth/ws-ticket` | Blocked | Native PKCE app link, revocable device session | Browser cookies cannot be transferred safely from Custom Tabs | Native OAuth exchange |
-| Username/password dashboard auth | `/auth/password-login` | Blocked | Credential form followed by native client session | Current result is browser cookie-only | Native OAuth/session exchange |
+| Username/password dashboard auth | `/auth/password-login`; `/api/auth/ws-ticket`; `/api/ws?ticket=` | Implemented | Native credential form, Keystore-backed session cookie, fresh single-use ticket per WebSocket | Contract tests plus physical Samsung smoke against isolated pinned upstream; login and saved reconnect each minted fresh tickets | No |
 | Multiple saved backends | Desktop connection config | Implemented baseline | Add/test/select/forget backends; metadata in DataStore and tokens in Keystore | HTTP+WebSocket validation; discovery/QR pairing pending | No |
 | Capability/version display | `/api/status`; `session.info.desktop_contract` | Implemented baseline | Dedicated diagnostics surface plus contract warning and version-gated attachment/YOLO controls | Displays app, audited upstream, server, auth, connection, capabilities and session contract; canonical capability document remains desirable | Canonical capability document desirable |
 | Session list across profiles | `/api/profiles/sessions` | Implemented | Phone atlas; tablet rail | Real REST path | No |
@@ -44,5 +44,5 @@ Baseline: Hermes Agent `0f102fa4dc04b7dfdab048169aaaa640d09d7523`, Agent `0.18.2
 | Logs/doctor/security audit/backup | `/api/ops/doctor`; `/api/ops/security-audit`; `/api/actions/{name}/status` | Doctor and security audit implemented; backup/export absent | Bounded status polling and selectable on-device output with defense-in-depth secret/home-path redaction | Typed route tests and redactor tests; server action may continue after the two-minute mobile polling bound | No |
 | Notifications/deep links | Desktop native notifications | Blocked for background delivery | Private channels and exact target links | Foreground prompts work only | Device delivery v1 |
 | Local Termux runtime | Upstream Termux support | Research only | Detect/link to explicit companion | No cross-app runtime API | Optional Termux companion contract |
-| Phone/tablet/foldable layout | Desktop has responsive renderer | Implemented baseline | Master/detail below 840dp, two-pane above | Visual device QA pending | No |
-| Keyboard/accessibility/reduced motion | Desktop design system | Foundation | Semantics, labelled actions, simple transitions | Full TalkBack/keyboard/reduced-motion audit pending | No |
+| Phone/tablet/foldable layout | Desktop has responsive renderer | Implemented baseline | Master/detail below 840dp, two-pane above | Physical 360dp Samsung QA passed at 100% and 130% text; tablet/foldable hardware QA pending | No |
+| Keyboard/accessibility/reduced motion | Desktop design system | Foundation | Semantics, labelled actions, reversible container motion | Physical reduced-motion and enlarged-text checks passed; full TalkBack, switch-access, and hardware-keyboard audit pending | No |
