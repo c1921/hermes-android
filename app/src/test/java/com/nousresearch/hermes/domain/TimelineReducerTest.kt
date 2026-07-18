@@ -64,6 +64,51 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `sudo and named secret prompts remain masked typed requests`() {
+        val sudo = TimelineReducer.reduce(
+            TimelineState(),
+            GatewayEvent("sudo.request", "runtime-1", buildJsonObject { put("request_id", "sudo-7") }),
+        )
+        assertEquals(SensitiveInputKind.SUDO_PASSWORD, sudo.sensitiveInput?.kind)
+        assertEquals("sudo-7", sudo.sensitiveInput?.requestId)
+
+        val secret = TimelineReducer.reduce(
+            sudo,
+            GatewayEvent(
+                "secret.request",
+                "runtime-1",
+                buildJsonObject {
+                    put("request_id", "secret-8")
+                    put("env_var", "DEPLOY_TOKEN")
+                    put("prompt", "Token for the isolated test target")
+                },
+            ),
+        )
+        assertEquals(SensitiveInputKind.SECRET, secret.sensitiveInput?.kind)
+        assertEquals("DEPLOY_TOKEN", secret.sensitiveInput?.environmentVariable)
+        assertEquals("Token for the isolated test target", secret.sensitiveInput?.prompt)
+    }
+
+    @Test
+    fun `sensitive prompt expiry only clears the matching request`() {
+        val state = TimelineReducer.reduce(
+            TimelineState(),
+            GatewayEvent("sudo.request", "runtime-1", buildJsonObject { put("request_id", "sudo-7") }),
+        )
+        val unrelated = TimelineReducer.reduce(
+            state,
+            GatewayEvent("sudo.expire", "runtime-1", buildJsonObject { put("request_id", "sudo-old") }),
+        )
+        val expired = TimelineReducer.reduce(
+            unrelated,
+            GatewayEvent("sudo.expire", "runtime-1", buildJsonObject { put("request_id", "sudo-7") }),
+        )
+
+        assertEquals("sudo-7", unrelated.sensitiveInput?.requestId)
+        assertTrue(expired.sensitiveInput == null)
+    }
+
+    @Test
     fun `removing the last exchange keeps earlier turns and drops tool output`() {
         val state = TimelineState(
             items = listOf(

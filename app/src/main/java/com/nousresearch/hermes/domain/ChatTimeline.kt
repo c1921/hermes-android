@@ -61,10 +61,21 @@ data class ClarificationRequest(
     val choices: List<String>,
 )
 
+enum class SensitiveInputKind { SUDO_PASSWORD, SECRET }
+
+data class SensitiveInputRequest(
+    val sessionId: String,
+    val requestId: String,
+    val kind: SensitiveInputKind,
+    val prompt: String,
+    val environmentVariable: String? = null,
+)
+
 data class TimelineState(
     val items: List<TimelineItem> = emptyList(),
     val approval: ApprovalRequest? = null,
     val clarification: ClarificationRequest? = null,
+    val sensitiveInput: SensitiveInputRequest? = null,
     val generation: Long = 0,
 )
 
@@ -164,6 +175,35 @@ object TimelineReducer {
                 ),
             )
 
+            "sudo.request" -> payload.text("request_id").takeIf(String::isNotBlank)?.let { requestId ->
+                state.copy(
+                    sensitiveInput = SensitiveInputRequest(
+                        sessionId = event.sessionId.orEmpty(),
+                        requestId = requestId,
+                        kind = SensitiveInputKind.SUDO_PASSWORD,
+                        prompt = "Hermes needs a sudo password to continue this command.",
+                    ),
+                )
+            } ?: state
+
+            "secret.request" -> payload.text("request_id").takeIf(String::isNotBlank)?.let { requestId ->
+                state.copy(
+                    sensitiveInput = SensitiveInputRequest(
+                        sessionId = event.sessionId.orEmpty(),
+                        requestId = requestId,
+                        kind = SensitiveInputKind.SECRET,
+                        prompt = payload.text("prompt").ifBlank { "Hermes needs a secret value to continue." },
+                        environmentVariable = payload.text("env_var").ifBlank { null },
+                    ),
+                )
+            } ?: state
+
+            "sudo.expire", "secret.expire" -> if (state.sensitiveInput?.requestId == payload.text("request_id")) {
+                state.copy(sensitiveInput = null)
+            } else {
+                state
+            }
+
             else -> state
         }
     }
@@ -184,11 +224,13 @@ object TimelineReducer {
             items = state.items.take(lastUserIndex),
             approval = null,
             clarification = null,
+            sensitiveInput = null,
         )
     }
 
     fun clearApproval(state: TimelineState) = state.copy(approval = null)
     fun clearClarification(state: TimelineState) = state.copy(clarification = null)
+    fun clearSensitiveInput(state: TimelineState) = state.copy(sensitiveInput = null)
 
     private fun appendAssistantDelta(state: TimelineState, sessionId: String?, delta: String): TimelineState {
         val index = state.items.indexOfLast {

@@ -28,6 +28,7 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | Oversized payload/zip bomb | HTTP/body, attachment, decompression, pixel and page limits; stream to disk | Planned |
 | Malicious skill | Preserve Hermes review/scan boundary; show source/origin/trust; never direct-install around Hermes | Planned |
 | Tool-output approval spoofing | Approval UI is driven only by a typed `approval.request` event bound to runtime session, never Markdown | Implemented |
+| Sudo or secret prompt leakage | Typed gateway events open a blocking password-semantics field backed only by non-saveable Compose state; values are sent once through the matching response method and never enter timelines, drafts, preferences, logs or diagnostics | Implemented |
 | Replay/duplicate events | Stable tool/request IDs; reducer upsert; authoritative rehydrate | Partial; stream cursor upstream gap |
 | Cross-profile/session confusion | Cache/navigation identity includes backend, profile, durable ID and runtime ID; events filtered by runtime | Implemented baseline, more tests required |
 | Diagnostic leakage | Structured redaction and explicit export review; never include tokens or raw credential stores | Planned |

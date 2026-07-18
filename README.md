@@ -25,7 +25,7 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [x] Backend/profile/session-scoped draft persistence across Android process restart, with debounced writes and cleanup when a backend is forgotten
 - [x] Gateway-backed slash command catalogue, live completions, argument replacement, curated mobile execution, skill and quick-command dispatch, inline output, and composer prefill
 - [x] Streamed assistant text, reasoning, status, and structured tool activity
-- [x] Dangerous-command approval, denial, clarification, interruption, and session-only YOLO controls
+- [x] Dangerous-command approval, denial, clarification, interruption, session-only YOLO, and non-persistent masked sudo/secret prompts with expiry handling
 - [x] Dynamic Hermes model/provider catalogue, model selection, reasoning effort, and fast mode
 - [x] Provider API-key and custom-endpoint management through Hermes-owned APIs
 - [x] SAF file, image, and PDF attachments with bounded reads and server-queue cleanup
@@ -188,6 +188,7 @@ Current automated coverage includes:
 - Legacy token-only record rejection without network reinterpretation
 - Password non-persistence at the connect-and-save boundary
 - Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, and diagnostic redaction
+- Sensitive sudo/secret request and expiry reduction plus physical Compose instrumentation for password semantics, exact submission, cancellation, and cross-request value isolation
 
 Automated tests do not require a paid provider key or production credentials. A physical-device smoke against an isolated secured Dashboard from the pinned upstream source has passed. A final smoke against any intended production deployment is still required before calling that deployment verified.
 

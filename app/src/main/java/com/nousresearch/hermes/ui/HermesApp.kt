@@ -116,6 +116,7 @@ import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
 import com.nousresearch.hermes.data.SlashSuggestion
 import com.nousresearch.hermes.domain.MessageRole
+import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
@@ -267,6 +268,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                         onInterrupt = viewModel::interrupt,
                         onApprove = viewModel::approve,
                         onClarify = viewModel::clarify,
+                        onSensitiveInput = viewModel::submitSensitiveInput,
                         modelActions = modelActions,
                         sessionActions = sessionActions,
                         managementActions = managementActions,
@@ -461,6 +463,7 @@ private fun HermesWorkspace(
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
+    onSensitiveInput: (String) -> Unit,
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
     managementActions: ManagementActions,
@@ -555,7 +558,7 @@ private fun HermesWorkspace(
                     else -> ChatSurface(
                         state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
                         onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, modelActions, sessionActions, Modifier.weight(1f),
+                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, Modifier.weight(1f),
                     )
                 }
             }
@@ -575,7 +578,7 @@ private fun HermesWorkspace(
                     WorkspaceDestination.CHAT -> ChatSurface(
                         state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
                         onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, modelActions, sessionActions,
+                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions,
                         Modifier.fillMaxSize(),
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                     )
@@ -974,6 +977,7 @@ private fun ChatSurface(
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
     onClarify: (String) -> Unit,
+    onSensitiveInput: (String) -> Unit,
     modelActions: ModelActions,
     sessionActions: SessionActionCallbacks,
     modifier: Modifier = Modifier,
@@ -1034,6 +1038,15 @@ private fun ChatSurface(
     }
     state.timeline.clarification?.let { request ->
         ClarificationDialog(request.question, request.choices, onClarify)
+    }
+    state.timeline.sensitiveInput?.let { request ->
+        SensitiveInputDialog(
+            requestId = request.requestId,
+            kind = request.kind,
+            prompt = request.prompt,
+            environmentVariable = request.environmentVariable,
+            onSubmit = onSensitiveInput,
+        )
     }
 }
 
@@ -1418,6 +1431,59 @@ private fun ClarificationDialog(question: String, choices: List<String>, onAnswe
             }
         },
         confirmButton = { Button(enabled = answer.isNotBlank(), onClick = { onAnswer(answer.trim()) }) { Text("CONTINUE") } },
+    )
+}
+
+@Composable
+internal fun SensitiveInputDialog(
+    requestId: String,
+    kind: SensitiveInputKind,
+    prompt: String,
+    environmentVariable: String?,
+    onSubmit: (String) -> Unit,
+) {
+    var value by remember(requestId) { mutableStateOf("") }
+    val submit: (String) -> Unit = { response ->
+        value = ""
+        onSubmit(response)
+    }
+    val sudo = kind == SensitiveInputKind.SUDO_PASSWORD
+    AlertDialog(
+        onDismissRequest = { },
+        icon = { Icon(Icons.Outlined.Key, null, tint = WarningColor) },
+        title = { Text(if (sudo) "SUDO PASSWORD REQUIRED" else "SECRET REQUIRED") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(prompt)
+                environmentVariable?.let {
+                    Text("ENVIRONMENT VARIABLE / $it", style = MaterialTheme.typography.labelMedium)
+                }
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it.take(8_192) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (sudo) "Password" else "Secret value") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (value.isNotEmpty()) submit(value) }),
+                )
+                Text(
+                    "This value is sent once to the active Hermes request. Android does not save it to drafts, restored state, logs, or local preferences.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(enabled = value.isNotEmpty(), onClick = { submit(value) }) { Text("CONTINUE") }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = { submit("") }) { Text("CANCEL REQUEST") }
+        },
     )
 }
 

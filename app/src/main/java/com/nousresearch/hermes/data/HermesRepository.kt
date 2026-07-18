@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.data
 
 import android.net.Uri
+import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.domain.lastUserPrompt
@@ -1376,6 +1377,32 @@ class HermesRepository @Inject constructor(
         )
         mutableState.value = mutableState.value.copy(
             timeline = TimelineReducer.clearClarification(mutableState.value.timeline),
+        )
+    }
+
+    suspend fun respondToSensitiveInput(value: String) {
+        val request = mutableState.value.timeline.sensitiveInput ?: return
+        val method: String
+        val key: String
+        when (request.kind) {
+            SensitiveInputKind.SUDO_PASSWORD -> {
+                method = "sudo.respond"
+                key = "password"
+            }
+            SensitiveInputKind.SECRET -> {
+                method = "secret.respond"
+                key = "value"
+            }
+        }
+        gateway.request(
+            method,
+            buildJsonObject {
+                put("request_id", request.requestId)
+                put(key, value)
+            },
+        )
+        mutableState.value = mutableState.value.copy(
+            timeline = TimelineReducer.clearSensitiveInput(mutableState.value.timeline),
         )
     }
 

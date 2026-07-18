@@ -57,6 +57,7 @@ class HermesViewModel @Inject constructor(
     fun interrupt() = viewModelScope.launch { repository.interrupt() }
     fun approve(choice: String) = viewModelScope.launch { repository.respondToApproval(choice) }
     fun clarify(answer: String) = viewModelScope.launch { repository.respondToClarification(answer) }
+    fun submitSensitiveInput(value: String) = viewModelScope.launch { repository.respondToSensitiveInput(value) }
     fun archiveActive() = viewModelScope.launch { repository.archiveActive() }
     fun deleteSession(session: StoredSession) = viewModelScope.launch { repository.deleteSession(session) }
     fun renameActive(title: String) = viewModelScope.launch { repository.renameActive(title) }
