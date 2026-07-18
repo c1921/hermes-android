@@ -91,6 +91,8 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -124,11 +126,43 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -F "$release_fingerprint"
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | tr -d ': ' | grep -iF "$release_fingerprint"
+      - name: Stage release downloads
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hermes-release"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/hermes-release/hermes-android-release.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-release/hermes-android-release.aab"
+          cp app/build/outputs/mapping/release/mapping.txt "$RUNNER_TEMP/hermes-release/hermes-android-release-mapping.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: hermes-android-release
           path: |
-            app/build/outputs/apk/release/app-release.apk
-            app/build/outputs/bundle/release/app-release.aab
-            app/build/outputs/mapping/release/mapping.txt
+            ${{ runner.temp }}/hermes-release/hermes-android-release.apk
+            ${{ runner.temp }}/hermes-release/hermes-android-release.aab
+            ${{ runner.temp }}/hermes-release/hermes-android-release-mapping.txt
           if-no-files-found: error
+      - name: Publish latest release downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_tag="build-${GITHUB_SHA::12}"
+          release_dir="$RUNNER_TEMP/hermes-release"
+          release_files=(
+            "$release_dir/hermes-android-release.apk"
+            "$release_dir/hermes-android-release.aab"
+            "$release_dir/hermes-android-release-mapping.txt"
+          )
+
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "${release_files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$release_tag" "${release_files[@]}" \
+              --draft \
+              --target "$GITHUB_SHA" \
+              --title "Hermes Android ${GITHUB_SHA::12}" \
+              --notes "Signed Android release built from main at $GITHUB_SHA." \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+
+          gh release edit "$release_tag" --draft=false --latest --repo "$GITHUB_REPOSITORY"
