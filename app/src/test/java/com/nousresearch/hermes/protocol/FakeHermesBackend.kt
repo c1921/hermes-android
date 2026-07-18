@@ -50,6 +50,18 @@ class FakeHermesBackend(
                             "model.options" -> json.parseToJsonElement(
                                 """{"model":"hermes-4","provider":"nous","providers":[{"slug":"nous","name":"Nous Portal","authenticated":true,"models":["hermes-4"],"capabilities":{"hermes-4":{"fast":true,"reasoning":true}}}]}""",
                             )
+                            "rollback.list" -> json.parseToJsonElement(
+                                """{"enabled":true,"checkpoints":[{"hash":"0123456789abcdef0123456789abcdef01234567","timestamp":"2026-07-18T10:20:30+00:00","message":""}]}""",
+                            )
+                            "rollback.diff" -> json.parseToJsonElement(
+                                """{"stat":"app.kt | 2 +-","diff":"diff --git a/app.kt b/app.kt\\n-old\\n+new"}""",
+                            )
+                            "rollback.restore" -> json.parseToJsonElement(
+                                """{"success":true,"restored_to":"01234567","reason":"checkpoint","directory":"/workspace/project","history_removed":3}""",
+                            )
+                            "session.history" -> json.parseToJsonElement(
+                                """{"messages":[{"role":"user","content":"Earlier turn"}]}""",
+                            )
                             else -> buildJsonObject { put("ok", true) }
                             }
                             webSocket.send(

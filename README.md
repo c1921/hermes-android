@@ -37,6 +37,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Profile-scoped messaging-gateway catalogue, platform status, Hermes-owned credential setup/removal, enable/disable, connection tests, and explicitly confirmed gateway restart
 - [x] Profile-scoped MCP configured-server and Nous catalogue views, backend connection probes, enable/disable, and confirmed live `reload.mcp`
 - [x] Profile-scoped 7/30/90-day token, API-call, model, tool, skill, cost, and live-session context breakdowns
+- [x] Session-scoped checkpoint listing, bounded diff preview, and explicitly confirmed full workspace rollback with authoritative history reload
 - [x] Command Center with live Hermes subagent trees, delegation pause/resume, confirmed subagent interruption, current-session background-process output, and confirmed process stop
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
@@ -62,7 +63,6 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
 - [ ] MCP add/edit/remove, catalog installation, OAuth setup, per-tool filters, and toolset/general configuration
 - [ ] Persisted spawn-tree replay and mobile background delivery for Agents when Android is suspended
-- [ ] Checkpoints, diffs, and filesystem rollback
 - [ ] Local Termux runtime discovery or companion integration
 - [ ] Biometric lock, secure-screen option, Android share target, deep links, shortcuts, widgets, and other platform integrations
 - [ ] Signed release APK, release AAB, reproducibility verification, Baseline Profile, and macrobenchmarks

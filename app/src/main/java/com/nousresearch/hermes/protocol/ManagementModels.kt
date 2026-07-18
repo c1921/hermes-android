@@ -326,6 +326,35 @@ data class McpReloadResponse(
 )
 
 @Serializable
+data class RollbackCheckpoint(
+    val hash: String,
+    val timestamp: String = "",
+    val message: String = "",
+)
+
+@Serializable
+data class RollbackListResult(
+    val enabled: Boolean,
+    val checkpoints: List<RollbackCheckpoint> = emptyList(),
+)
+
+@Serializable
+data class RollbackDiffResult(
+    val stat: String = "",
+    val diff: String = "",
+)
+
+@Serializable
+data class RollbackRestoreResult(
+    val success: Boolean,
+    val error: String? = null,
+    @SerialName("restored_to") val restoredTo: String? = null,
+    val reason: String? = null,
+    val directory: String? = null,
+    @SerialName("history_removed") val historyRemoved: Int = 0,
+)
+
+@Serializable
 data class ContextUsageCategory(
     val id: String,
     val label: String,

@@ -173,6 +173,9 @@ private data class SessionActionCallbacks(
     val compress: (String) -> Unit,
     val reset: () -> Unit,
     val archive: () -> Unit,
+    val refreshCheckpoints: () -> Unit,
+    val previewCheckpoint: (String) -> Unit,
+    val restoreCheckpoint: (String) -> Unit,
 )
 
 private data class ManagementActions(
@@ -240,6 +243,9 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             compress = viewModel::compressActive,
             reset = viewModel::resetActive,
             archive = viewModel::archiveActive,
+            refreshCheckpoints = viewModel::refreshCheckpoints,
+            previewCheckpoint = viewModel::previewCheckpoint,
+            restoreCheckpoint = viewModel::restoreCheckpoint,
         )
     }
     val managementActions = remember(viewModel) {
@@ -1261,6 +1267,9 @@ private fun ChatHeader(
             onCompress = sessionActions.compress,
             onReset = sessionActions.reset,
             onArchive = sessionActions.archive,
+            onRefreshCheckpoints = sessionActions.refreshCheckpoints,
+            onPreviewCheckpoint = sessionActions.previewCheckpoint,
+            onRestoreCheckpoint = sessionActions.restoreCheckpoint,
         )
     }
     HorizontalDivider()

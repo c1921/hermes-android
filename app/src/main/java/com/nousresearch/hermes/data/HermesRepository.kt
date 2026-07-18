@@ -34,6 +34,10 @@ import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
 import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfileInfo
+import com.nousresearch.hermes.protocol.RollbackCheckpoint
+import com.nousresearch.hermes.protocol.RollbackDiffResult
+import com.nousresearch.hermes.protocol.RollbackListResult
+import com.nousresearch.hermes.protocol.RollbackRestoreResult
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionBranchResult
 import com.nousresearch.hermes.protocol.SessionCompressResult
@@ -131,6 +135,12 @@ data class HermesState(
     val usageDays: Int = 30,
     val usageLoading: Boolean = false,
     val usageError: String? = null,
+    val checkpointsEnabled: Boolean? = null,
+    val checkpoints: List<RollbackCheckpoint> = emptyList(),
+    val checkpointPreview: CheckpointPreview? = null,
+    val checkpointsLoading: Boolean = false,
+    val checkpointNotice: String? = null,
+    val checkpointError: String? = null,
     val delegationStatus: DelegationStatusResponse? = null,
     val activeSubagents: List<SubagentProgress> = emptyList(),
     val subagentsBySession: Map<String, List<SubagentProgress>> = emptyMap(),
@@ -194,6 +204,12 @@ data class ModelSelection(val provider: String, val model: String) {
 data class PendingModelConfirmation(
     val selection: ModelSelection,
     val message: String,
+)
+
+data class CheckpointPreview(
+    val hash: String,
+    val stat: String,
+    val diff: String,
 )
 
 data class PendingAttachment(
@@ -371,7 +387,17 @@ class HermesRepository @Inject constructor(
         flushDraft()
         setLoading(true)
         val current = mutableState.value
-        mutableState.value = current.copy(activeStoredSession = session, timeline = TimelineState(), error = null)
+        mutableState.value = current.copy(
+            activeStoredSession = session,
+            timeline = TimelineState(),
+            checkpointsEnabled = null,
+            checkpoints = emptyList(),
+            checkpointPreview = null,
+            checkpointsLoading = false,
+            checkpointNotice = null,
+            checkpointError = null,
+            error = null,
+        )
         var opened = false
         runCatching {
             val prefetch = restClient.sessionMessages(
@@ -436,6 +462,12 @@ class HermesRepository @Inject constructor(
                 timeline = TimelineReducer.hydrate(created.messages),
                 runtimeInfo = created.info,
                 activeProfile = profile ?: mutableState.value.activeProfile,
+                checkpointsEnabled = null,
+                checkpoints = emptyList(),
+                checkpointPreview = null,
+                checkpointsLoading = false,
+                checkpointNotice = null,
+                checkpointError = null,
                 loading = false,
                 error = null,
             )
@@ -766,6 +798,12 @@ class HermesRepository @Inject constructor(
                 runtimeSessionId = branch.runtimeSessionId,
                 activeStoredSession = StoredSession(title = branch.title, profile = profile, source = "android"),
                 runtimeInfo = mutableState.value.runtimeInfo.copy(title = branch.title, storedSessionId = "", running = false),
+                checkpointsEnabled = null,
+                checkpoints = emptyList(),
+                checkpointPreview = null,
+                checkpointsLoading = false,
+                checkpointNotice = null,
+                checkpointError = null,
                 error = null,
             )
             opened = true
@@ -1579,6 +1617,166 @@ class HermesRepository @Inject constructor(
         }
     }
 
+    suspend fun refreshCheckpoints() {
+        if (mutableState.value.checkpointsLoading) return
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            checkpointsLoading = true,
+            checkpointNotice = null,
+            checkpointError = null,
+        )
+        runCatching { loadCheckpointList(sessionId) }
+            .onSuccess { result ->
+                if (mutableState.value.runtimeSessionId != sessionId) return@onSuccess
+                val safeCheckpoints = result.checkpoints
+                    .filter { CheckpointSafety.isValidIdentity(it.hash) }
+                    .distinctBy(RollbackCheckpoint::hash)
+                    .take(MAX_CHECKPOINTS)
+                    .map {
+                        it.copy(
+                            timestamp = it.timestamp.take(MAX_CHECKPOINT_LABEL_CHARACTERS),
+                            message = it.message.take(MAX_CHECKPOINT_LABEL_CHARACTERS),
+                        )
+                    }
+                mutableState.value = mutableState.value.copy(
+                    checkpointsEnabled = result.enabled,
+                    checkpoints = safeCheckpoints,
+                    checkpointPreview = null,
+                    checkpointsLoading = false,
+                    checkpointError = null,
+                    error = null,
+                )
+            }
+            .onFailure { error ->
+                if (error is CancellationException) throw error
+                failCheckpoints(error)
+            }
+    }
+
+    suspend fun previewCheckpoint(hash: String) {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        val checkpoint = runCatching {
+            CheckpointSafety.requireAdvertised(mutableState.value.checkpoints, hash)
+        }.getOrElse { error ->
+            failCheckpoints(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            checkpointsLoading = true,
+            checkpointPreview = null,
+            checkpointNotice = null,
+            checkpointError = null,
+        )
+        runCatching {
+            gateway.request(
+                "rollback.diff",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("hash", checkpoint.hash)
+                },
+            ).let { json.decodeFromJsonElement(RollbackDiffResult.serializer(), it) }
+        }.onSuccess { result ->
+            if (mutableState.value.runtimeSessionId != sessionId) return@onSuccess
+            mutableState.value = mutableState.value.copy(
+                checkpointPreview = CheckpointPreview(
+                    hash = checkpoint.hash,
+                    stat = result.stat.take(MAX_CHECKPOINT_STAT_CHARACTERS),
+                    diff = result.diff.take(MAX_CHECKPOINT_DIFF_CHARACTERS),
+                ),
+                checkpointsLoading = false,
+                checkpointError = null,
+                error = null,
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            failCheckpoints(error)
+        }
+    }
+
+    suspend fun restoreCheckpoint(hash: String) {
+        val sessionId = mutableState.value.runtimeSessionId ?: return
+        val checkpoint = runCatching {
+            CheckpointSafety.requireRestorable(
+                checkpoints = mutableState.value.checkpoints,
+                requestedHash = hash,
+                previewedHash = mutableState.value.checkpointPreview?.hash,
+                running = mutableState.value.runtimeInfo.running || mutableState.value.sending,
+            )
+        }.getOrElse { error ->
+            failCheckpoints(error)
+            return
+        }
+        val preview = mutableState.value.checkpointPreview ?: return
+        mutableState.value = mutableState.value.copy(
+            checkpointsLoading = true,
+            checkpointNotice = null,
+            checkpointError = null,
+        )
+        val restored = runCatching {
+            val latestDiff = gateway.request(
+                "rollback.diff",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("hash", checkpoint.hash)
+                },
+            ).let { json.decodeFromJsonElement(RollbackDiffResult.serializer(), it) }
+            CheckpointSafety.requireUnchangedPreview(preview, latestDiff)
+            gateway.request(
+                "rollback.restore",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("hash", checkpoint.hash)
+                },
+            ).let { json.decodeFromJsonElement(RollbackRestoreResult.serializer(), it) }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            if (error is IllegalStateException && error.message?.contains("changed after the preview") == true) {
+                mutableState.value = mutableState.value.copy(checkpointPreview = null)
+            }
+            failCheckpoints(error)
+            return
+        }
+        if (mutableState.value.runtimeSessionId != sessionId) return
+        if (!restored.success) {
+            failCheckpoints(IllegalStateException(restored.error ?: "Hermes did not restore the checkpoint"))
+            return
+        }
+
+        val history = runCatching {
+            gateway.request("session.history", buildJsonObject { put("session_id", sessionId) })
+                .let { json.decodeFromJsonElement(SessionHistoryResult.serializer(), it) }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            mutableState.value = mutableState.value.copy(
+                timeline = TimelineState(),
+                checkpointsLoading = false,
+                checkpointPreview = null,
+                checkpointError = "Hermes restored the workspace, but Android could not reload the changed session history: ${DiagnosticRedactor.redact(error.message ?: "unknown gateway error")}. Reopen this session before continuing.",
+            )
+            return
+        }
+        val refreshed = runCatching { loadCheckpointList(sessionId) }.getOrNull()
+        val safeRefreshed = refreshed?.checkpoints.orEmpty()
+            .filter { CheckpointSafety.isValidIdentity(it.hash) }
+            .distinctBy(RollbackCheckpoint::hash)
+            .take(MAX_CHECKPOINTS)
+        mutableState.value = mutableState.value.copy(
+            timeline = TimelineReducer.hydrate(history.messages),
+            checkpointsEnabled = refreshed?.enabled ?: mutableState.value.checkpointsEnabled,
+            checkpoints = if (refreshed == null) mutableState.value.checkpoints else safeRefreshed,
+            checkpointPreview = null,
+            checkpointsLoading = false,
+            checkpointNotice = "Restored checkpoint ${restored.restoredTo ?: checkpoint.hash.take(8)} and reloaded the session history (${restored.historyRemoved} messages removed).",
+            checkpointError = null,
+            error = null,
+        )
+    }
+
+    private suspend fun loadCheckpointList(sessionId: String): RollbackListResult =
+        gateway.request("rollback.list", buildJsonObject { put("session_id", sessionId) })
+            .let { json.decodeFromJsonElement(RollbackListResult.serializer(), it) }
+
     suspend fun refreshAgents() {
         if (mutableState.value.agentsLoading) return
         mutableState.value = mutableState.value.copy(agentsLoading = true, agentsError = null)
@@ -2142,6 +2340,7 @@ class HermesRepository @Inject constructor(
             gatewayRestarting = false,
             mcpLoading = false,
             usageLoading = false,
+            checkpointsLoading = false,
             agentsLoading = false,
             skillHubLoading = false,
             sessionSearchLoading = false,
@@ -2192,6 +2391,15 @@ class HermesRepository @Inject constructor(
         )
     }
 
+    private fun failCheckpoints(error: Throwable) {
+        mutableState.value = mutableState.value.copy(
+            checkpointsLoading = false,
+            checkpointError = DiagnosticRedactor.redact(
+                error.message ?: error::class.simpleName ?: "Hermes checkpoint request failed",
+            ),
+        )
+    }
+
     private fun scheduleReconnect() {
         if (reconnectJob?.isActive == true) return
         reconnectJob = scope.launch {
@@ -2232,6 +2440,10 @@ private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
 private const val MAX_MCP_NAME_CHARACTERS = 200
 private const val MAX_USAGE_LABEL_CHARACTERS = 200
 private const val MAX_CONTEXT_CATEGORIES = 32
+private const val MAX_CHECKPOINTS = 100
+private const val MAX_CHECKPOINT_LABEL_CHARACTERS = 300
+private const val MAX_CHECKPOINT_STAT_CHARACTERS = 2_000
+private const val MAX_CHECKPOINT_DIFF_CHARACTERS = 4_000
 private const val MAX_AGENT_EVENT_SESSIONS = 32
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18

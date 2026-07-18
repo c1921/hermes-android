@@ -31,6 +31,7 @@ For protocol work, inspect the exact upstream Hermes source and cite the commit 
 
 Recent completed slices on `main`:
 
+- Checkpoint management adds session-scoped checkpoint listing, mandatory bounded diff preview, explicit full-workspace restore confirmation, busy-session rejection, full-hash allowlisting, and authoritative history rehydration after Hermes removes the affected turn. File-scoped rollback remains omitted until a safe server file selector can supply the exact relative path.
 - Usage management adds profile-scoped 7/30/90-day token, API-call, model, tool, skill and cost summaries plus the live session's `session.context_breakdown`.
 - MCP management adds profile-scoped configured-server and Nous catalogue inspection, backend connection probes, enable/disable, and live `reload.mcp`; server creation/edit/removal, catalog install, OAuth, and per-tool filters remain follow-up work.
 - `889aa37` adds the mobile Command Center with live delegation status, subagent trees, pause/resume, confirmed interruption, session-owned background processes, and confirmed process stop.
@@ -67,7 +68,6 @@ Good unblocked candidates include:
 
 - MCP server creation/edit/removal, catalog installation, OAuth setup, and per-tool filters using the existing audited REST contracts.
 - Toolset and structured general-configuration management.
-- Checkpoint list, diff, and explicitly confirmed rollback.
 - Pending-message queue and composer history.
 - Persisted spawn-tree replay using the existing server contract.
 - Platform integrations that do not require a new upstream contract.
@@ -113,6 +113,8 @@ Record device-only verification as deferred, with exact steps for the next local
 For the MCP slice, the deferred pass must inspect configured and catalog layouts on phone and expanded widths; exercise TalkBack, 130%+ text, keyboard focus, and profile switching; then use a disposable MCP server on a pinned Hermes backend to verify probe success/failure, enable/disable, live-session reload without transcript loss, and the saved-but-reload-failed recovery message. None of those checks are established by the cloud unit/lint/build gate.
 
 For the usage slice, the deferred pass must inspect 7/30/90-day, empty, large-number and partial-context states on phone and expanded widths; exercise TalkBack traversal, 130%+ text and keyboard focus; compare one disposable profile's totals with the pinned Dashboard; and verify an open session's context category total and capacity before and after a message. The cloud gate does not establish those visual, accessibility or live-accounting checks.
+
+For the checkpoint slice, the deferred pass must use a disposable workspace and checkpoint-enabled session on the pinned backend; create at least two file mutations, compare Android's list and raw diff with `/rollback` and `/rollback diff`, verify that an active run disables restore, confirm a full rollback changes only the expected server files, confirm the affected last turn disappears after history reload, and verify the pre-rollback snapshot can restore the prior state. Inspect disabled, empty, long-diff, error and post-restore states at phone and expanded widths with TalkBack, 130%+ text and keyboard focus. File-scoped restore is not exposed. The cloud gate does not establish visual layout, accessibility, live filesystem mutation, or rollback recovery.
 
 ## Working method
 

@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CallSplit
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -27,7 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.nousresearch.hermes.data.HermesState
 
-private enum class SessionDialog { RENAME, BRANCH, COMPRESS, RETRY, RESET, UNDO }
+private enum class SessionDialog { RENAME, BRANCH, COMPRESS, RETRY, RESET, UNDO, CHECKPOINTS }
 
 @Composable
 internal fun SessionActions(
@@ -39,6 +40,9 @@ internal fun SessionActions(
     onCompress: (String) -> Unit,
     onReset: () -> Unit,
     onArchive: () -> Unit,
+    onRefreshCheckpoints: () -> Unit,
+    onPreviewCheckpoint: (String) -> Unit,
+    onRestoreCheckpoint: (String) -> Unit,
 ) {
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var dialog by rememberSaveable { mutableStateOf<SessionDialog?>(null) }
@@ -93,6 +97,15 @@ internal fun SessionActions(
                 input = ""
                 menuOpen = false
                 dialog = SessionDialog.COMPRESS
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Checkpoints") },
+            leadingIcon = { Icon(Icons.Outlined.History, null) },
+            onClick = {
+                menuOpen = false
+                dialog = SessionDialog.CHECKPOINTS
+                onRefreshCheckpoints()
             },
         )
         DropdownMenuItem(
@@ -197,6 +210,13 @@ internal fun SessionActions(
                 ) { Text("Start new session") }
             },
             dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+        )
+        SessionDialog.CHECKPOINTS -> CheckpointDialog(
+            state = state,
+            onRefresh = onRefreshCheckpoints,
+            onPreview = onPreviewCheckpoint,
+            onRestore = onRestoreCheckpoint,
+            onDismiss = { dialog = null },
         )
         null -> Unit
     }

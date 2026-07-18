@@ -116,6 +116,9 @@ class HermesViewModel @Inject constructor(
         repository.setMcpServerEnabled(name, enabled)
     }
     fun refreshUsage(days: Int) = viewModelScope.launch { repository.refreshUsage(days) }
+    fun refreshCheckpoints() = viewModelScope.launch { repository.refreshCheckpoints() }
+    fun previewCheckpoint(hash: String) = viewModelScope.launch { repository.previewCheckpoint(hash) }
+    fun restoreCheckpoint(hash: String) = viewModelScope.launch { repository.restoreCheckpoint(hash) }
     fun refreshAgents() = viewModelScope.launch { repository.refreshAgents() }
     fun setDelegationPaused(paused: Boolean) = viewModelScope.launch { repository.setDelegationPaused(paused) }
     fun interruptSubagent(id: String) = viewModelScope.launch { repository.interruptSubagent(id) }

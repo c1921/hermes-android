@@ -48,3 +48,16 @@ Proposal: publish a versioned JSON Schema or OpenAPI plus JSON-RPC method/event 
 
 Suggested boundary: schema and golden fixtures first; generators and clients follow independently. Avoid changing runtime behaviour in the schema commit.
 
+## 5. Atomic rollback preview precondition
+
+Existing limitation: `rollback.diff` returns a bounded textual diff and stat, while `rollback.restore` accepts only the checkpoint hash. A full client can recheck the preview immediately before restore, as Android does, but the gateway cannot atomically reject a workspace mutation occurring between that check and restore.
+
+Proposal: advertise an optional `rollback_precondition_v1` capability. Return an opaque, short-lived `preview_id` from `rollback.diff`, bound server-side to the runtime session, checkpoint, working directory and complete current workspace tree. Allow `rollback.restore` to accept `expected_preview_id` and reject if that bound state no longer matches immediately before mutation.
+
+Compatibility: both fields are additive and optional. Existing clients and restores retain current behaviour; capable clients send the precondition after displaying the preview.
+
+Security: preview IDs must be unpredictable, short-lived, single-use after successful restore, scoped to the authenticated runtime session and never reveal a server path. Rate-limit creation and bound server storage.
+
+Tests: matching restore, workspace change, checkpoint mismatch, session/profile mismatch, expiry, replay, concurrent restore, busy-session rejection and legacy restore without a precondition.
+
+Suggested commits: capability and preview-store contract → atomic restore enforcement/tests → protocol documentation. No upstream pull request is opened by this repository.
