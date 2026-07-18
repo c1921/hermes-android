@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.File
+import java.net.URI
 import java.util.UUID
 
 fun textShareIntent(text: String): Intent = Intent(Intent.ACTION_SEND).apply {
@@ -36,6 +37,15 @@ fun fileOpenIntent(uri: Uri, mimeType: String, name: String): Intent = Intent(In
     clipData = ClipData.newRawUri(name, uri)
     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 }
+
+internal fun safeExternalUrl(raw: String): String? = runCatching {
+    val value = raw.trim()
+    require(value.length in 1..2_048 && value.none(Char::isISOControl))
+    val uri = URI(value)
+    require(uri.scheme?.lowercase() in setOf("http", "https"))
+    require(!uri.host.isNullOrBlank() && uri.userInfo == null)
+    uri.toASCIIString()
+}.getOrNull()
 
 internal fun safeContentName(raw: String?, fallback: String): String =
     raw?.take(200)?.replace(UNSAFE_NAME_CHARS, "_")?.takeUnless { it.isBlank() || it == "." || it == ".." } ?: fallback

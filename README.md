@@ -29,6 +29,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Durable active-session pending-message queue with FIFO drain, edit/remove/retry controls, and bounded failure handling through Hermes `prompt.submit`
 - [x] Gateway-backed slash command catalogue, live completions, argument replacement, curated mobile execution, skill and quick-command dispatch, inline output, and composer prefill
 - [x] Streamed assistant text, reasoning, status, and structured tool activity
+- [x] Completed assistant GFM Markdown with headings, lists, quotes, tables, inline code, rounded syntax-highlighted code blocks, and constrained external web links
 - [x] Dangerous-command approval, denial, clarification, interruption, session-only YOLO, and non-persistent masked sudo/secret prompts with expiry handling
 - [x] Dynamic Hermes model/provider catalogue, model selection, reasoning effort, and fast mode
 - [x] Provider API-key and custom-endpoint management through Hermes-owned APIs
@@ -57,7 +58,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 ### Partial foundations
 
 - [ ] **Partial:** reconnect uses bounded backoff and authoritative session rehydration, but exact in-flight delta replay needs a server event cursor.
-- [ ] **Partial:** tool activity is structured and expandable; specialised renderers for every Hermes tool are not complete.
+- [ ] **Partial:** tool activity is structured and expandable; specialised renderers and canonical inline media for every Hermes tool are not complete.
 - [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews/actions work; upload progress, large streamed uploads, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
 - [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report; SBOM and release provenance remain.

@@ -108,6 +108,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -126,6 +127,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -138,6 +141,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -173,12 +177,20 @@ import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
 import com.nousresearch.hermes.platform.newCameraCaptureUri
+import com.nousresearch.hermes.platform.safeExternalUrl
 import com.nousresearch.hermes.platform.textShareIntent
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
-import kotlinx.coroutines.flow.first
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.compose.elements.highlightedCodeBlock
+import com.mikepenz.markdown.compose.elements.highlightedCodeFence
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.markdownAnimations
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 private val WideLayout = 840.dp
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
@@ -1540,7 +1552,10 @@ internal fun MessageBlock(
                 }
                 Spacer(Modifier.height(5.dp))
                 SelectionContainer {
-                    RichText(message.text.ifBlank { if (message.streaming) "▍" else "" })
+                    RichText(
+                        text = message.text.ifBlank { if (message.streaming) "▍" else "" },
+                        markdown = message.role == MessageRole.ASSISTANT && !message.streaming,
+                    )
                 }
                 actionError?.let { error ->
                     Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -1551,7 +1566,11 @@ internal fun MessageBlock(
 }
 
 @Composable
-private fun RichText(text: String) {
+internal fun RichText(text: String, markdown: Boolean) {
+    if (markdown) {
+        MarkdownReply(text)
+        return
+    }
     val parts = remember(text) { text.split("```") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         parts.forEachIndexed { index, part ->
@@ -1563,6 +1582,63 @@ private fun RichText(text: String) {
                 Text(part.trim(), style = MaterialTheme.typography.bodyLarge)
             }
         }
+    }
+}
+
+@Composable
+private fun MarkdownReply(text: String) {
+    val context = LocalContext.current
+    val uriHandler = remember(context) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                safeExternalUrl(uri)?.let { safe ->
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(safe))) }
+                }
+            }
+        }
+    }
+    val body = MaterialTheme.typography.bodyLarge
+    CompositionLocalProvider(LocalUriHandler provides uriHandler) {
+        Markdown(
+            content = text,
+            modifier = Modifier.fillMaxWidth(),
+            colors = markdownColor(
+                text = MaterialTheme.colorScheme.onSurface,
+                codeBackground = MaterialTheme.colorScheme.surfaceVariant,
+                inlineCodeBackground = MaterialTheme.colorScheme.surfaceVariant,
+                dividerColor = MaterialTheme.colorScheme.outlineVariant,
+                tableBackground = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+            typography = markdownTypography(
+                h1 = MaterialTheme.typography.headlineMedium,
+                h2 = MaterialTheme.typography.titleLarge,
+                h3 = MaterialTheme.typography.titleMedium,
+                h4 = body.copy(fontWeight = FontWeight.Bold),
+                h5 = body.copy(fontWeight = FontWeight.Bold),
+                h6 = body.copy(fontWeight = FontWeight.Bold),
+                text = body,
+                paragraph = body,
+                ordered = body,
+                bullet = body,
+                list = body,
+                code = MaterialTheme.typography.bodyMedium,
+                inlineCode = MaterialTheme.typography.bodyMedium,
+                quote = MaterialTheme.typography.bodyMedium,
+                link = body.copy(
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline,
+                ),
+                table = MaterialTheme.typography.bodyMedium,
+            ),
+            components = markdownComponents(
+                codeBlock = highlightedCodeBlock,
+                codeFence = highlightedCodeFence,
+            ),
+            animations = markdownAnimations(animateTextSize = { this }),
+            loading = { Text(text, modifier = it, style = body) },
+            error = { Text(text, modifier = it, style = body) },
+        )
     }
 }
 

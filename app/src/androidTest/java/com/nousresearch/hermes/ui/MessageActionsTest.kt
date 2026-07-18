@@ -3,6 +3,7 @@ package com.nousresearch.hermes.ui
 import android.content.ClipboardManager
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nousresearch.hermes.domain.MessageRole
@@ -36,5 +37,21 @@ class MessageActionsTest {
         val clipboard = InstrumentationRegistry.getInstrumentation().targetContext
             .getSystemService(ClipboardManager::class.java)
         assertEquals(text, clipboard.primaryClip!!.getItemAt(0).text.toString())
+    }
+
+    @Test
+    fun completedAssistantMessageRendersMarkdown() {
+        compose.setContent {
+            HermesTheme {
+                RichText(
+                    "# Rendered heading\n\n- First item\n- Second item\n\n```kotlin\nval answer = 42\n```",
+                    markdown = true,
+                )
+            }
+        }
+
+        compose.onNodeWithText("Rendered heading").assertExists()
+        compose.onNodeWithText("First item").assertExists()
+        compose.onNodeWithText("val answer = 42", substring = true).assertExists()
     }
 }

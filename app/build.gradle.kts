@@ -71,6 +71,8 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.markdown.code)
+    implementation(libs.markdown.m3)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     ksp(libs.hilt.compiler)
