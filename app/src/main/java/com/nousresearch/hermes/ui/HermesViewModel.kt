@@ -43,6 +43,8 @@ class HermesViewModel @Inject constructor(
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
     fun steer(text: String) = viewModelScope.launch { repository.steer(text) }
     fun updateDraft(value: String) = repository.updateDraft(value)
+    fun completeSlash(text: String) = repository.completeSlash(text)
+    fun executeSlash(command: String) = viewModelScope.launch { repository.executeSlash(command) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
     fun removeAttachment(id: String) = viewModelScope.launch { repository.removePendingAttachment(id) }
     fun refreshModels() = viewModelScope.launch { repository.refreshModelOptions(refresh = true) }

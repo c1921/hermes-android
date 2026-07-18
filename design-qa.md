@@ -20,6 +20,8 @@ Implementation evidence:
 - Rounded session search: `/tmp/hermes-android-qa-qxuQgq/nous-brand-session-search-v1.png`
 - Rounded session action menu: `/tmp/hermes-android-qa-qxuQgq/hermes-session-actions.png`
 - Confirmed fresh-session dialog: `/tmp/hermes-android-qa-qxuQgq/hermes-reset-confirm2.png`
+- Slash-command palette with the Samsung IME: `/tmp/hermes-android-qa-qxuQgq/hermes-position-fixed.png`
+- Harmless slash-command result: `/tmp/hermes-android-qa-qxuQgq/hermes-slash-version-result.png`
 - Full comparison: `/tmp/hermes-android-qa-qxuQgq/design-qa-full-v2.png`
 - Focused comparison: `/tmp/hermes-android-qa-qxuQgq/design-qa-focus-v2.png`
 
@@ -38,6 +40,7 @@ No actionable P0, P1, or P2 visual mismatch remains.
 - Copy and content: site language anchors the onboarding hierarchy while Android-specific copy accurately describes the existing backend relationship and security boundary.
 - Icons and controls: Material outlined icons provide a consistent native stroke family. Rounded buttons and fields are an intentional requirement from the product owner, replacing the site's square web controls without changing hierarchy.
 - Accessibility and responsiveness: the implementation was checked in dark and light modes, at 130% text, with the IME visible, and with animator scale disabled. The onboarding and form scroll, the CTA remains reachable, and no labels clip on the 360dp device.
+- Composer and IME positioning: the activity uses resize semantics and the rounded command palette has a bounded, scrollable height. The physical Samsung check kept the app bar, live-session controls, palette, and composer visible together while the keyboard was open. Selecting `/version` produced an inline `SYSTEM` result without creating a persisted session or message.
 
 ## Comparison history
 
@@ -48,6 +51,14 @@ Earlier finding: P2, onboarding hero was too small relative to the source and ap
 Fix: moved the CTA directly below the heading/body, increased the official hero artwork from a 180dp to 280dp maximum height, and moved the connection architecture strip below the image.
 
 Post-fix evidence: `/tmp/hermes-android-qa-qxuQgq/design-qa-full-v2.png` and `/tmp/hermes-android-qa-qxuQgq/design-qa-focus-v2.png`. The artwork now owns the lower half of the mobile hero, the CTA is above it and immediately reachable, and the heading-to-art proportions track the source while fitting the phone viewport.
+
+### Iteration 2
+
+Earlier finding: P1, opening the slash-command palette with the Samsung keyboard panned the entire activity upward and moved the app bar offscreen.
+
+Fix: set the chat activity to resize around the IME and cap the rounded palette at 168dp with internal scrolling.
+
+Post-fix evidence: `/tmp/hermes-android-qa-qxuQgq/hermes-position-fixed.png`. The app bar, model and permission controls, palette, and composer remain visible in one 360dp-wide viewport.
 
 ## Open questions
 
@@ -62,6 +73,7 @@ Post-fix evidence: `/tmp/hermes-android-qa-qxuQgq/design-qa-full-v2.png` and `/t
 - [x] Licensed high-contrast display fallback
 - [x] Rounded shape system across controls and text fields
 - [x] Physical-device dark/light, text-scale, IME, motion, and connection checks
+- [x] Physical-device slash completion, selection, safe execution, and IME positioning check
 - [x] Full and focused source-to-device comparison
 
 ## Follow-up polish

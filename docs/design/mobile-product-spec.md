@@ -36,6 +36,7 @@ The launcher uses Hermes Desktop's official application icon. Product screens us
 - Tool and provider errors retain technical status codes with secrets removed.
 - Process recreation restores selected backend metadata and backend/profile/session-scoped drafts; live state and navigation are rehydrated from Hermes rather than trusted from a stale local process snapshot.
 - Retry, undo and reset are explicit confirmed session actions. Reset closes the old live runtime before opening a clean one, while its durable transcript remains available in the session list.
+- Typing `/` opens Hermes' own categorized command catalogue above the composer. Suggestions and arguments come from the gateway, but Android filters terminal-only built-ins and supports every structured dispatch result: inline output, alias, send, skill, and editable prefill.
 
 ## Notifications and permissions
 

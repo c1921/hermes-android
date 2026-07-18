@@ -34,6 +34,9 @@ import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.SkillHubPreview
 import com.nousresearch.hermes.protocol.SkillHubResult
 import com.nousresearch.hermes.protocol.SkillHubScanResult
+import com.nousresearch.hermes.protocol.SlashCommandCatalog
+import com.nousresearch.hermes.protocol.SlashCommandResult
+import com.nousresearch.hermes.protocol.SlashCompletionResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.security.DiagnosticRedactor
@@ -72,6 +75,9 @@ data class HermesState(
     val attaching: Boolean = false,
     val pendingAttachments: List<PendingAttachment> = emptyList(),
     val draft: String = "",
+    val slashSuggestions: List<SlashSuggestion> = emptyList(),
+    val slashLoading: Boolean = false,
+    val slashQuery: String = "",
     val runtimeInfo: SessionRuntimeInfo = SessionRuntimeInfo(),
     val modelOptions: ModelOptionsResult? = null,
     val modelsLoading: Boolean = false,
@@ -159,6 +165,13 @@ data class PendingAttachment(
     val queuedImagePaths: List<String> = emptyList(),
 )
 
+data class SlashSuggestion(
+    val text: String,
+    val display: String,
+    val meta: String,
+    val group: String,
+)
+
 @Singleton
 class HermesRepository @Inject constructor(
     private val backendRegistry: BackendRegistry,
@@ -175,6 +188,9 @@ class HermesRepository @Inject constructor(
     private var reconnectJob: Job? = null
     private var draftSaveJob: Job? = null
     private var sessionSearchJob: Job? = null
+    private var slashCompletionJob: Job? = null
+    private var extensionSlashCommands: Set<String>? = null
+    private var cachedSlashCatalog: List<SlashSuggestion>? = null
     private var intentionalDisconnect = false
     val state = mutableState.asStateFlow()
     val connectionState = gateway.connectionState
@@ -391,6 +407,101 @@ class HermesRepository @Inject constructor(
         draftSaveJob = scope.launch {
             delay(DRAFT_SAVE_DEBOUNCE_MILLIS)
             draftStore.put(context, bounded)
+        }
+    }
+
+    fun completeSlash(text: String) {
+        val cleaned = text.take(MAX_SLASH_TEXT_CHARACTERS)
+        slashCompletionJob?.cancel()
+        if (!cleaned.startsWith('/')) {
+            mutableState.value = mutableState.value.copy(
+                slashSuggestions = emptyList(),
+                slashLoading = false,
+                slashQuery = "",
+            )
+            return
+        }
+        mutableState.value = mutableState.value.copy(slashLoading = true, slashQuery = cleaned)
+        slashCompletionJob = scope.launch {
+            delay(SLASH_COMPLETION_DEBOUNCE_MILLIS)
+            runCatching {
+                activeCredentials()
+                val catalogueSuggestions = loadSlashCatalog()
+                if (cleaned == "/") {
+                    catalogueSuggestions
+                } else {
+                    val completed = gateway.request(
+                        "complete.slash",
+                        buildJsonObject { put("text", cleaned) },
+                    ).let { json.decodeFromJsonElement(SlashCompletionResult.serializer(), it) }
+                    mobileCompletionSuggestions(cleaned, completed, extensionSlashCommands.orEmpty())
+                }
+            }.onSuccess { suggestions ->
+                if (mutableState.value.slashQuery == cleaned) {
+                    mutableState.value = mutableState.value.copy(
+                        slashSuggestions = suggestions.take(MAX_SLASH_SUGGESTIONS),
+                        slashLoading = false,
+                    )
+                }
+            }.onFailure { error ->
+                if (error !is CancellationException && mutableState.value.slashQuery == cleaned) {
+                    mutableState.value = mutableState.value.copy(
+                        slashSuggestions = emptyList(),
+                        slashLoading = false,
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun executeSlash(rawCommand: String) {
+        try {
+            executeSlashUnchecked(rawCommand)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            fail(error)
+        }
+    }
+
+    private suspend fun executeSlashUnchecked(rawCommand: String) {
+        val command = rawCommand.trim().take(MAX_SLASH_TEXT_CHARACTERS)
+        require(command.startsWith('/') && command.length > 1) { "Enter a Hermes slash command" }
+        val body = command.dropWhile { it == '/' }
+        val name = body.substringBefore(' ').lowercase()
+        val argument = body.substringAfter(' ', "").trim()
+        activeCredentials()
+        loadSlashCatalog()
+        if (!isMobileSlashCommand("/$name", extensionSlashCommands.orEmpty())) {
+            error("/$name is not available in the Android app")
+        }
+        when (name) {
+            "new", "reset" -> {
+                clearCurrentDraft()
+                newSession(mutableState.value.activeStoredSession?.profile)
+            }
+            "retry" -> {
+                clearCurrentDraft()
+                retryLastMessage()
+            }
+            "undo" -> {
+                clearCurrentDraft()
+                undoLastTurn()
+            }
+            "compress" -> {
+                clearCurrentDraft()
+                compressActive(argument)
+            }
+            "branch" -> {
+                clearCurrentDraft()
+                branchActive(argument)
+            }
+            "title" -> {
+                require(argument.isNotBlank()) { "Usage: /title <name>" }
+                clearCurrentDraft()
+                renameActive(argument)
+            }
+            else -> executeRemoteSlash(command, name, argument)
         }
     }
 
@@ -1337,6 +1448,8 @@ class HermesRepository @Inject constructor(
 
     private suspend fun connect(backend: BackendConfig) {
         if (mutableState.value.backend?.id != backend.id) flushDraft()
+        cachedSlashCatalog = null
+        extensionSlashCommands = null
         intentionalDisconnect = false
         if (backend.authMode != AuthMode.DASHBOARD_SESSION) {
             mutableState.value = HermesState(
@@ -1399,6 +1512,115 @@ class HermesRepository @Inject constructor(
         draftSaveJob = null
         contexts.forEach { draftStore.remove(it) }
         mutableState.value = mutableState.value.copy(draft = "")
+    }
+
+    private suspend fun clearCurrentDraft() {
+        slashCompletionJob?.cancelAndJoin()
+        slashCompletionJob = null
+        val context = currentDraftContext()
+        if (context == null) {
+            mutableState.value = mutableState.value.copy(draft = "")
+        } else {
+            clearDraft(listOf(context))
+        }
+        mutableState.value = mutableState.value.copy(
+            slashSuggestions = emptyList(),
+            slashLoading = false,
+            slashQuery = "",
+        )
+    }
+
+    private suspend fun loadSlashCatalog(): List<SlashSuggestion> {
+        cachedSlashCatalog?.let { return it }
+        return gateway.request("commands.catalog", buildJsonObject {})
+            .let { json.decodeFromJsonElement(SlashCommandCatalog.serializer(), it) }
+            .let(::mobileCatalogSuggestions)
+            .also { suggestions ->
+                cachedSlashCatalog = suggestions
+                extensionSlashCommands = suggestions
+                    .filter { it.group == "Skills" || it.group == "User commands" }
+                    .map { it.text.substringBefore(' ').lowercase() }
+                    .toSet()
+            }
+    }
+
+    private suspend fun executeRemoteSlash(
+        command: String,
+        name: String,
+        argument: String,
+        depth: Int = 0,
+    ) {
+        require(depth < MAX_SLASH_ALIAS_DEPTH) { "Hermes slash alias depth exceeded" }
+        val sessionId = mutableState.value.runtimeSessionId ?: error("Open a Hermes session before running /$name")
+        val raw = try {
+            gateway.request(
+                "slash.exec",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("command", command.dropWhile { it == '/' })
+                },
+            )
+        } catch (error: Throwable) {
+            if (error is CancellationException) throw error
+            gateway.request(
+                "command.dispatch",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("name", name)
+                    put("arg", argument)
+                },
+            )
+        }
+        val result = json.decodeFromJsonElement(SlashCommandResult.serializer(), raw)
+        result.notice?.takeIf(String::isNotBlank)?.let(::appendSlashOutput)
+        when (result.type) {
+            "alias" -> {
+                val target = result.target?.trim().orEmpty()
+                require(target.isNotEmpty()) { "/$name returned an empty alias" }
+                val aliased = "/${target.removePrefix("/")}${argument.takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()}"
+                executeRemoteSlash(aliased, target.removePrefix("/").substringBefore(' ').lowercase(), argument, depth + 1)
+            }
+            "send", "skill" -> {
+                require(!mutableState.value.runtimeInfo.running && !mutableState.value.sending) {
+                    "Interrupt the current Hermes run before sending this command"
+                }
+                val message = result.message?.trim().orEmpty()
+                require(message.isNotEmpty()) { "/$name returned an empty prompt" }
+                if (result.type == "skill") appendSlashOutput("Loading skill: ${result.name ?: name}")
+                mutableState.value = mutableState.value.copy(
+                    draft = message,
+                    slashSuggestions = emptyList(),
+                    slashQuery = "",
+                )
+                send(message)
+            }
+            "prefill" -> {
+                val message = result.message.orEmpty().take(DraftStore.MAX_DRAFT_CHARACTERS)
+                mutableState.value = mutableState.value.copy(slashSuggestions = emptyList(), slashQuery = "")
+                updateDraft(message)
+            }
+            "exec", "plugin" -> {
+                clearCurrentDraft()
+                appendSlashOutput(result.output?.takeIf(String::isNotBlank) ?: "(no output)")
+            }
+            null -> {
+                clearCurrentDraft()
+                val output = result.output?.takeIf(String::isNotBlank) ?: "/$name: no output"
+                appendSlashOutput(result.warning?.takeIf(String::isNotBlank)?.let { "Warning: $it\n$output" } ?: output)
+            }
+            else -> error("Hermes returned unsupported slash result type ${result.type}")
+        }
+    }
+
+    private fun appendSlashOutput(text: String) {
+        mutableState.value = mutableState.value.copy(
+            timeline = TimelineReducer.appendSystemMessage(
+                mutableState.value.timeline,
+                "slash:${UUID.randomUUID()}",
+                text.take(MAX_SLASH_OUTPUT_CHARACTERS),
+            ),
+            error = null,
+        )
     }
 
     private suspend fun activeCredentials(): Pair<BackendConfig, String> {
@@ -1471,6 +1693,64 @@ private const val DIAGNOSTIC_POLL_LIMIT = 120
 private const val DRAFT_SAVE_DEBOUNCE_MILLIS = 300L
 private const val SESSION_SEARCH_DEBOUNCE_MILLIS = 300L
 private const val MAX_SESSION_SEARCH_RESULTS = 100
+private const val SLASH_COMPLETION_DEBOUNCE_MILLIS = 60L
+private const val MAX_SLASH_TEXT_CHARACTERS = 2_000
+private const val MAX_SLASH_OUTPUT_CHARACTERS = 20_000
+private const val MAX_SLASH_SUGGESTIONS = 12
+private const val MAX_SLASH_ALIAS_DEPTH = 5
+
+private val MOBILE_SLASH_COMMANDS = setOf(
+    "/agents", "/background", "/bg", "/btw", "/branch", "/compress", "/debug",
+    "/goal", "/new", "/personality", "/q", "/queue", "/reset", "/retry", "/rollback",
+    "/save", "/status", "/steer", "/stop", "/title", "/tools", "/undo", "/usage", "/version",
+)
+
+internal fun mobileCatalogSuggestions(catalog: SlashCommandCatalog): List<SlashSuggestion> {
+    val categorized = catalog.categories.flatMap { category ->
+        category.pairs.mapNotNull { pair ->
+            val command = pair.getOrNull(0)?.lowercase() ?: return@mapNotNull null
+            val userCommand = category.name == "User commands"
+            if (!userCommand && command !in MOBILE_SLASH_COMMANDS) return@mapNotNull null
+            SlashSuggestion(
+                text = pair[0],
+                display = pair[0],
+                meta = pair.getOrNull(1).orEmpty(),
+                group = if (userCommand) "User commands" else category.name.ifBlank { "Commands" },
+            )
+        }
+    }
+    val categorizedNames = catalog.categories.flatMap { it.pairs }.mapNotNull { it.firstOrNull()?.lowercase() }.toSet()
+    val skills = catalog.pairs.mapNotNull { pair ->
+        val command = pair.getOrNull(0) ?: return@mapNotNull null
+        if (command.lowercase() in categorizedNames) return@mapNotNull null
+        SlashSuggestion(command, command, pair.getOrNull(1).orEmpty(), "Skills")
+    }
+    return (categorized + skills).distinctBy { it.text.lowercase() }
+}
+
+internal fun mobileCompletionSuggestions(
+    query: String,
+    completion: SlashCompletionResult,
+    extensionCommands: Set<String>,
+): List<SlashSuggestion> {
+    val argumentCompletion = completion.replaceFrom > 1
+    val prefix = if (argumentCompletion) query.take(completion.replaceFrom.coerceIn(0, query.length)) else ""
+    return completion.items.mapNotNull { item ->
+        val fullText = if (argumentCompletion) prefix + item.text else item.text.let { if (it.startsWith('/')) it else "/$it" }
+        if (!argumentCompletion && !isMobileSlashCommand(fullText, extensionCommands)) return@mapNotNull null
+        SlashSuggestion(
+            text = fullText,
+            display = item.display.ifBlank { item.text },
+            meta = item.meta,
+            group = if (argumentCompletion) "Options" else if (fullText.substringBefore(' ').lowercase() in extensionCommands) "Skills" else "Commands",
+        )
+    }.distinctBy { it.text.lowercase() }
+}
+
+private fun isMobileSlashCommand(command: String, extensionCommands: Set<String>): Boolean {
+    val base = command.substringBefore(' ').lowercase()
+    return base in MOBILE_SLASH_COMMANDS || base in extensionCommands
+}
 
 private fun String.isSafeModelToken(): Boolean =
     isNotBlank() && length <= 512 && !startsWith('-') && none { it.isWhitespace() || it.isISOControl() }

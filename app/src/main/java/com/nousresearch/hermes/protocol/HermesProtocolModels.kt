@@ -210,6 +210,44 @@ data class SessionCloseResult(
 )
 
 @Serializable
+data class SlashCommandCategory(
+    val name: String = "",
+    val pairs: List<List<String>> = emptyList(),
+)
+
+@Serializable
+data class SlashCommandCatalog(
+    val pairs: List<List<String>> = emptyList(),
+    val categories: List<SlashCommandCategory> = emptyList(),
+    @SerialName("skill_count") val skillCount: Int = 0,
+    val warning: String = "",
+)
+
+@Serializable
+data class SlashCompletionItem(
+    val text: String,
+    val display: String = text,
+    val meta: String = "",
+)
+
+@Serializable
+data class SlashCompletionResult(
+    val items: List<SlashCompletionItem> = emptyList(),
+    @SerialName("replace_from") val replaceFrom: Int = 1,
+)
+
+@Serializable
+data class SlashCommandResult(
+    val type: String? = null,
+    val output: String? = null,
+    val warning: String? = null,
+    val target: String? = null,
+    val message: String? = null,
+    val notice: String? = null,
+    val name: String? = null,
+)
+
+@Serializable
 data class SessionHistoryResult(
     val count: Int,
     val messages: List<ProtocolMessage> = emptyList(),

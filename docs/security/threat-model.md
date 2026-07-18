@@ -15,6 +15,7 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | WebSocket credential leakage | Mint a fresh 30-second single-use Dashboard ticket for each upgrade; never place the session cookie in the upgrade or log WebSocket URLs | Implemented; deployment proxies should still redact query strings |
 | Token theft at rest | AES-GCM key generated in Android Keystore; ciphertext only in private preferences; backups disabled | Implemented |
 | Draft leakage at rest | App-private backend/profile/session-scoped DataStore, hashed preference keys, backup/device-transfer exclusion, bounded size, and backend-forget cleanup | Implemented baseline; rooted-device risk remains |
+| Unsafe slash command exposure | Catalogue is server-sourced but Android allow-lists supported built-ins, excludes terminal-only commands, bounds input/output, and only runs commands the user explicitly submits | Implemented baseline; server-side command policy remains authoritative |
 | OAuth interception/replay | PKCE S256, state/nonce, exact app link and single-use code | Blocked on native upstream flow |
 | Malicious deep link | Treat route IDs as untrusted; require authenticated backend lookup; no credentials/actions in links | Required before link routing ships |
 | Exported component/intent spoofing | Only launcher activity exported; explicit declarations; validate all inbound content | Implemented baseline |

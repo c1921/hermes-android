@@ -46,10 +46,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -58,7 +59,6 @@ import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
@@ -113,6 +113,7 @@ import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
+import com.nousresearch.hermes.data.SlashSuggestion
 import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
@@ -256,6 +257,8 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
                     onSend = viewModel::send,
                     onSteer = viewModel::steer,
                     onDraftChange = viewModel::updateDraft,
+                    onCompleteSlash = viewModel::completeSlash,
+                    onExecuteSlash = viewModel::executeSlash,
                     onAttach = viewModel::attach,
                     onRemoveAttachment = viewModel::removeAttachment,
                     onInterrupt = viewModel::interrupt,
@@ -338,7 +341,7 @@ private fun OnboardingScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { step = 0 }) { Icon(Icons.Outlined.ArrowBack, "Back") }
+                        IconButton(onClick = { step = 0 }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
                         Text("BACKEND LINK", style = MaterialTheme.typography.headlineMedium)
                     }
                     HermesField(label, { label = it }, "Connection name")
@@ -447,6 +450,8 @@ private fun HermesWorkspace(
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onDraftChange: (String) -> Unit,
+    onCompleteSlash: (String) -> Unit,
+    onExecuteSlash: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
@@ -537,7 +542,8 @@ private fun HermesWorkspace(
                         modifier = Modifier.weight(1f),
                     )
                     else -> ChatSurface(
-                        state, connection, onSend, onSteer, onDraftChange, onAttach, onRemoveAttachment, onInterrupt,
+                        state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
+                        onAttach, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, modelActions, sessionActions, Modifier.weight(1f),
                     )
                 }
@@ -556,7 +562,8 @@ private fun HermesWorkspace(
             ) { activeDestination ->
                 when (activeDestination) {
                     WorkspaceDestination.CHAT -> ChatSurface(
-                        state, connection, onSend, onSteer, onDraftChange, onAttach, onRemoveAttachment, onInterrupt,
+                        state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
+                        onAttach, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, modelActions, sessionActions,
                         Modifier.fillMaxSize(),
                         onBack = { destination = WorkspaceDestination.SESSIONS },
@@ -933,6 +940,8 @@ private fun ChatSurface(
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onDraftChange: (String) -> Unit,
+    onCompleteSlash: (String) -> Unit,
+    onExecuteSlash: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
@@ -974,6 +983,8 @@ private fun ChatSurface(
             )
             Composer(
                 draft = state.draft,
+                slashSuggestions = state.slashSuggestions,
+                slashLoading = state.slashLoading,
                 sending = state.sending || state.runtimeInfo.running,
                 attaching = state.attaching,
                 connected = connection is GatewayConnectionState.Open,
@@ -982,6 +993,8 @@ private fun ChatSurface(
                 onSend = onSend,
                 onSteer = onSteer,
                 onDraftChange = onDraftChange,
+                onCompleteSlash = onCompleteSlash,
+                onExecuteSlash = onExecuteSlash,
                 onAttach = onAttach,
                 onRemoveAttachment = onRemoveAttachment,
                 onInterrupt = onInterrupt,
@@ -1004,7 +1017,7 @@ private fun ChatHeader(
     sessionActions: SessionActionCallbacks,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        onBack?.let { IconButton(onClick = it) { Icon(Icons.Outlined.ArrowBack, "Back to sessions") } }
+        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sessions") } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(
                 state.activeStoredSession?.displayTitle ?: state.runtimeInfo.title.ifBlank { "New session" },
@@ -1057,6 +1070,12 @@ private fun Timeline(items: List<TimelineItem>) {
 @Composable
 private fun MessageBlock(message: TimelineItem.Message) {
     val user = message.role == MessageRole.USER
+    val label = when (message.role) {
+        MessageRole.USER -> "YOU"
+        MessageRole.ASSISTANT -> "HERMES"
+        MessageRole.SYSTEM -> "SYSTEM"
+        MessageRole.TOOL -> "TOOL"
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
         Surface(
             modifier = Modifier.fillMaxWidth(if (user) 0.88f else 1f),
@@ -1065,7 +1084,7 @@ private fun MessageBlock(message: TimelineItem.Message) {
             border = if (message.failed) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
         ) {
             Column(Modifier.padding(if (user) 14.dp else 6.dp)) {
-                Text(if (user) "YOU" else "HERMES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(5.dp))
                 RichText(message.text.ifBlank { if (message.streaming) "▍" else "" })
             }
@@ -1132,6 +1151,8 @@ private fun StatusBlock(status: TimelineItem.Status) {
 @Composable
 private fun Composer(
     draft: String,
+    slashSuggestions: List<SlashSuggestion>,
+    slashLoading: Boolean,
     sending: Boolean,
     attaching: Boolean,
     connected: Boolean,
@@ -1140,20 +1161,43 @@ private fun Composer(
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onDraftChange: (String) -> Unit,
+    onCompleteSlash: (String) -> Unit,
+    onExecuteSlash: (String) -> Unit,
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
 ) {
+    var pendingDestructiveSlash by rememberSaveable { mutableStateOf<String?>(null) }
     val focus = LocalFocusManager.current
     fun submit() {
         if (draft.isBlank()) return
-        if (sending) onSteer(draft) else onSend(draft)
+        if (draft.trimStart().startsWith('/')) {
+            val slash = draft.trim()
+            val normalized = slash.lowercase()
+            if (
+                normalized.substringBefore(' ') in setOf("/new", "/reset") ||
+                normalized.startsWith("/rollback restore")
+            ) {
+                pendingDestructiveSlash = slash
+            } else {
+                onExecuteSlash(slash)
+            }
+        } else if (sending) onSteer(draft) else onSend(draft)
         focus.clearFocus()
     }
+    LaunchedEffect(draft) { onCompleteSlash(draft) }
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(onAttach)
     }
     Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding().padding(12.dp)) {
+        if (slashSuggestions.isNotEmpty() || slashLoading) {
+            SlashSuggestions(
+                suggestions = slashSuggestions,
+                loading = slashLoading,
+                onSuggestion = onDraftChange,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         if (attachments.isNotEmpty() || attaching) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1210,10 +1254,93 @@ private fun Composer(
                     Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
                 }
                 IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) {
-                    Icon(Icons.Outlined.Send, "Steer the current run")
+                    Icon(Icons.AutoMirrored.Outlined.Send, "Steer the current run")
                 }
             } else {
-                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.Outlined.Send, "Send message") }
+                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.AutoMirrored.Outlined.Send, "Send message") }
+            }
+        }
+    }
+    pendingDestructiveSlash?.let { command ->
+        val restoresSnapshot = command.lowercase().startsWith("/rollback restore")
+        AlertDialog(
+            onDismissRequest = { pendingDestructiveSlash = null },
+            title = { Text(if (restoresSnapshot) "RESTORE SNAPSHOT?" else "START FRESH?") },
+            text = {
+                Text(
+                    if (restoresSnapshot) {
+                        "Hermes will replace the current workspace with the selected snapshot. Unsaved workspace changes may be lost."
+                    } else {
+                        "Hermes will end the current live conversation and open a clean session. Its stored transcript remains available in the session list."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDestructiveSlash = null
+                        onExecuteSlash(command)
+                    },
+                ) { Text(if (restoresSnapshot) "Restore snapshot" else "Start new session") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDestructiveSlash = null }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun SlashSuggestions(
+    suggestions: List<SlashSuggestion>,
+    loading: Boolean,
+    onSuggestion: (String) -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.fillMaxWidth().heightIn(max = 168.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+        ) {
+            if (loading && suggestions.isEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text("Loading Hermes commands", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            suggestions.forEachIndexed { index, suggestion ->
+                if (index == 0 || suggestions[index - 1].group != suggestion.group) {
+                    Text(
+                        suggestion.group.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    )
+                }
+                Surface(
+                    onClick = { onSuggestion(suggestion.text) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
+                        Text(suggestion.display, style = MaterialTheme.typography.titleMedium)
+                        if (suggestion.meta.isNotBlank()) {
+                            Text(
+                                suggestion.meta,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

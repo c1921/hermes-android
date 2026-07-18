@@ -71,4 +71,18 @@ class SessionLifecycleProtocolTest {
     fun `decodes idempotent live session close result`() {
         assertTrue(json.decodeFromString<SessionCloseResult>("""{"closed":true}""").closed)
     }
+
+    @Test
+    fun `decodes command dispatch result variants`() {
+        val skill = json.decodeFromString<SlashCommandResult>(
+            """{"type":"skill","name":"codex","message":"Use the Codex workflow"}""",
+        )
+        val prefill = json.decodeFromString<SlashCommandResult>(
+            """{"type":"prefill","message":"Edit this before sending","notice":"Turn restored"}""",
+        )
+
+        assertEquals("codex", skill.name)
+        assertEquals("Use the Codex workflow", skill.message)
+        assertEquals("Turn restored", prefill.notice)
+    }
 }

@@ -172,6 +172,10 @@ object TimelineReducer {
         items = state.items + TimelineItem.Message(id, MessageRole.USER, text),
     )
 
+    fun appendSystemMessage(state: TimelineState, id: String, text: String): TimelineState = state.copy(
+        items = state.items + TimelineItem.Message(id, MessageRole.SYSTEM, text),
+    )
+
     fun removeLastExchange(state: TimelineState): TimelineState {
         val lastUserIndex = state.items.indexOfLast {
             it is TimelineItem.Message && it.role == MessageRole.USER
