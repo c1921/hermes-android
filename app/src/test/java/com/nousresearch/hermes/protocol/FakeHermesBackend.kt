@@ -63,6 +63,12 @@ class FakeHermesBackend(
                             "session.history" -> json.parseToJsonElement(
                                 """{"count":1,"messages":[{"role":"user","content":"Earlier turn"}]}""",
                             )
+                            "spawn_tree.list" -> json.parseToJsonElement(
+                                """{"entries":[{"path":"/server/hermes/spawn-trees/stored-session/20260718T090000.json","session_id":"stored-session","started_at":100.0,"finished_at":110.0,"label":"Archive QA","count":2}]}""",
+                            )
+                            "spawn_tree.load" -> json.parseToJsonElement(
+                                """{"session_id":"stored-session","started_at":100.0,"finished_at":110.0,"label":"Archive QA","subagents":[{"id":"parent","parentId":null,"goal":"Coordinate QA","index":0,"status":"completed","taskCount":2,"toolCount":1,"notes":[],"thinking":[],"tools":[]},{"id":"child","parentId":"parent","goal":"Inspect build","index":1,"status":"completed","taskCount":2,"toolCount":1,"notes":[],"thinking":[],"tools":[]}]}""",
+                            )
                             else -> buildJsonObject { put("ok", true) }
                             }
                             webSocket.send(

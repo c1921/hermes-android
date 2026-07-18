@@ -63,6 +63,9 @@ import com.nousresearch.hermes.protocol.SlashCompletionResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.SubagentInterruptResponse
+import com.nousresearch.hermes.protocol.SpawnTreeListEntry
+import com.nousresearch.hermes.protocol.SpawnTreeListResponse
+import com.nousresearch.hermes.protocol.SpawnTreeSnapshot
 import com.nousresearch.hermes.protocol.ToolsetInfo
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import java.util.UUID
@@ -161,6 +164,10 @@ data class HermesState(
     val agentsLoading: Boolean = false,
     val agentsNotice: String? = null,
     val agentsError: String? = null,
+    val spawnTreeArchives: List<SpawnTreeListEntry> = emptyList(),
+    val spawnTreeReplay: SpawnTreeReplay? = null,
+    val spawnTreesLoading: Boolean = false,
+    val spawnTreesError: String? = null,
     val reconnectRequiredBackendId: String? = null,
     val error: String? = null,
 ) {
@@ -185,6 +192,11 @@ data class HermesState(
         const val MINIMUM_DESKTOP_CONTRACT = 3
     }
 }
+
+data class SpawnTreeReplay(
+    val archive: SpawnTreeListEntry,
+    val subagents: List<SubagentProgress>,
+)
 
 enum class DiagnosticAction(val wireName: String) {
     DOCTOR("doctor"),
@@ -2036,6 +2048,77 @@ class HermesRepository @Inject constructor(
         }.onFailure(::failAgents)
     }
 
+    suspend fun refreshSpawnTrees() {
+        if (mutableState.value.spawnTreesLoading) return
+        mutableState.value = mutableState.value.copy(spawnTreesLoading = true, spawnTreesError = null)
+        runCatching {
+            activeCredentials()
+            gateway.request(
+                "spawn_tree.list",
+                buildJsonObject {
+                    put("limit", MAX_SPAWN_TREE_ARCHIVES)
+                    put("cross_session", true)
+                },
+            ).let { json.decodeFromJsonElement(SpawnTreeListResponse.serializer(), it) }
+        }.onSuccess { result ->
+            val safe = result.entries
+                .filter {
+                    it.path.isNotBlank() && it.path.length <= MAX_SPAWN_TREE_PATH_CHARACTERS &&
+                        it.count in 1..MAX_AGENTS_PER_SPAWN_TREE
+                }
+                .map {
+                    it.copy(
+                        sessionId = it.sessionId?.take(MAX_SPAWN_TREE_LABEL_CHARACTERS),
+                        label = it.label.take(MAX_SPAWN_TREE_LABEL_CHARACTERS),
+                    )
+                }
+                .distinctBy(SpawnTreeListEntry::path)
+                .sortedByDescending { it.finishedAt ?: 0.0 }
+                .take(MAX_SPAWN_TREE_ARCHIVES)
+            mutableState.value = mutableState.value.copy(
+                spawnTreeArchives = safe,
+                spawnTreeReplay = mutableState.value.spawnTreeReplay?.takeIf { replay ->
+                    safe.any { it.path == replay.archive.path }
+                },
+                spawnTreesLoading = false,
+                spawnTreesError = null,
+            )
+        }.onFailure(::failSpawnTrees)
+    }
+
+    suspend fun loadSpawnTree(path: String) {
+        val archive = mutableState.value.spawnTreeArchives.firstOrNull { it.path == path }
+            ?: run {
+                failSpawnTrees(IllegalArgumentException("Hermes did not advertise this spawn-tree archive"))
+                return
+            }
+        mutableState.value = mutableState.value.copy(
+            spawnTreesLoading = true,
+            spawnTreesError = null,
+        )
+        runCatching {
+            activeCredentials()
+            val snapshot = gateway.request("spawn_tree.load", buildJsonObject { put("path", archive.path) })
+                .let { json.decodeFromJsonElement(SpawnTreeSnapshot.serializer(), it) }
+            require(snapshot.sessionId == null || archive.sessionId == null || snapshot.sessionId == archive.sessionId) {
+                "Hermes returned a spawn tree for a different session"
+            }
+            val finishedAt = ((snapshot.finishedAt ?: archive.finishedAt ?: 0.0) * 1_000)
+                .toLong().takeIf { it > 0 } ?: System.currentTimeMillis()
+            val items = snapshot.subagents.take(MAX_AGENTS_PER_SPAWN_TREE).mapIndexed { index, raw ->
+                SubagentReducer.fromSnapshot(raw, "archive:${archive.finishedAt?.toLong() ?: 0}:$index", finishedAt)
+            }.distinctBy(SubagentProgress::id)
+            require(items.isNotEmpty()) { "Hermes returned an empty spawn-tree archive" }
+            SpawnTreeReplay(archive, items)
+        }.onSuccess { replay ->
+            mutableState.value = mutableState.value.copy(
+                spawnTreeReplay = replay,
+                spawnTreesLoading = false,
+                spawnTreesError = null,
+            )
+        }.onFailure(::failSpawnTrees)
+    }
+
     suspend fun setDelegationPaused(paused: Boolean) {
         mutableState.value = mutableState.value.copy(agentsLoading = true, agentsNotice = null, agentsError = null)
         runCatching {
@@ -2699,6 +2782,7 @@ class HermesRepository @Inject constructor(
             usageLoading = false,
             checkpointsLoading = false,
             agentsLoading = false,
+            spawnTreesLoading = false,
             skillHubLoading = false,
             toolsetsLoading = false,
             sessionSearchLoading = false,
@@ -2718,6 +2802,21 @@ class HermesRepository @Inject constructor(
         mutableState.value = mutableState.value.copy(
             agentsLoading = false,
             agentsError = error.message ?: error::class.simpleName ?: "Hermes orchestration request failed",
+        )
+    }
+
+    private fun failSpawnTrees(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException ||
+            (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        if (reconnect) {
+            fail(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            spawnTreesLoading = false,
+            spawnTreesError = DiagnosticRedactor.redact(
+                error.message ?: error::class.simpleName ?: "Hermes spawn-tree request failed",
+            ),
         )
     }
 
@@ -2823,6 +2922,10 @@ private const val MAX_CHECKPOINT_LABEL_CHARACTERS = 300
 private const val MAX_CHECKPOINT_STAT_CHARACTERS = 2_000
 private const val MAX_CHECKPOINT_DIFF_CHARACTERS = 4_000
 private const val MAX_AGENT_EVENT_SESSIONS = 32
+private const val MAX_SPAWN_TREE_ARCHIVES = 30
+private const val MAX_AGENTS_PER_SPAWN_TREE = 100
+private const val MAX_SPAWN_TREE_PATH_CHARACTERS = 4_096
+private const val MAX_SPAWN_TREE_LABEL_CHARACTERS = 200
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
 private val USAGE_PERIODS = setOf(7, 30, 90)

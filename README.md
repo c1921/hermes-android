@@ -40,7 +40,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Profile-scoped MCP configured-server and Nous catalogue views, backend probes, reviewed catalog installation, confirmed removal, enable/disable, background-install polling, and live `reload.mcp`
 - [x] Profile-scoped 7/30/90-day token, API-call, model, tool, skill, cost, and live-session context breakdowns
 - [x] Session-scoped checkpoint listing, bounded diff preview, and explicitly confirmed full workspace rollback with authoritative history reload
-- [x] Command Center with live Hermes subagent trees, delegation pause/resume, confirmed subagent interruption, current-session background-process output, and confirmed process stop
+- [x] Command Center with live Hermes subagent trees, TUI-persisted cross-session spawn-tree replay, delegation pause/resume, confirmed subagent interruption, current-session background-process output, and confirmed process stop
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
 - [x] Profile-scoped Hermes toolset catalogue with server-advertised platform, setup state, tools, and enable/disable controls for future sessions
@@ -64,7 +64,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] Background push notifications and notification actions
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, per-tool filters, and structured general configuration
-- [ ] Persisted spawn-tree replay and mobile background delivery for Agents when Android is suspended
+- [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
 - [ ] Biometric lock, secure-screen option, Android share target, deep links, shortcuts, widgets, and other platform integrations
 - [ ] Signed release APK, release AAB, reproducibility verification, Baseline Profile, and macrobenchmarks

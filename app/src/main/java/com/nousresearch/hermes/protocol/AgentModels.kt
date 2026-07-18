@@ -2,6 +2,7 @@ package com.nousresearch.hermes.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class ActiveSubagent(
@@ -30,6 +31,30 @@ data class DelegationPauseResponse(val paused: Boolean = false)
 data class SubagentInterruptResponse(
     val found: Boolean = false,
     @SerialName("subagent_id") val subagentId: String = "",
+)
+
+@Serializable
+data class SpawnTreeListEntry(
+    val path: String,
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("started_at") val startedAt: Double? = null,
+    @SerialName("finished_at") val finishedAt: Double? = null,
+    val label: String = "",
+    val count: Int = 0,
+)
+
+@Serializable
+data class SpawnTreeListResponse(
+    val entries: List<SpawnTreeListEntry> = emptyList(),
+)
+
+@Serializable
+data class SpawnTreeSnapshot(
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("started_at") val startedAt: Double? = null,
+    @SerialName("finished_at") val finishedAt: Double? = null,
+    val label: String = "",
+    val subagents: List<JsonObject> = emptyList(),
 )
 
 @Serializable

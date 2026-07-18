@@ -132,6 +132,8 @@ class HermesViewModel @Inject constructor(
     fun previewCheckpoint(hash: String) = viewModelScope.launch { repository.previewCheckpoint(hash) }
     fun restoreCheckpoint(hash: String) = viewModelScope.launch { repository.restoreCheckpoint(hash) }
     fun refreshAgents() = viewModelScope.launch { repository.refreshAgents() }
+    fun refreshSpawnTrees() = viewModelScope.launch { repository.refreshSpawnTrees() }
+    fun loadSpawnTree(path: String) = viewModelScope.launch { repository.loadSpawnTree(path) }
     fun setDelegationPaused(paused: Boolean) = viewModelScope.launch { repository.setDelegationPaused(paused) }
     fun interruptSubagent(id: String) = viewModelScope.launch { repository.interruptSubagent(id) }
     fun stopBackgroundProcess(id: String) = viewModelScope.launch { repository.stopBackgroundProcess(id) }

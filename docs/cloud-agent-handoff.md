@@ -2,7 +2,7 @@
 
 - Snapshot date: 18 July 2026
 - Expected starting branch: `main`
-- Baseline before the latest cloud slice: `e4f665a3793ba4e40a37f33e85c0e215b14c8f21`
+- Baseline before the latest cloud slice: `0900caf98ff44c29136c8e3361468b00c06ab542`
 
 ## Objective
 
@@ -37,6 +37,7 @@ Recent completed slices on `main`:
 - Usage management adds profile-scoped 7/30/90-day token, API-call, model, tool, skill and cost summaries plus the live session's `session.context_breakdown`.
 - MCP management adds profile-scoped configured-server and Nous catalogue inspection, backend probes, reviewed non-OAuth catalog installation, canonical background-action polling, confirmed removal, enable/disable, and live `reload.mcp`; custom creation/edit, remote OAuth and per-tool filters remain follow-up work.
 - Toolset management adds the exact profile-scoped Dashboard catalogue and toggle contract under Capabilities. Android exposes server-advertised target platform, setup state and resolved tools, accepts only advertised identities, validates the full mutation acknowledgement, and tells users changes affect new sessions because upstream exposes no live toolset reload.
+- Command Center now lists and replays the bounded cross-session spawn-tree snapshots persisted by Hermes TUI through exact `spawn_tree.list/load` calls. Android loads only an advertised path, does not reveal server filesystem paths, checks list/load session identity, and defensively normalises bounded historical subagent detail. It does not claim that Desktop or Android turns were archived when the TUI did not save them.
 - `889aa37` adds the mobile Command Center with live delegation status, subagent trees, pause/resume, confirmed interruption, session-owned background processes, and confirmed process stop.
 - `072f2b9` adds messaging gateway management.
 - `17cb866` adds Hermes-native voice transcription and spoken playback. Android does not substitute platform TTS.
@@ -71,7 +72,7 @@ Good unblocked candidates include:
 
 - MCP custom-server creation, safe per-server editing, remote-client OAuth setup, and per-tool filters; edit/OAuth require the upstream changes recorded in the change plan.
 - Structured general-configuration management; basic toolset catalogue and toggles are complete.
-- Persisted spawn-tree replay using the existing server contract.
+- Agent background delivery and replay coverage for non-TUI clients; TUI-persisted `spawn_tree.list/load` replay is complete.
 - Platform integrations that do not require a new upstream contract.
 - The exact Desktop appearance presets (`nous`, `midnight`, `ember`, `mono`, `cyberpunk`, `slate`) after higher-impact functional work.
 
@@ -123,6 +124,8 @@ For the composer-history slice, the deferred pass must inspect empty, one-entry,
 For the pending-message queue slice, the deferred pass must use the pinned backend to hold a run active, enqueue at least three text turns, edit and remove non-head entries, then verify FIFO submission and authoritative transcript order after each settle. Force one rejected submission to verify bounded retry and manual recovery; kill and recreate Android before the run settles to verify durable scope and no duplicate drain; switch sessions and profiles to verify isolation; and confirm attachments disable queueing with the stated explanation. Inspect empty, full, long, multiline, draining and stuck states at phone and expanded widths with TalkBack, 130%+ text, IME open and hardware-keyboard focus. The cloud gate does not establish layout, accessibility, process-death timing or live runtime ordering.
 
 For the toolset slice, the deferred pass must compare Android's catalogue with the pinned Dashboard for at least one CLI toolset and one platform-restricted toolset; toggle each in a disposable profile, confirm the persisted `platform_toolsets` target and verify a newly created session receives the expected tool inventory while an already-open session is not misrepresented as reloaded. Inspect enabled, disabled, unconfigured, empty, long-description, long-tool-list, error and profile-switch states at phone and expanded widths with TalkBack, 130%+ text and keyboard focus. The cloud gate does not establish visual layout, accessibility or live configuration effects.
+
+For the spawn-tree replay slice, the deferred pass must run a disposable TUI session that completes a nested subagent tree, confirm the TUI persists it, then verify Android lists it without exposing the server path, loads the same parent/child ordering and detail, opens the matching durable session when present, and remains read-only. Also test a deleted archive between list/load, a malformed legacy snapshot, no archives, 30 archives, long labels, profile switching and a server restart. Inspect phone and expanded widths with TalkBack, 130%+ text and keyboard focus. The cloud gate does not establish visual layout, accessibility or real TUI persistence.
 
 ## Working method
 

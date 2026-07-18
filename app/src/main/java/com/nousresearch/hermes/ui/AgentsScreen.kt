@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.OpenInNew
@@ -50,6 +51,7 @@ import com.nousresearch.hermes.domain.SubagentRow
 import com.nousresearch.hermes.domain.SubagentStatus
 import com.nousresearch.hermes.protocol.BackgroundProcess
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.protocol.SpawnTreeListEntry
 import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.Warning
 import kotlinx.coroutines.delay
@@ -58,6 +60,8 @@ import kotlinx.coroutines.delay
 internal fun AgentsScreen(
     state: HermesState,
     onRefresh: () -> Unit,
+    onRefreshArchives: () -> Unit,
+    onLoadArchive: (String) -> Unit,
     onSetPaused: (Boolean) -> Unit,
     onInterrupt: (String) -> Unit,
     onStopProcess: (String) -> Unit,
@@ -73,6 +77,7 @@ internal fun AgentsScreen(
     }.sortedByDescending { it.second.updatedAtMillis }
 
     LaunchedEffect(Unit) {
+        onRefreshArchives()
         while (true) {
             onRefresh()
             delay(4_000)
@@ -83,12 +88,16 @@ internal fun AgentsScreen(
         ManagementHeader(
             "COMMAND CENTER",
             "Agents, delegation and current-session processes",
-            state.agentsLoading,
-            onRefresh,
+            state.agentsLoading || state.spawnTreesLoading,
+            {
+                onRefresh()
+                onRefreshArchives()
+            },
             onBack,
         )
         state.agentsNotice?.let { AgentNotice(it) }
         state.agentsError?.let { ManagementError(it) }
+        state.spawnTreesError?.let { ManagementError(it) }
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(12.dp),
@@ -140,6 +149,34 @@ internal fun AgentsScreen(
                     )
                 }
             }
+            section("ARCHIVED SPAWN TREES")
+            if (state.spawnTreeArchives.isEmpty() && !state.spawnTreesLoading) {
+                item { EmptyAgentCard("No TUI-persisted spawn trees were returned by this Hermes profile.") }
+            } else {
+                itemsIndexed(
+                    state.spawnTreeArchives,
+                    key = { index, archive -> "archive:${archive.finishedAt}:${archive.sessionId}:$index" },
+                ) { _, archive ->
+                    SpawnTreeArchiveCard(
+                        archive = archive,
+                        selected = state.spawnTreeReplay?.archive?.path == archive.path,
+                        loading = state.spawnTreesLoading,
+                        onLoad = { onLoadArchive(archive.path) },
+                    )
+                }
+            }
+            state.spawnTreeReplay?.let { replay ->
+                section("ARCHIVE REPLAY / ${replay.archive.label.ifBlank { "${replay.subagents.size} SUBAGENTS" }.uppercase()}")
+                items(SubagentReducer.rows(replay.subagents), key = { "replay:${replay.archive.finishedAt}:${it.progress.id}" }) { row ->
+                    SubagentCard(
+                        row = row,
+                        sessionLabel = replay.archive.sessionId,
+                        matchingSession = state.sessions.firstOrNull { it.durableId == replay.archive.sessionId },
+                        onOpenSession = onOpenSession,
+                        onInterrupt = null,
+                    )
+                }
+            }
         }
     }
 
@@ -181,6 +218,36 @@ internal fun AgentsScreen(
             },
             dismissButton = { TextButton(onClick = { pendingProcessStop = null }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun SpawnTreeArchiveCard(
+    archive: SpawnTreeListEntry,
+    selected: Boolean,
+    loading: Boolean,
+    onLoad: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(archive.label.ifBlank { "${archive.count} subagents" }, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOfNotNull(
+                        "${archive.count} subagents",
+                        archive.sessionId?.takeIf(String::isNotBlank)?.let { "session ${it.take(12)}" },
+                    ).joinToString(" / "),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            OutlinedButton(onClick = onLoad, enabled = !loading) {
+                Text(if (selected) "Reload" else "Replay")
+            }
+        }
     }
 }
 

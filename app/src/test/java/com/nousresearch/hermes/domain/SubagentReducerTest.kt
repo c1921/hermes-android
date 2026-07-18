@@ -7,6 +7,7 @@ import com.nousresearch.hermes.protocol.GatewayEvent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
@@ -95,6 +96,25 @@ class SubagentReducerTest {
         assertEquals("agent-7", delegation.active.single().id)
         assertEquals("proc-1", processes.processes.single().id)
         assertEquals("ok", processes.processes.single().outputTail)
+    }
+
+    @Test
+    fun `archived TUI snapshot normalizes camel case detail without random identity`() {
+        val raw = json.parseToJsonElement(
+            """{"id":"archived-child","parentId":"archived-parent","goal":"Inspect artifacts","model":"hermes-4","status":"timeout","index":2,"taskCount":3,"startedAt":1000,"durationSeconds":4.5,"costUsd":0.02,"inputTokens":120,"outputTokens":30,"toolCount":2,"filesRead":["input.txt"],"filesWritten":["report.md"],"thinking":["checking"],"notes":["bounded"],"outputTail":[{"tool":"terminal","preview":"gradle test","isError":false}],"summary":"Timed out safely","future":"ignored"}""",
+        ).jsonObject
+
+        val archived = SubagentReducer.fromSnapshot(raw, "archive:0", 9_000)
+
+        assertEquals("archived-child", archived.id)
+        assertEquals("archived-parent", archived.parentId)
+        assertEquals(SubagentStatus.FAILED, archived.status)
+        assertEquals(2, archived.taskIndex)
+        assertEquals(3, archived.taskCount)
+        assertEquals(listOf("input.txt"), archived.filesRead)
+        assertEquals(listOf("report.md"), archived.filesWritten)
+        assertTrue(archived.stream.any { it.kind == SubagentStreamKind.THINKING && it.text == "checking" })
+        assertTrue(archived.stream.any { it.kind == SubagentStreamKind.TOOL && "Terminal" in it.text })
     }
 
     private fun event(type: String, id: String, parent: String?, text: String) = GatewayEvent(

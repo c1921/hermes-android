@@ -103,6 +103,62 @@ object SubagentReducer {
         currentTool = previous?.currentTool,
     )
 
+    fun fromSnapshot(
+        raw: JsonObject,
+        fallbackId: String,
+        finishedAtMillis: Long,
+    ): SubagentProgress {
+        val status = raw.string("status").toStatus(SubagentStatus.COMPLETED)
+        val stream = buildList {
+            raw.stringList("thinking").takeLast(MAX_ARCHIVE_DETAIL).forEach { text ->
+                compact(text).takeIf(String::isNotBlank)?.let {
+                    add(SubagentStreamEntry(finishedAtMillis, SubagentStreamKind.THINKING, it))
+                }
+            }
+            raw.stringList("notes").takeLast(MAX_ARCHIVE_DETAIL).forEach { text ->
+                compact(text).takeIf(String::isNotBlank)?.let {
+                    add(SubagentStreamEntry(finishedAtMillis, SubagentStreamKind.PROGRESS, it))
+                }
+            }
+            (raw["outputTail"] as? JsonArray).orEmpty().takeLast(MAX_ARCHIVE_DETAIL).forEach { element ->
+                val tail = element as? JsonObject ?: return@forEach
+                val tool = tail.string("tool")
+                val preview = tail.string("preview")
+                val text = if (tool.isBlank()) compact(preview) else formatTool(tool, preview)
+                if (text.isNotBlank()) {
+                    add(
+                        SubagentStreamEntry(
+                            finishedAtMillis,
+                            if (tool.isBlank()) SubagentStreamKind.PROGRESS else SubagentStreamKind.TOOL,
+                            text,
+                            tail.boolean("isError"),
+                        ),
+                    )
+                }
+            }
+        }.takeLast(MAX_STREAM)
+        return SubagentProgress(
+            id = raw.string("id").take(MAX_ID_LENGTH).ifBlank { fallbackId.take(MAX_ID_LENGTH) },
+            parentId = raw.string("parentId").take(MAX_ID_LENGTH).takeIf(String::isNotBlank),
+            goal = compact(raw.string("goal")).ifBlank { "Subagent" },
+            model = compact(raw.string("model"), MAX_ID_LENGTH).takeIf(String::isNotBlank),
+            status = status,
+            taskCount = (raw.long("taskCount") ?: 1).toInt().coerceIn(1, MAX_AGENTS),
+            taskIndex = (raw.long("index") ?: 0).toInt().coerceIn(0, MAX_AGENTS),
+            startedAtMillis = raw.double("startedAt")?.toLong() ?: finishedAtMillis,
+            updatedAtMillis = finishedAtMillis,
+            durationSeconds = raw.double("durationSeconds")?.takeIf { it >= 0 },
+            costUsd = raw.double("costUsd")?.takeIf { it >= 0 },
+            inputTokens = raw.long("inputTokens")?.takeIf { it >= 0 },
+            outputTokens = raw.long("outputTokens")?.takeIf { it >= 0 },
+            toolCount = raw.long("toolCount")?.toInt()?.coerceAtLeast(0),
+            filesRead = raw.stringList("filesRead").take(MAX_ARCHIVE_FILES).map { compact(it, MAX_FILE_LENGTH) },
+            filesWritten = raw.stringList("filesWritten").take(MAX_ARCHIVE_FILES).map { compact(it, MAX_FILE_LENGTH) },
+            stream = stream,
+            summary = compact(raw.string("summary"), SUMMARY_MAX).takeIf(String::isNotBlank),
+        )
+    }
+
     fun rows(items: List<SubagentProgress>): List<SubagentRow> {
         val byParent = items.groupBy { it.parentId }
         val knownIds = items.mapTo(mutableSetOf()) { it.id }
@@ -206,7 +262,7 @@ object SubagentReducer {
     private fun String.toStatus(default: SubagentStatus): SubagentStatus = when (lowercase()) {
         "queued" -> SubagentStatus.QUEUED
         "completed" -> SubagentStatus.COMPLETED
-        "failed", "error" -> SubagentStatus.FAILED
+        "failed", "error", "timeout" -> SubagentStatus.FAILED
         "interrupted" -> SubagentStatus.INTERRUPTED
         "running" -> SubagentStatus.RUNNING
         else -> default
@@ -233,4 +289,9 @@ object SubagentReducer {
     private const val MAX_STREAM = 24
     private const val PREVIEW_MAX = 220
     private const val TOOL_PREVIEW_MAX = 96
+    private const val SUMMARY_MAX = 2_000
+    private const val MAX_ID_LENGTH = 200
+    private const val MAX_FILE_LENGTH = 500
+    private const val MAX_ARCHIVE_FILES = 32
+    private const val MAX_ARCHIVE_DETAIL = 12
 }
