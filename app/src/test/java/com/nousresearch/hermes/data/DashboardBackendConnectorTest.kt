@@ -37,7 +37,9 @@ class DashboardBackendConnectorTest {
             assertFalse(credentials.toString().contains("do-not-persist"))
             assertFalse(backends.toString().contains("do-not-persist"))
             assertEquals("hermes_session_at=session-value", dashboard.statusCookie)
-            assertEquals("hermes_session_at=session-value", dashboard.webSocketCookie)
+            assertEquals("hermes_session_at=session-value", dashboard.ticketCookie)
+            assertEquals("single-use-ticket", dashboard.webSocketTicket)
+            assertNull(dashboard.webSocketCookie)
         }
     }
 
@@ -116,7 +118,7 @@ class DashboardBackendConnectorTest {
     ) = DashboardBackendConnector(
         DashboardAuthClient(OkHttpClient(), json),
         HermesRestClient(OkHttpClient(), json),
-        OkHttpHermesGatewayClient(OkHttpClient(), json),
+        OkHttpClient().let { OkHttpHermesGatewayClient(it, json, DashboardAuthClient(it, json)) },
         credentials,
         backends,
     )
@@ -150,6 +152,8 @@ private class FakeDashboard(
 ) : AutoCloseable {
     private val server = MockWebServer()
     var statusCookie: String? = null
+    var ticketCookie: String? = null
+    var webSocketTicket: String? = null
     var webSocketCookie: String? = null
     val baseUrl: String get() = server.url("/").toString().replace("localhost", "127.0.0.1").trimEnd('/')
 
@@ -166,7 +170,12 @@ private class FakeDashboard(
                         if (statusCode == 200) """{"status":"ok","hermes_version":"0.18.2"}""" else """{"detail":"Session expired"}""",
                     )
                 }
+                "/api/auth/ws-ticket" -> {
+                    ticketCookie = request.getHeader("Cookie")
+                    MockResponse().setBody("""{"ticket":"single-use-ticket","ttl_seconds":30}""")
+                }
                 "/api/ws" -> {
+                    webSocketTicket = request.requestUrl?.queryParameter("ticket")
                     webSocketCookie = request.getHeader("Cookie")
                     if (!webSocketAccepted) MockResponse().setResponseCode(401)
                     else MockResponse().withWebSocketUpgrade(object : WebSocketListener() {

@@ -2,6 +2,8 @@ package com.nousresearch.hermes.protocol
 
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.AuthMode
+import com.nousresearch.hermes.network.DashboardAuthClient
+import com.nousresearch.hermes.network.DashboardSessionCookie
 import com.nousresearch.hermes.network.TransportPolicy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -28,6 +30,7 @@ import okhttp3.WebSocketListener
 class OkHttpHermesGatewayClient @Inject constructor(
     private val client: OkHttpClient,
     private val json: Json,
+    private val authClient: DashboardAuthClient,
 ) : HermesGatewayClient {
     private val requestIds = AtomicLong(0)
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<JsonElement>>()
@@ -42,6 +45,16 @@ class OkHttpHermesGatewayClient @Inject constructor(
     override val events = mutableEvents.asSharedFlow()
 
     override suspend fun connect(config: BackendConfig, token: String) {
+        require(config.authMode != AuthMode.DASHBOARD_SESSION) { "Dashboard sessions require a single-use WebSocket ticket" }
+        connect(gatewayUrl(config, "token", token))
+    }
+
+    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCookie) {
+        require(config.authMode == AuthMode.DASHBOARD_SESSION) { "Dashboard session credentials require dashboard authentication" }
+        connect(gatewayUrl(config, "ticket", authClient.mintWebSocketTicket(config, cookie)))
+    }
+
+    private suspend fun connect(url: HttpUrl) {
         val previous = socket
         socket = null
         previous?.close(1000, "connection replaced")
@@ -49,11 +62,8 @@ class OkHttpHermesGatewayClient @Inject constructor(
         mutableConnectionState.value = GatewayConnectionState.Connecting(attempt = 1)
         val opened = CompletableDeferred<Unit>()
         val request = Request.Builder()
-            .url(gatewayUrl(config, token))
+            .url(url)
             .header("User-Agent", "Hermes-Android/0.1")
-            .apply {
-                if (config.authMode == AuthMode.DASHBOARD_SESSION) header("Cookie", token)
-            }
             .build()
         val nextSocket = client.newWebSocket(request, listener(opened))
         socket = nextSocket
@@ -142,12 +152,13 @@ class OkHttpHermesGatewayClient @Inject constructor(
         }
     }
 
-    private fun gatewayUrl(config: BackendConfig, token: String): HttpUrl {
+    private fun gatewayUrl(config: BackendConfig, credentialName: String, credential: String): HttpUrl {
         val uri = TransportPolicy.validate(config).getOrThrow()
         val base = uri.toString().trimEnd('/').toHttpUrl()
-        return base.newBuilder().addPathSegments("api/ws").apply {
-            if (config.authMode != AuthMode.DASHBOARD_SESSION) addQueryParameter("token", token)
-        }.build()
+        return base.newBuilder()
+            .addPathSegments("api/ws")
+            .addQueryParameter(credentialName, credential)
+            .build()
     }
 
     private fun failPending(error: Throwable) {

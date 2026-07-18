@@ -2,6 +2,7 @@ package com.nousresearch.hermes.protocol
 
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.network.DashboardAuthClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -18,7 +19,7 @@ class OkHttpHermesGatewayClientTest {
     fun `performs real websocket handshake and json rpc round trip`() = runBlocking {
         FakeHermesBackend(json).use { backend ->
             backend.start()
-            val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
+            val client = gatewayClient()
             val config = BackendConfig(
                 id = "fake",
                 label = "Fake Hermes",
@@ -41,7 +42,7 @@ class OkHttpHermesGatewayClientTest {
     fun `replacing a socket reaches open without publishing an intentional close`() = runBlocking {
         FakeHermesBackend(json).use { backend ->
             backend.start(connectionCount = 2)
-            val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
+            val client = gatewayClient()
             val config = BackendConfig(
                 id = "fake",
                 label = "Fake Hermes",
@@ -62,7 +63,7 @@ class OkHttpHermesGatewayClientTest {
     fun `steering round trip preserves the redirected text`() = runBlocking {
         FakeHermesBackend(json).use { backend ->
             backend.start()
-            val client = OkHttpHermesGatewayClient(OkHttpClient(), json)
+            val client = gatewayClient()
             val config = BackendConfig(
                 id = "fake",
                 label = "Fake Hermes",
@@ -85,5 +86,10 @@ class OkHttpHermesGatewayClientTest {
             assertEquals("Check the failing test first", result.text)
             client.disconnect()
         }
+    }
+
+    private fun gatewayClient(): OkHttpHermesGatewayClient {
+        val http = OkHttpClient()
+        return OkHttpHermesGatewayClient(http, json, DashboardAuthClient(http, json))
     }
 }

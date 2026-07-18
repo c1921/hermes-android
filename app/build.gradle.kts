@@ -19,7 +19,7 @@ android {
         versionName = "0.1.0-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
-        buildConfigField("String", "AUDITED_HERMES_COMMIT", "\"0f102fa4dc04b7dfdab048169aaaa640d09d7523\"")
+        buildConfigField("String", "AUDITED_HERMES_COMMIT", "\"5122ddd478143a6901bb752cf8ebcd1c5154b6da\"")
     }
 
     buildFeatures {

@@ -29,7 +29,7 @@ class HermesRestClientManagementTest {
                 allowInsecurePrivateNetwork = true,
             )
             val client = HermesRestClient(OkHttpClient(), json)
-            server.enqueue(MockResponse().setBody("""[{"name":"browser","description":"Web research","category":"research","enabled":true,"usage":12,"provenance":"bundled"}]"""))
+            server.enqueue(MockResponse().setBody("""[{"name":"browser","description":"Web research","category":null,"enabled":true,"usage":12,"provenance":"bundled"}]"""))
             server.enqueue(MockResponse().setBody("""{"ok":true,"name":"browser","enabled":false}"""))
             server.enqueue(MockResponse().setBody("""[{"id":"daily","enabled":true,"name":"Daily brief","schedule_display":"0 8 * * *","next_run_at":"2026-07-18T08:00:00Z"}]"""))
             server.enqueue(MockResponse().setBody("""{"runs":[{"session_id":"cron_daily_1","title":"Daily brief run","profile":"default","source":"cron","message_count":2}],"limit":20}"""))
@@ -59,6 +59,7 @@ class HermesRestClientManagementTest {
             client.deleteCron(config, "secret", "weekly")
 
             assertEquals(12, skills.single().usage)
+            assertEquals(null, skills.single().category)
             assertFalse(toggled.enabled)
             assertEquals("0 8 * * *", jobs.single().scheduleDisplay)
             assertEquals("cron_daily_1", runs.runs.single().durableId)

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SkillInfo(
-    val category: String = "general",
+    val category: String? = null,
     val description: String = "",
     val enabled: Boolean,
     val name: String,

@@ -4,6 +4,7 @@ import com.nousresearch.hermes.data.BackendConfig
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -79,9 +80,41 @@ class DashboardAuthClient(
             }
         }
 
+    suspend fun mintWebSocketTicket(config: BackendConfig, cookie: DashboardSessionCookie): String =
+        withContext(Dispatchers.IO) {
+            val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+            val request = Request.Builder()
+                .url("$base/api/auth/ws-ticket")
+                .post(ByteArray(0).toRequestBody())
+                .header("Accept", "application/json")
+                .header("Cookie", cookie.headerValue)
+                .header("User-Agent", "Hermes-Android/0.1")
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw DashboardAuthenticationException(
+                        when (response.code) {
+                            401, 403 -> "Dashboard session expired or was rejected."
+                            else -> "Hermes Dashboard WebSocket ticket request failed with HTTP ${response.code}."
+                        },
+                    )
+                }
+                val ticket = response.body?.string()?.let {
+                    runCatching { json.decodeFromString<WebSocketTicketResponse>(it) }.getOrNull()
+                }?.ticket.orEmpty()
+                if (ticket.isBlank() || ticket.length > 8_192 || ticket.any(Char::isISOControl)) {
+                    throw DashboardAuthenticationException("Hermes Dashboard returned a malformed WebSocket ticket.")
+                }
+                ticket
+            }
+        }
+
     private companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
+
+@Serializable
+private data class WebSocketTicketResponse(val ticket: String)
 
 class DashboardAuthenticationException(message: String) : IOException(message)

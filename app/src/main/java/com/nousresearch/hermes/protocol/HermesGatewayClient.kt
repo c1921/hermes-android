@@ -11,7 +11,7 @@ interface HermesGatewayClient {
     val events: SharedFlow<GatewayEvent>
 
     suspend fun connect(config: BackendConfig, token: String)
-    suspend fun connect(config: BackendConfig, cookie: DashboardSessionCookie) = connect(config, cookie.headerValue)
+    suspend fun connect(config: BackendConfig, cookie: DashboardSessionCookie)
     suspend fun disconnect()
     suspend fun request(method: String, params: JsonElement): JsonElement
 }
