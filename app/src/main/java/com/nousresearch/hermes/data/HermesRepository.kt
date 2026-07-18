@@ -67,6 +67,7 @@ import com.nousresearch.hermes.protocol.SpawnTreeListEntry
 import com.nousresearch.hermes.protocol.SpawnTreeListResponse
 import com.nousresearch.hermes.protocol.SpawnTreeSnapshot
 import com.nousresearch.hermes.protocol.ToolsetInfo
+import com.nousresearch.hermes.platform.mergeSharedText
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import java.util.UUID
 import javax.inject.Inject
@@ -526,6 +527,22 @@ class HermesRepository @Inject constructor(
             delay(DRAFT_SAVE_DEBOUNCE_MILLIS)
             draftStore.put(context, bounded)
         }
+    }
+
+    suspend fun ingestSharedContent(text: String, uris: List<Uri>) {
+        runCatching {
+            if (mutableState.value.runtimeSessionId == null) {
+                newSession()
+                requireNotNull(mutableState.value.runtimeSessionId) { "Hermes could not open a session for shared content" }
+            }
+            if (text.isNotEmpty()) {
+                updateDraft(mergeSharedText(mutableState.value.draft, text, DraftStore.MAX_DRAFT_CHARACTERS))
+            }
+            uris.take(MAX_SHARED_ATTACHMENTS).forEach { uri ->
+                require(uri.scheme.equals("content", ignoreCase = true)) { "Shared attachments must use content URIs" }
+                attach(uri)
+            }
+        }.onFailure(::fail)
     }
 
     suspend fun queueDraft() {
@@ -2985,6 +3002,7 @@ class HermesRepository @Inject constructor(
 private const val DIAGNOSTIC_POLL_INTERVAL_MILLIS = 1_000L
 private const val DIAGNOSTIC_POLL_LIMIT = 120
 private const val DRAFT_SAVE_DEBOUNCE_MILLIS = 300L
+private const val MAX_SHARED_ATTACHMENTS = 5
 private const val QUEUE_DRAIN_RETRY_MILLIS = 750L
 private const val SESSION_SEARCH_DEBOUNCE_MILLIS = 300L
 private const val MAX_SESSION_SEARCH_RESULTS = 100

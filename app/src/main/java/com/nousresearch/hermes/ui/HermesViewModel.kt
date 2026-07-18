@@ -8,6 +8,7 @@ import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.HermesRepository
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.platform.SharedContent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -48,6 +49,9 @@ class HermesViewModel @Inject constructor(
     fun removeQueuedPrompt(id: String) = viewModelScope.launch { repository.removeQueuedPrompt(id) }
     fun sendQueuedPromptNow(id: String) = viewModelScope.launch { repository.sendQueuedPromptNow(id) }
     fun updateDraft(value: String) = repository.updateDraft(value)
+    suspend fun ingestSharedContent(content: SharedContent) {
+        repository.ingestSharedContent(content.text, content.uriStrings.map(Uri::parse))
+    }
     fun completeSlash(text: String) = repository.completeSlash(text)
     fun executeSlash(command: String) = viewModelScope.launch { repository.executeSlash(command) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }

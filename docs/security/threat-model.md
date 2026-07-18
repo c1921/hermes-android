@@ -20,6 +20,7 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | OAuth interception/replay | PKCE S256, state/nonce, exact app link and single-use code | Blocked on native upstream flow |
 | Malicious deep link | Treat route IDs as untrusted; require authenticated backend lookup; no credentials/actions in links | Required before link routing ships |
 | Exported component/intent spoofing | Only launcher activity exported; explicit declarations; validate all inbound content | Implemented baseline |
+| Malicious Android share payload | Accept only `ACTION_SEND`/`ACTION_SEND_MULTIPLE`; strip NULs and bound text; parse, deduplicate and bound only authority-bearing `content://` URIs; reject `file://`, HTTP and user-info; recheck scheme before attachment; never auto-send or persist the share payload | Implemented baseline; real provider grants, task recreation and malicious-provider device tests deferred |
 | Screenshot/recents leakage | Activity starts protected until the durable device-local preference resolves; optional secure-screen mode applies Android `FLAG_SECURE` to screenshots, screen recording and recent-app thumbnails across every Hermes surface | Implemented baseline; physical-device capture/recents verification deferred, and external cameras/root bypass remain out of scope |
 | Clipboard leakage | No automatic copy; sensitive-copy warning and timed clear where supported | Planned |
 | Notification privacy | Secret content hidden by default; separate channels; action tokens | Blocked on push contract |

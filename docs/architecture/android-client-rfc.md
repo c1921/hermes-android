@@ -24,6 +24,7 @@ Use a hybrid native client: Hermes REST APIs for backend-owned management data a
 - `protocol`: JSON-RPC frames, WebSocket lifecycle and typed method/event models.
 - `data`: backend registry, session reconciliation and repository orchestration.
 - `domain`: deterministic timeline reducer and capability decisions.
+- `platform`: bounded Android intent/share ingestion; untrusted payloads become draft input only and never authorize a Hermes action.
 - `ui`: immutable state rendering and user intent.
 
 Backend truth wins. Local data stores connection metadata, encrypted credentials, drafts and bounded caches; it does not become a second session database.
@@ -53,4 +54,3 @@ No permanent foreground service is part of this architecture. Background complet
 ## Compatibility
 
 Unknown JSON fields and event types are retained at the boundary or ignored safely. UI is capability-gated. Missing endpoints disable only their feature and show the required Hermes version. The initial source contract is pinned to Hermes `0.18.2`; the supported-version range will be declared only after real contract tests run against older releases.
-

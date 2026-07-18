@@ -109,6 +109,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -163,9 +164,11 @@ import com.nousresearch.hermes.domain.ToolState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.platform.SharedContent
 import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
+import kotlinx.coroutines.flow.first
 
 private val WideLayout = 840.dp
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
@@ -254,10 +257,20 @@ private data class ManagementActions(
 fun HermesApp(
     secureScreen: Boolean = false,
     onSecureScreenChange: (Boolean) -> Unit = {},
+    sharedContent: SharedContent? = null,
+    onSharedContentConsumed: (String) -> Unit = {},
     viewModel: HermesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
+    val latestConnection by rememberUpdatedState(connection)
+    LaunchedEffect(sharedContent?.id, state.backend?.id) {
+        val content = sharedContent ?: return@LaunchedEffect
+        if (state.backend == null) return@LaunchedEffect
+        snapshotFlow { latestConnection }.first { it == GatewayConnectionState.Open }
+        viewModel.ingestSharedContent(content)
+        onSharedContentConsumed(content.id)
+    }
     val modelActions = remember(viewModel) {
         ModelActions(
             refresh = viewModel::refreshModels,
@@ -389,6 +402,7 @@ fun HermesApp(
                         onForgetBackend = viewModel::forgetBackend,
                         secureScreen = secureScreen,
                         onSecureScreenChange = onSecureScreenChange,
+                        sharedContentId = sharedContent?.id,
                     )
                 }
             }
@@ -587,6 +601,7 @@ private fun HermesWorkspace(
     onForgetBackend: (String) -> Unit,
     secureScreen: Boolean,
     onSecureScreenChange: (Boolean) -> Unit,
+    sharedContentId: String?,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
@@ -595,6 +610,9 @@ private fun HermesWorkspace(
             if (state.runtimeSessionId != null && destination == WorkspaceDestination.SESSIONS) {
                 destination = WorkspaceDestination.CHAT
             }
+        }
+        LaunchedEffect(sharedContentId) {
+            if (sharedContentId != null) destination = WorkspaceDestination.CHAT
         }
         BackHandler(enabled = !wide && destination != WorkspaceDestination.SESSIONS) {
             destination = WorkspaceDestination.SESSIONS

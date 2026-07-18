@@ -33,6 +33,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [x] Dynamic Hermes model/provider catalogue, model selection, reasoning effort, and fast mode
 - [x] Provider API-key and custom-endpoint management through Hermes-owned APIs
 - [x] SAF file, image, and PDF attachments with bounded reads and server-queue cleanup
+- [x] Android share-target ingestion for bounded text and `content://` attachments into a draft session without automatic sending
 - [x] Managed workspace browsing with directory navigation, bounded text/source/image/PDF previews, network-isolated HTML rendering, streamed SAF downloads, cancellation, and MIME/path validation
 - [x] Press-to-talk and lockable voice capture through Hermes `/api/audio/transcribe`, with slide-to-lock/cancel, live level feedback, bounded temporary audio, permission recovery, and audio-focus interruption handling
 - [x] Per-reply spoken playback through Hermes' own `/api/audio/speak` provider chain, with pause, resume, stop, system output routing, Bluetooth support, and temporary-audio cleanup
@@ -68,7 +69,7 @@ The current `main` checkout passes all unit tests, Android lint, debug APK assem
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, and per-tool filters
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
-- [ ] Biometric lock, Android share target, deep links, shortcuts, widgets, and other platform integrations
+- [ ] Biometric lock, deep links, shortcuts, widgets, and other platform integrations
 - [ ] Signed release APK, release AAB, reproducibility verification, Baseline Profile, and macrobenchmarks
 
 The detailed, current source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md).
@@ -202,6 +203,7 @@ Current automated coverage includes:
 - Profile-scoped config/schema reads, exact one-field nested PUT bodies, cookie reuse, negative acknowledgements, positive safe-key intersection, type validation, and unknown-field tolerance
 - Profile-scoped usage analytics plus live `session.context_breakdown`, nullable legacy counters, and unknown-field tolerance
 - Sensitive sudo/secret request and expiry reduction plus physical Compose instrumentation for password semantics, exact submission, cancellation, and cross-request value isolation
+- Shared-content text/URI sanitisation, scheme/count/length bounds, duplicate rejection, and bounded draft merging; physical Android share-sheet delivery remains deferred
 - Hermes voice REST payloads, spoken-audio MIME/base64 validation, Desktop-equivalent speech sanitisation, and numeric/string session-history message identifiers
 
 Automated tests do not require a paid provider key or production credentials. A physical-device smoke against an isolated secured Dashboard from the pinned upstream source has passed. Voice QA on the Samsung covered microphone permission denial/recovery, press-to-talk without the keyboard, locked recording, slide-to-lock, slide-to-cancel, transcription failure recovery, cache cleanup, real Hermes Edge TTS generation, playback pause/resume/stop/completion, and Android's system output switcher. A final smoke against any intended production deployment is still required before calling that deployment verified.
