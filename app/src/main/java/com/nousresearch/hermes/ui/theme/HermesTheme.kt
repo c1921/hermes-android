@@ -2,67 +2,95 @@ package com.nousresearch.hermes.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import com.nousresearch.hermes.R
 
-val NousBlue = Color(0xFF0053FD)
-val PsycheBlue = Color(0xFF1540B1)
-val PsycheWarm = Color(0xFFFFE6CB)
-val Ink = Color(0xFF17171A)
+val NousBlue = Color(0xFF0000F2)
+val HermesPaper = Color(0xFFF5F5F5)
+val HermesAccent = Color(0xFFEDFF45)
 val Danger = Color(0xFFC72E4D)
 val Success = Color(0xFF147D55)
 val Warning = Color(0xFFB46800)
 
 private val LightColours = lightColorScheme(
     primary = NousBlue,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8F0FF),
-    onPrimaryContainer = Color(0xFF002B84),
-    secondary = PsycheBlue,
-    onSecondary = Color.White,
-    background = Color(0xFFF8FAFF),
-    onBackground = Ink,
+    onPrimary = HermesPaper,
+    primaryContainer = NousBlue,
+    onPrimaryContainer = HermesPaper,
+    secondary = NousBlue,
+    onSecondary = HermesPaper,
+    tertiary = Success,
+    onTertiary = Color.White,
+    background = HermesPaper,
+    onBackground = NousBlue,
     surface = Color.White,
-    onSurface = Ink,
-    surfaceVariant = Color(0xFFF0F4FF),
-    onSurfaceVariant = Color(0xFF555568),
-    outline = Color(0xFFB7C8ED),
+    onSurface = NousBlue,
+    surfaceVariant = Color.White,
+    onSurfaceVariant = Color(0xFF1111B5),
+    outline = NousBlue,
+    outlineVariant = Color(0x660000F2),
     error = Danger,
 )
 
 private val DarkColours = darkColorScheme(
-    primary = PsycheWarm,
-    onPrimary = Color(0xFF0D2F86),
-    primaryContainer = Color(0xFF1B45A4),
-    onPrimaryContainer = Color(0xFFFFE6CB),
-    secondary = Color(0xFFB5C7F3),
-    onSecondary = Color(0xFF0D2F86),
-    background = Color(0xFF09286F),
-    onBackground = PsycheWarm,
-    surface = Color(0xFF0D2F86),
-    onSurface = PsycheWarm,
-    surfaceVariant = Color(0xFF143B91),
-    onSurfaceVariant = Color(0xFFB5C7F3),
-    outline = Color(0xFF3158AD),
+    primary = HermesPaper,
+    onPrimary = NousBlue,
+    primaryContainer = HermesPaper,
+    onPrimaryContainer = NousBlue,
+    secondary = HermesPaper,
+    onSecondary = NousBlue,
+    tertiary = HermesAccent,
+    onTertiary = NousBlue,
+    background = NousBlue,
+    onBackground = HermesPaper,
+    surface = NousBlue,
+    onSurface = HermesPaper,
+    surfaceVariant = Color(0xFF1212DC),
+    onSurfaceVariant = HermesPaper,
+    outline = Color(0x99F5F5F5),
+    outlineVariant = Color(0x66F5F5F5),
     error = Color(0xFFFFB4AB),
 )
 
+private val HermesDisplay = FontFamily(
+    Font(R.font.cormorant_garamond, weight = FontWeight.Light),
+)
+
+private val HermesMono = FontFamily(
+    Font(R.font.courier_prime_regular, weight = FontWeight.Normal),
+    Font(R.font.courier_prime_bold, weight = FontWeight.Bold),
+)
+
 private val HermesTypography = androidx.compose.material3.Typography(
-    headlineLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 31.sp),
-    headlineMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 24.sp),
-    titleLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 20.sp),
-    titleMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 13.sp),
-    labelMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 11.sp),
-    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 16.sp, lineHeight = 23.sp),
-    bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 17.sp),
+    displayLarge = TextStyle(fontFamily = HermesDisplay, fontWeight = FontWeight.Light, fontSize = 54.sp, lineHeight = 48.sp),
+    headlineLarge = TextStyle(fontFamily = HermesDisplay, fontWeight = FontWeight.Light, fontSize = 42.sp, lineHeight = 39.sp),
+    headlineMedium = TextStyle(fontFamily = HermesDisplay, fontWeight = FontWeight.Light, fontSize = 32.sp, lineHeight = 30.sp),
+    titleLarge = TextStyle(fontFamily = HermesDisplay, fontWeight = FontWeight.Light, fontSize = 27.sp, lineHeight = 27.sp),
+    titleMedium = TextStyle(fontFamily = HermesMono, fontWeight = FontWeight.Bold, fontSize = 16.sp),
+    labelLarge = TextStyle(fontFamily = HermesMono, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp),
+    labelMedium = TextStyle(fontFamily = HermesMono, fontWeight = FontWeight.Normal, fontSize = 11.sp, letterSpacing = 0.8.sp),
+    bodyLarge = TextStyle(fontFamily = HermesMono, fontSize = 16.sp, lineHeight = 23.sp),
+    bodyMedium = TextStyle(fontFamily = HermesMono, fontSize = 14.sp, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontFamily = HermesMono, fontSize = 12.sp, lineHeight = 17.sp),
+)
+
+private val HermesShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
 
 @Composable
@@ -70,7 +98,7 @@ fun HermesTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (isSystemInDarkTheme()) DarkColours else LightColours,
         typography = HermesTypography,
+        shapes = HermesShapes,
         content = content,
     )
 }
-

@@ -26,7 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -198,7 +198,7 @@ private fun ProviderSettingDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(info.description.ifBlank { key }, style = MaterialTheme.typography.bodySmall)
-                TextField(
+                OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
                     label = { Text(key) },
@@ -207,7 +207,7 @@ private fun ProviderSettingDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (key == "OPENAI_BASE_URL") {
-                    TextField(
+                    OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
                         label = { Text("Endpoint API key (optional, validation only)") },

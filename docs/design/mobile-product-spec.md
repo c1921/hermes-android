@@ -20,9 +20,11 @@ The session-atlas direction is selected. Chat remains home, while tools, approva
 
 ## Visual language
 
-The token seed comes directly from current Hermes Desktop's Nous theme: Nous blue `#0053FD`, Psyche blue `#1540B1`, Psyche warm `#FFE6CB`, neutral ink and the existing destructive red family. Typography pairs technical monospace headings/labels with a readable system sans body. Layout is flat rather than nested cards; tool activity uses a single tinted technical surface.
+The canonical visual source is the current first-party Hermes Agent site. Its core tokens are Hermes blue `#0000F2`, off-white `#F5F5F5`, paper white `#FFFFFF`, and accent lime `#EDFF45`. Dark mode is an electric-blue field with off-white typography; light mode reverses that relationship. The official etched Hermes hero, headphone portrait badge, and Desktop application icon are bundled from first-party sources rather than recreated.
 
-The temporary `H` adaptive icon is deliberately isolated and must be replaced with an approved official asset before any first-party release.
+Display headings use a high-contrast editorial serif. The site uses licensed Sigurd; Android uses the OFL Cormorant Garamond fallback until Nous supplies an app-embedding Sigurd license. Utility labels, body copy, inputs, and technical state use the site's Courier Prime. Controls preserve the site's hairline-outline character while using a shared rounded Android shape scale of 8/12/16/24/32dp. No interactive container has square corners.
+
+The launcher uses Hermes Desktop's official application icon. Product screens use the official site badge and hero artwork. Source and license details live in `THIRD_PARTY_NOTICES.md` and `licenses/`.
 
 ## States
 
@@ -58,4 +60,3 @@ Interrupted animations settle to semantic state. Process recreation restores the
 ## Accessibility
 
 Minimum 48dp controls, scalable text, semantic headings, labelled icon actions, logical master/detail traversal and no colour-only state. Streaming updates do not continuously steal TalkBack focus. Hardware Enter sends only from the composer; Escape/back affects the topmost owned interaction once. Tool state combines icon, text and colour.
-

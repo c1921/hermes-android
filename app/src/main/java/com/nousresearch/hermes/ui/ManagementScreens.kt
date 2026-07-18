@@ -36,7 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -183,15 +183,15 @@ private fun BackendConnectionDialog(
         title = { Text(if (initial == null) "ADD HERMES BACKEND" else "RECONNECT HERMES BACKEND") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
-                TextField(url, { url = it }, label = { Text("HTTPS URL") }, singleLine = true)
-                TextField(
+                OutlinedTextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
+                OutlinedTextField(url, { url = it }, label = { Text("HTTPS URL") }, singleLine = true)
+                OutlinedTextField(
                     username,
                     { username = it },
                     label = { Text("Dashboard username") },
                     singleLine = true,
                 )
-                TextField(
+                OutlinedTextField(
                     password,
                     { password = it },
                     label = { Text("Dashboard password") },
@@ -240,7 +240,7 @@ internal fun SkillsScreen(
     var uninstallName by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { onRefresh() }
     val visible = state.skills.filter {
-        query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || it.category.contains(query, true)
+        query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || it.category.orEmpty().contains(query, true)
     }
     Column(modifier.fillMaxSize()) {
         ManagementHeader("SKILLS", if (browsing) "Review before installing" else "Installed capabilities", state.managementLoading || state.skillHubLoading, onRefresh, onBack)
@@ -248,14 +248,32 @@ internal fun SkillsScreen(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(onClick = { browsing = false }, modifier = Modifier.weight(1f)) { Text("Installed") }
-            OutlinedButton(
-                onClick = { browsing = true; onLoadHub("") },
-                modifier = Modifier.weight(1f),
-            ) { Text("Browse hub") }
-            if (!browsing) TextButton(onClick = onUpdate, enabled = state.skillAction?.running != true) { Text("Update") }
+            if (browsing) {
+                OutlinedButton(onClick = { browsing = false }, modifier = Modifier.weight(1f)) {
+                    Text("Installed", maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                }
+                Button(
+                    onClick = { onLoadHub("") },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Browse hub", maxLines = 1, style = MaterialTheme.typography.labelMedium) }
+            } else {
+                Button(onClick = { browsing = false }, modifier = Modifier.weight(1f)) {
+                    Text("Installed", maxLines = 1, style = MaterialTheme.typography.labelMedium)
+                }
+                OutlinedButton(
+                    onClick = { browsing = true; onLoadHub("") },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Browse hub", maxLines = 1, style = MaterialTheme.typography.labelMedium) }
+            }
         }
-        TextField(
+        if (!browsing) {
+            OutlinedButton(
+                onClick = onUpdate,
+                enabled = state.skillAction?.running != true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            ) { Text("Update all skills", maxLines = 1, style = MaterialTheme.typography.labelMedium) }
+        }
+        OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             placeholder = { Text(if (browsing) "Search the Hermes skills hub" else "Search installed skills") },
@@ -601,8 +619,8 @@ private fun ProfileCreateDialog(
         title = { Text("CREATE PROFILE") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextField(name, { name = it.take(100) }, label = { Text("Profile name") }, singleLine = true)
-                TextField(
+                OutlinedTextField(name, { name = it.take(100) }, label = { Text("Profile name") }, singleLine = true)
+                OutlinedTextField(
                     cloneFrom,
                     { cloneFrom = it.take(100) },
                     label = { Text("Clone source (optional)") },
@@ -634,7 +652,7 @@ private fun ProfileRenameDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("RENAME PROFILE") },
-        text = { TextField(name, { name = it.take(100) }, label = { Text("New name") }, singleLine = true) },
+        text = { OutlinedTextField(name, { name = it.take(100) }, label = { Text("New name") }, singleLine = true) },
         confirmButton = { TextButton(onClick = { onRename(name) }, enabled = name.isNotBlank() && name != profile.name) { Text("Rename") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
@@ -675,11 +693,14 @@ private fun SkillRow(
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(skill.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.width(8.dp))
-                    Text(skill.provenance ?: skill.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
+                Text(skill.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    skill.provenance ?: skill.category ?: "general",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(skill.description, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 skill.usage?.let { Text("$it observed actions", style = MaterialTheme.typography.labelSmall) }
             }
@@ -803,9 +824,9 @@ private fun CronEditorDialog(
         title = { Text(if (job == null) "CREATE CRON JOB" else "EDIT CRON JOB") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextField(name, { name = it.take(200) }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                TextField(prompt, { prompt = it }, label = { Text("Hermes prompt") }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 7)
-                TextField(
+                OutlinedTextField(name, { name = it.take(200) }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(prompt, { prompt = it }, label = { Text("Hermes prompt") }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 7)
+                OutlinedTextField(
                     schedule,
                     { schedule = it },
                     label = { Text("Exact schedule") },
@@ -813,7 +834,7 @@ private fun CronEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                TextField(deliver, { deliver = it }, label = { Text("Delivery destination (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(deliver, { deliver = it }, label = { Text("Delivery destination (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             }
         },
         confirmButton = { TextButton(onClick = { onSave(name, prompt, schedule, deliver) }, enabled = valid) { Text("Save") } },

@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -12,8 +13,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -53,6 +58,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.Person
@@ -67,8 +73,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,12 +88,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -96,6 +102,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
 import com.nousresearch.hermes.domain.MessageRole
@@ -105,8 +112,6 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.ui.theme.Danger
 import com.nousresearch.hermes.ui.theme.HermesTheme
-import com.nousresearch.hermes.ui.theme.NousBlue
-import com.nousresearch.hermes.ui.theme.Success
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
@@ -269,25 +274,53 @@ private fun OnboardingScreen(
         AnimatedContent(
             targetState = step,
             transitionSpec = {
-                (slideInHorizontally(tween(320)) { it / 5 } + fadeIn(tween(220))) togetherWith
-                    (slideOutHorizontally(tween(260)) { -it / 6 } + fadeOut(tween(160)))
+                val direction = if (targetState > initialState) {
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                } else {
+                    AnimatedContentTransitionScope.SlideDirection.Right
+                }
+                (slideIntoContainer(direction, tween(320)) + fadeIn(tween(220))) togetherWith
+                    (slideOutOfContainer(direction, tween(320)) + fadeOut(tween(220)))
             },
             label = "onboarding",
-            modifier = Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 560.dp),
+            modifier = Modifier.align(Alignment.Center).padding(18.dp).widthIn(max = 560.dp),
         ) { activeStep ->
             if (activeStep == 0) {
-                Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    BrandGlyph()
-                    Text("HERMES / ANDROID", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        BrandGlyphSmall()
+                        Column {
+                            Text("HERMES", style = MaterialTheme.typography.titleLarge)
+                            Text("AGENT / ANDROID", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    Text("OPEN SOURCE  ·  NATIVE ANDROID", style = MaterialTheme.typography.labelMedium)
                     Text(
-                        "A native control surface for your existing Hermes Agent. The agent, sessions, tools, skills and memory remain on the backend you control.",
-                        style = MaterialTheme.typography.bodyLarge,
+                        "THE AGENT\nTHAT GROWS\nWITH YOU",
+                        style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Text(
+                        "Your Hermes sessions, tools, skills, memory and approvals. Native on Android; agent state stays on the backend you control.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth()) { Text("CONNECT TO HERMES") }
+                    Image(
+                        painter = painterResource(R.drawable.hermes_hero_art),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                        contentScale = ContentScale.Fit,
                     )
                     ArchitectureStrip()
-                    Button(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Connect to Hermes") }
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { step = 0 }) { Icon(Icons.Outlined.ArrowBack, "Back") }
                         Text("BACKEND LINK", style = MaterialTheme.typography.headlineMedium)
@@ -338,7 +371,7 @@ private fun HermesField(
     keyboardType: KeyboardType = KeyboardType.Text,
     secret: Boolean = false,
 ) {
-    TextField(
+    OutlinedTextField(
         value = value,
         onValueChange = onValue,
         label = { Text(label) },
@@ -346,7 +379,7 @@ private fun HermesField(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next),
         visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        colors = TextFieldDefaults.colors(
+        colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
         ),
@@ -355,23 +388,34 @@ private fun HermesField(
 
 @Composable
 private fun BrandGlyph() {
-    Surface(shape = RoundedCornerShape(10.dp), color = NousBlue, modifier = Modifier.size(72.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            Text("H", color = Color(0xFFFFE6CB), style = MaterialTheme.typography.headlineLarge)
-        }
-    }
+    Image(
+        painter = painterResource(R.drawable.hermes_badge),
+        contentDescription = "Hermes Agent",
+        modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)),
+        contentScale = ContentScale.Crop,
+    )
 }
 
 @Composable
 private fun ArchitectureStrip() {
-    Row(
-        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)).padding(14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
-        Text("ANDROID", style = MaterialTheme.typography.labelMedium)
-        Text("⇄  HTTPS / WSS  ⇄", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text("HERMES SERVE", style = MaterialTheme.typography.labelMedium)
+        Row(
+            Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("ANDROID", style = MaterialTheme.typography.labelMedium)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Icon(Icons.Outlined.SwapHoriz, null, modifier = Modifier.size(16.dp))
+                Text("HTTPS / WSS", style = MaterialTheme.typography.labelMedium)
+            }
+            Text("HERMES SERVE", style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 
@@ -502,7 +546,7 @@ private fun HermesWorkspace(
                         managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
                         managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.CRON -> CronScreen(
                         state, managementActions.refreshCron, managementActions.setCronEnabled,
@@ -511,7 +555,7 @@ private fun HermesWorkspace(
                         managementActions.createCron,
                         managementActions.updateCron, managementActions.deleteCron,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.PROFILES -> ProfilesScreen(
                         state = state,
@@ -522,7 +566,7 @@ private fun HermesWorkspace(
                         onSetActive = managementActions.setActiveProfile,
                         onDelete = managementActions.deleteProfile,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.BACKENDS -> BackendsScreen(
                         state = state,
@@ -530,14 +574,14 @@ private fun HermesWorkspace(
                         onSelect = onSelectBackend,
                         onForget = onForgetBackend,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.DIAGNOSTICS -> DiagnosticsScreen(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.PROVIDERS -> ProvidersScreen(
                         state = state,
@@ -545,7 +589,7 @@ private fun HermesWorkspace(
                         onSave = managementActions.saveProviderSetting,
                         onDelete = managementActions.deleteProviderSetting,
                         onBack = { destination = WorkspaceDestination.SESSIONS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh,
@@ -557,7 +601,7 @@ private fun HermesWorkspace(
                         onBackends = { destination = WorkspaceDestination.BACKENDS },
                         onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                         onProviders = { destination = WorkspaceDestination.PROVIDERS },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                 }
             }
@@ -599,32 +643,50 @@ private fun SessionRail(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(onClick = onSkills, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = onSkills,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
                 Icon(Icons.Outlined.AutoAwesome, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Skills")
             }
-            OutlinedButton(onClick = onCron, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = onCron,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
                 Icon(Icons.Outlined.Schedule, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Cron")
-            }
-            OutlinedButton(onClick = onProfiles, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Outlined.Person, null)
-                Spacer(Modifier.width(6.dp))
-                Text("Profiles")
             }
         }
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(onClick = onProviders, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = onProfiles,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
+                Icon(Icons.Outlined.Person, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Profiles")
+            }
+            OutlinedButton(
+                onClick = onProviders,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) {
                 Icon(Icons.Outlined.Key, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Providers")
             }
-            OutlinedButton(onClick = onDiagnostics, modifier = Modifier.weight(1f)) {
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            OutlinedButton(onClick = onDiagnostics, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Info, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Diagnostics")
@@ -649,15 +711,18 @@ private fun SessionRail(
 
 @Composable
 private fun BrandGlyphSmall() {
-    Surface(shape = RoundedCornerShape(6.dp), color = NousBlue, modifier = Modifier.size(34.dp)) {
-        Box(contentAlignment = Alignment.Center) { Text("H", color = Color(0xFFFFE6CB), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) }
-    }
+    Image(
+        painter = painterResource(R.drawable.hermes_badge),
+        contentDescription = "Hermes Agent",
+        modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
+        contentScale = ContentScale.Crop,
+    )
 }
 
 @Composable
 private fun ConnectionLine(connection: GatewayConnectionState) {
     val (colour, text) = when (connection) {
-        GatewayConnectionState.Open -> Success to "LIVE / JSON-RPC"
+        GatewayConnectionState.Open -> MaterialTheme.colorScheme.tertiary to "LIVE / JSON-RPC"
         is GatewayConnectionState.Connecting -> WarningColor to "CONNECTING"
         is GatewayConnectionState.Reconnecting -> WarningColor to "RECONNECTING"
         is GatewayConnectionState.Failed -> Danger to "CONNECTION FAILED"
@@ -674,7 +739,8 @@ private fun ConnectionLine(connection: GatewayConnectionState) {
 @Composable
 private fun SessionRow(session: StoredSession, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth()
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 13.dp),
@@ -687,7 +753,7 @@ private fun SessionRow(session: StoredSession, selected: Boolean, onClick: () ->
                 session.model?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }
-        if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(Success))
+        if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary))
     }
 }
 
@@ -821,7 +887,7 @@ private fun MessageBlock(message: TimelineItem.Message) {
         Surface(
             modifier = Modifier.fillMaxWidth(if (user) 0.88f else 1f),
             color = if (user) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-            shape = RoundedCornerShape(if (user) 12.dp else 0.dp),
+            shape = RoundedCornerShape(12.dp),
             border = if (message.failed) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
         ) {
             Column(Modifier.padding(if (user) 14.dp else 6.dp)) {
@@ -854,7 +920,7 @@ private fun ToolBlock(tool: TimelineItem.Tool) {
     var expanded by rememberSaveable(tool.id) { mutableStateOf(false) }
     val colour = when (tool.state) {
         ToolState.RUNNING -> WarningColor
-        ToolState.COMPLETE -> Success
+        ToolState.COMPLETE -> MaterialTheme.colorScheme.tertiary
         ToolState.FAILED -> Danger
     }
     Column(
@@ -943,7 +1009,7 @@ private fun Composer(
                     Icon(Icons.Outlined.AttachFile, "Attach a file")
                 }
             }
-            TextField(
+            OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it },
                 placeholder = {
@@ -960,11 +1026,9 @@ private fun Composer(
                 maxLines = 6,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() }),
-                colors = TextFieldDefaults.colors(
+                colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
                 ),
             )
             if (sending) {
@@ -1022,7 +1086,7 @@ private fun ClarificationDialog(question: String, choices: List<String>, onAnswe
                         choices.forEach { choice -> OutlinedButton(onClick = { answer = choice }) { Text(choice) } }
                     }
                 }
-                TextField(answer, { answer = it }, Modifier.fillMaxWidth(), label = { Text("Answer") })
+                OutlinedTextField(answer, { answer = it }, Modifier.fillMaxWidth(), label = { Text("Answer") })
             }
         },
         confirmButton = { Button(enabled = answer.isNotBlank(), onClick = { onAnswer(answer.trim()) }) { Text("CONTINUE") } },
