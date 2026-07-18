@@ -1,6 +1,6 @@
 # Hermes for Android
 
-[![Download latest APK and AAB](https://img.shields.io/badge/download-latest%20APK%20%2B%20AAB-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Amain+is%3Asuccess)
+[![Download latest APK and AAB](https://img.shields.io/badge/download-latest%20APK%20%2B%20AAB-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Amain+status%3Asuccess)
 
 Native Android client for [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent). The project targets first-party-quality integration with the same Dashboard backend, sessions, profiles, skills, tools, models, providers, and automations used by Hermes Desktop, CLI, and TUI.
 
