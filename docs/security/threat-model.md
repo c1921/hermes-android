@@ -25,7 +25,9 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | Markdown/tool-output injection | Render declarative Markdown only; no executable HTML/JS; links require explicit open | Current UI is plain/code text; full renderer planned |
 | WebView compromise | Isolated preview activity/process, JS off by default, no `file://`, no universal file access, CSP and MIME checks | Planned; no WebView shipped |
 | Path traversal/file preview | Backend path normalisation plus client display-name/MIME validation; SAF export | Planned |
-| Oversized payload/zip bomb | HTTP/body, attachment, decompression, pixel and page limits; stream to disk | Planned |
+| Oversized payload/zip bomb | HTTP/body, attachment, audio, decompression, pixel and page limits; stream to disk where supported | Partial; voice payloads are capped at 25 MiB before decode/playback |
+| Microphone/audio residue | Request microphone only at use; app-private temporary files; bounded duration/size; delete on submit, cancel, navigation, focus interruption, failure, stop and completion | Implemented for voice slice; rooted-device/cache-forensics risk remains |
+| Malicious spoken-audio response | Accept only bounded base64 `audio/*` data URLs from the authenticated Hermes backend; decode through Android media APIs; never execute or expose the server path | Implemented |
 | Malicious skill | Preserve Hermes review/scan boundary; show source/origin/trust; never direct-install around Hermes | Planned |
 | Tool-output approval spoofing | Approval UI is driven only by a typed `approval.request` event bound to runtime session, never Markdown | Implemented |
 | Sudo or secret prompt leakage | Typed gateway events open a blocking password-semantics field backed only by non-saveable Compose state; values are sent once through the matching response method and never enter timelines, drafts, preferences, logs or diagnostics | Implemented |

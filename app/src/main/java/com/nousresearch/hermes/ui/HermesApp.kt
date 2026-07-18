@@ -1,5 +1,10 @@
 package com.nousresearch.hermes.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +21,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +56,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
@@ -57,6 +66,10 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
@@ -71,6 +84,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -80,11 +94,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -92,11 +108,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -108,7 +129,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.R
@@ -983,6 +1007,15 @@ private fun ChatSurface(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
 ) {
+    val voiceViewModel: VoiceViewModel = hiltViewModel()
+    val speechState by voiceViewModel.speechState.collectAsStateWithLifecycle()
+    LaunchedEffect(state.backend?.id) { state.backend?.let(voiceViewModel::bind) }
+    DisposableEffect(voiceViewModel) {
+        onDispose {
+            voiceViewModel.cancelRecording()
+            voiceViewModel.stopSpeaking()
+        }
+    }
     Column(modifier.statusBarsPadding()) {
         ChatHeader(state, onBack, sessionActions)
         Box(Modifier.weight(1f)) {
@@ -994,7 +1027,12 @@ private fun ChatSurface(
                     Text("Select an existing conversation or create a new one.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                Timeline(state.timeline.items)
+                Timeline(
+                    items = state.timeline.items,
+                    speechState = speechState,
+                    onSpeak = voiceViewModel::speak,
+                    onStopSpeaking = voiceViewModel::stopSpeaking,
+                )
             }
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
@@ -1013,6 +1051,7 @@ private fun ChatSurface(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             )
             Composer(
+                backend = requireNotNull(state.backend),
                 draft = state.draft,
                 slashSuggestions = state.slashSuggestions,
                 slashLoading = state.slashLoading,
@@ -1029,6 +1068,7 @@ private fun ChatSurface(
                 onAttach = onAttach,
                 onRemoveAttachment = onRemoveAttachment,
                 onInterrupt = onInterrupt,
+                voiceViewModel = voiceViewModel,
             )
         }
     }
@@ -1085,7 +1125,12 @@ private fun ChatHeader(
 }
 
 @Composable
-private fun Timeline(items: List<TimelineItem>) {
+private fun Timeline(
+    items: List<TimelineItem>,
+    speechState: SpeechUiState,
+    onSpeak: (String, String) -> Unit,
+    onStopSpeaking: () -> Unit,
+) {
     val listState = rememberLazyListState()
     LaunchedEffect(items.size, (items.lastOrNull() as? TimelineItem.Message)?.text?.length) {
         if (items.isNotEmpty()) listState.animateScrollToItem(items.lastIndex)
@@ -1098,7 +1143,12 @@ private fun Timeline(items: List<TimelineItem>) {
     ) {
         items(items, key = { it.id }) { item ->
             when (item) {
-                is TimelineItem.Message -> MessageBlock(item)
+                is TimelineItem.Message -> MessageBlock(
+                    message = item,
+                    speechState = speechState,
+                    onSpeak = { onSpeak(item.id, item.text) },
+                    onStopSpeaking = onStopSpeaking,
+                )
                 is TimelineItem.Tool -> ToolBlock(item)
                 is TimelineItem.Reasoning -> ReasoningBlock(item)
                 is TimelineItem.Status -> StatusBlock(item)
@@ -1108,7 +1158,12 @@ private fun Timeline(items: List<TimelineItem>) {
 }
 
 @Composable
-private fun MessageBlock(message: TimelineItem.Message) {
+private fun MessageBlock(
+    message: TimelineItem.Message,
+    speechState: SpeechUiState,
+    onSpeak: () -> Unit,
+    onStopSpeaking: () -> Unit,
+) {
     val user = message.role == MessageRole.USER
     val label = when (message.role) {
         MessageRole.USER -> "YOU"
@@ -1124,7 +1179,23 @@ private fun MessageBlock(message: TimelineItem.Message) {
             border = if (message.failed) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
         ) {
             Column(Modifier.padding(if (user) 14.dp else 6.dp)) {
-                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    if (!user && message.role == MessageRole.ASSISTANT && !message.streaming && message.text.isNotBlank()) {
+                        val active = speechState.messageId == message.id && speechState.phase != SpeechPhase.IDLE
+                        if (active && speechState.phase == SpeechPhase.LOADING) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        IconButton(onClick = if (active) onStopSpeaking else onSpeak, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                if (active) Icons.Outlined.StopCircle else Icons.AutoMirrored.Outlined.VolumeUp,
+                                if (active) "Stop reading this reply" else "Read this reply aloud",
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.height(5.dp))
                 RichText(message.text.ifBlank { if (message.streaming) "▍" else "" })
             }
@@ -1190,6 +1261,7 @@ private fun StatusBlock(status: TimelineItem.Status) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
+    backend: com.nousresearch.hermes.data.BackendConfig,
     draft: String,
     slashSuggestions: List<SlashSuggestion>,
     slashLoading: Boolean,
@@ -1206,9 +1278,49 @@ private fun Composer(
     onAttach: (android.net.Uri) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
+    voiceViewModel: VoiceViewModel,
 ) {
     var pendingDestructiveSlash by rememberSaveable { mutableStateOf<String?>(null) }
+    var microphoneDenied by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
+    val softwareKeyboard = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val voiceState by voiceViewModel.state.collectAsStateWithLifecycle()
+    val speechState by voiceViewModel.speechState.collectAsStateWithLifecycle()
+    val latestDraft by rememberUpdatedState(draft)
+    val latestDraftChange by rememberUpdatedState(onDraftChange)
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        microphoneDenied = !granted
+        if (granted) voiceViewModel.startRecording(VoiceRecordingMode.LOCKED) else voiceViewModel.permissionDenied()
+    }
+    LaunchedEffect(voiceState.transcript?.id) {
+        voiceState.transcript?.let { transcript ->
+            val combined = listOf(latestDraft.trimEnd(), transcript.text).filter(String::isNotBlank).joinToString(" ")
+            latestDraftChange(combined)
+            voiceViewModel.consumeTranscript(transcript.id)
+        }
+    }
+    LaunchedEffect(voiceState.phase) {
+        if (voiceState.phase != VoicePhase.IDLE) {
+            focus.clearFocus(force = true)
+            softwareKeyboard?.hide()
+        }
+    }
+    fun toggleVoice() {
+        when (voiceState.phase) {
+            VoicePhase.IDLE -> {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    microphoneDenied = false
+                    voiceViewModel.startRecording(VoiceRecordingMode.LOCKED)
+                } else {
+                    microphoneDenied = false
+                    microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+            VoicePhase.RECORDING -> voiceViewModel.stopAndTranscribe()
+            VoicePhase.TRANSCRIBING -> voiceViewModel.cancelRecording()
+        }
+    }
     fun submit() {
         if (draft.isBlank()) return
         if (draft.trimStart().startsWith('/')) {
@@ -1257,6 +1369,30 @@ private fun Composer(
                 if (attaching) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         }
+        VoiceStatus(
+            state = voiceState,
+            onStop = voiceViewModel::stopAndTranscribe,
+            onCancel = { voiceViewModel.cancelRecording() },
+            onDismissError = {
+                microphoneDenied = false
+                voiceViewModel.clearError()
+            },
+            showPermissionSettings = microphoneDenied,
+            onOpenPermissionSettings = {
+                context.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+        )
+        SpeechStatus(
+            state = speechState,
+            onPause = voiceViewModel::pauseSpeaking,
+            onResume = voiceViewModel::resumeSpeaking,
+            onStop = voiceViewModel::stopSpeaking,
+            onOutput = voiceViewModel::showOutputSwitcher,
+            onDismissError = voiceViewModel::clearSpeechError,
+        )
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Bottom,
@@ -1284,6 +1420,21 @@ private fun Composer(
                 maxLines = 6,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { submit() }),
+                trailingIcon = {
+                    VoiceRecordButton(
+                        state = voiceState,
+                        connected = connected,
+                        hasPermission = {
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        },
+                        onRequestPermission = { microphonePermission.launch(Manifest.permission.RECORD_AUDIO) },
+                        onTap = ::toggleVoice,
+                        onPressStart = { voiceViewModel.startRecording(VoiceRecordingMode.PRESS_TO_TALK) },
+                        onLock = voiceViewModel::lockRecording,
+                        onRelease = voiceViewModel::stopAndTranscribe,
+                        onCancel = { voiceViewModel.cancelRecording() },
+                    )
+                },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -1327,6 +1478,237 @@ private fun Composer(
         )
     }
 }
+
+@Composable
+private fun VoiceRecordButton(
+    state: VoiceUiState,
+    connected: Boolean,
+    hasPermission: () -> Boolean,
+    onRequestPermission: () -> Unit,
+    onTap: () -> Unit,
+    onPressStart: () -> Unit,
+    onLock: () -> Unit,
+    onRelease: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val gestureThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    val latestState by rememberUpdatedState(state)
+    val latestTap by rememberUpdatedState(onTap)
+    val latestPermission by rememberUpdatedState(hasPermission)
+    val latestRequestPermission by rememberUpdatedState(onRequestPermission)
+    val latestPressStart by rememberUpdatedState(onPressStart)
+    val latestLock by rememberUpdatedState(onLock)
+    val latestRelease by rememberUpdatedState(onRelease)
+    val latestCancel by rememberUpdatedState(onCancel)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(50))
+            .semantics {
+                role = Role.Button
+                contentDescription = when (state.phase) {
+                    VoicePhase.IDLE -> "Hold to talk or tap for locked recording"
+                    VoicePhase.RECORDING -> "Stop and transcribe voice recording"
+                    VoicePhase.TRANSCRIBING -> "Cancel voice transcription"
+                }
+                onClick {
+                    if (connected) latestTap()
+                    connected
+                }
+            }
+            .focusable(enabled = connected)
+            .pointerInput(connected, gestureThreshold) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                down.consume()
+                if (!connected) return@awaitEachGesture
+                if (latestState.phase != VoicePhase.IDLE) {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) {
+                            change.consume()
+                            latestTap()
+                            break
+                        }
+                        change.consume()
+                    }
+                    return@awaitEachGesture
+                }
+                if (!latestPermission()) {
+                    latestRequestPermission()
+                    return@awaitEachGesture
+                }
+
+                latestPressStart()
+                var locked = false
+                var cancelled = false
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    val horizontal = change.position.x - down.position.x
+                    val vertical = change.position.y - down.position.y
+                    if (!locked && !cancelled && horizontal <= -gestureThreshold) {
+                        cancelled = true
+                        latestCancel()
+                    } else if (!locked && !cancelled && vertical <= -gestureThreshold) {
+                        locked = true
+                        latestLock()
+                    }
+                    if (!change.pressed) {
+                        if (!locked && !cancelled) {
+                            if (change.uptimeMillis - down.uptimeMillis < PRESS_TO_TALK_THRESHOLD_MILLIS) {
+                                latestLock()
+                            } else {
+                                latestRelease()
+                            }
+                        }
+                        change.consume()
+                        break
+                    }
+                    change.consume()
+                }
+            }
+        },
+    ) {
+        Icon(
+            when {
+                state.phase == VoicePhase.IDLE -> Icons.Outlined.Mic
+                state.phase == VoicePhase.RECORDING && state.recordingMode == VoiceRecordingMode.LOCKED -> Icons.Outlined.Lock
+                else -> Icons.Outlined.StopCircle
+            },
+            contentDescription = null,
+            tint = if (state.phase == VoicePhase.RECORDING) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun VoiceStatus(
+    state: VoiceUiState,
+    onStop: () -> Unit,
+    onCancel: () -> Unit,
+    onDismissError: () -> Unit,
+    showPermissionSettings: Boolean,
+    onOpenPermissionSettings: () -> Unit,
+) {
+    when (state.phase) {
+        VoicePhase.RECORDING -> Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${if (state.recordingMode == VoiceRecordingMode.PRESS_TO_TALK) "HOLDING" else "RECORDING"} / ${state.elapsedMillis.formatVoiceTime()}",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onCancel) { Text("Cancel") }
+                    Button(onClick = onStop) { Text("Transcribe") }
+                }
+                LinearProgressIndicator(progress = { state.level }, modifier = Modifier.fillMaxWidth())
+                Text(
+                    if (state.recordingMode == VoiceRecordingMode.PRESS_TO_TALK) {
+                        "Release to transcribe, slide up to lock, or slide left to cancel."
+                    } else {
+                        "Locked recording. Tap Transcribe when finished; it stops automatically after two minutes."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        VoicePhase.TRANSCRIBING -> Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text("HERMES IS TRANSCRIBING", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            }
+        }
+        VoicePhase.IDLE -> state.error?.let { message ->
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+                Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    if (showPermissionSettings) TextButton(onClick = onOpenPermissionSettings) { Text("Settings") }
+                    IconButton(onClick = onDismissError) { Icon(Icons.Outlined.Close, "Dismiss voice error") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeechStatus(
+    state: SpeechUiState,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onStop: () -> Unit,
+    onOutput: () -> Unit,
+    onDismissError: () -> Unit,
+) {
+    if (state.phase != SpeechPhase.IDLE) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Row(
+                Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (state.phase == SpeechPhase.LOADING) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Icon(Icons.AutoMirrored.Outlined.VolumeUp, null, modifier = Modifier.size(20.dp))
+                Text(
+                    if (state.phase == SpeechPhase.LOADING) "HERMES IS PREPARING AUDIO" else "SPEAKING / ${state.outputName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (state.phase == SpeechPhase.PLAYING) {
+                    IconButton(onClick = onPause) { Icon(Icons.Outlined.Pause, "Pause spoken reply") }
+                } else if (state.phase == SpeechPhase.PAUSED) {
+                    IconButton(onClick = onResume) { Icon(Icons.Outlined.PlayArrow, "Resume spoken reply") }
+                }
+                if (state.phase != SpeechPhase.LOADING) {
+                    TextButton(onClick = onOutput) { Text("Output") }
+                }
+                IconButton(onClick = onStop) { Icon(Icons.Outlined.StopCircle, "Stop spoken reply") }
+            }
+        }
+    } else if (state.error != null) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(state.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                IconButton(onClick = onDismissError) { Icon(Icons.Outlined.Close, "Dismiss spoken reply error") }
+            }
+        }
+    }
+}
+
+private fun Long.formatVoiceTime(): String {
+    val totalSeconds = this / 1_000L
+    return "%d:%02d".format(totalSeconds / 60L, totalSeconds % 60L)
+}
+
+private const val PRESS_TO_TALK_THRESHOLD_MILLIS = 300L
 
 @Composable
 private fun SlashSuggestions(

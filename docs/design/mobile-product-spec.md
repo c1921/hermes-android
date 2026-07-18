@@ -40,12 +40,14 @@ Dark surfaces carry a low-opacity carousel of six purpose-built Nous field plate
 - Retry, undo and reset are explicit confirmed session actions. Reset closes the old live runtime before opening a clean one, while its durable transcript remains available in the session list.
 - Typing `/` opens Hermes' own categorized command catalogue above the composer. Suggestions and arguments come from the gateway, but Android filters terminal-only built-ins and supports every structured dispatch result: inline output, alias, send, skill, and editable prefill.
 - Nous is the default appearance. A lower-priority cosmetic follow-up will expose the exact client-owned Hermes Desktop presets (`nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate`) through a native appearance picker without changing server configuration.
+- Voice input is a composer-owned interaction. Holding the rounded microphone control records press-to-talk; a quick tap or upward slide locks recording, and a leftward slide cancels it. Recording clears composer focus and hides the IME so the microphone state never competes with the keyboard. An always-visible cancel/transcribe surface provides a non-gesture alternative.
+- Completed assistant messages expose a labelled read-aloud action. The app sends Desktop-equivalent sanitised reply text to Hermes `/api/audio/speak`, then plays only the audio returned by Hermes' configured TTS provider. Android provides pause, resume, stop and the system media-output switcher; it does not silently replace Hermes TTS with platform synthesis.
 
 ## Notifications and permissions
 
 Notification channels will separate approvals/input, run completion/failure and cron/automation results. Content previews default to private. Notification actions must carry a signed, single-use server action token or open the exact in-app prompt; broadcast extras alone never authorise an approval.
 
-Microphone permission is requested only when voice recording begins. Storage uses the system document picker and Storage Access Framework. Camera permission is requested only for direct capture. Notification permission is requested after the value is explained, not during cold start.
+Microphone permission is requested only when voice recording begins. Denial leaves the conversation usable and exposes an inline route to Android App Info for recovery. Recordings are bounded to two minutes and 25 MiB, kept only in app-private cache, deleted after transcription or cancellation, and stopped when audio focus is lost or the conversation is left. Spoken audio is MIME-checked, base64-checked, capped at 25 MiB and deleted after stop, failure or completion. Storage uses the system document picker and Storage Access Framework. Camera permission is requested only for direct capture. Notification permission is requested after the value is explained, not during cold start.
 
 ## Offline behaviour
 
@@ -60,9 +62,10 @@ The app is not an offline agent. Previously hydrated transcripts and drafts may 
 - Connection loss changes a narrow status line; the transcript does not flash or relayout.
 - Reduced-motion mode replaces spatial transitions with immediate changes or short fades. Streaming content never animates each token.
 - Ambient field art holds each anchor for 150 seconds, crosses through a 12-second bridge plate, pauses off-screen, and remains static when the system motion scale is zero.
+- Recording feedback uses a stable level bar rather than decorative waveform motion. Reduced-motion users receive the same elapsed time, recording mode and text instructions without relying on animation.
 
 Interrupted animations settle to semantic state. Process recreation restores the destination, not an animation phase.
 
 ## Accessibility
 
-Minimum 48dp controls, scalable text, semantic headings, labelled icon actions, logical master/detail traversal and no colour-only state. Streaming updates do not continuously steal TalkBack focus. Hardware Enter sends only from the composer; Escape/back affects the topmost owned interaction once. Tool state combines icon, text and colour.
+Minimum 48dp controls, scalable text, semantic headings, labelled icon actions, logical master/detail traversal and no colour-only state. Voice actions expose TalkBack labels for record, stop, read, pause, resume and output selection; recording mode and interruption state are also written as text. Streaming updates do not continuously steal TalkBack focus. Hardware Enter sends only from the composer; Escape/back affects the topmost owned interaction once. Tool state combines icon, text and colour.

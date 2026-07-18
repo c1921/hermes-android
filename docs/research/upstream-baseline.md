@@ -36,7 +36,7 @@ Paths below are relative to the pinned upstream checkout.
 | Profiles | `hermes_cli/profiles.py`, profile routes in `hermes_cli/web_server.py`, profile handling in `tui_gateway/server.py` | Profile-scoped configuration and sessions, including a currently open WebSocket profile-routing bug. |
 | Skills, MCP, and plugins | `skills/`, `hermes_cli/skills_hub.py`, `tools/mcp_*`, `plugins/` | Discovery, review, installation, enablement, and reload surfaces used by Desktop. |
 | Cron and background work | `cron/`, cron routes in `hermes_cli/web_server.py`, delegation methods in `tui_gateway/server.py` | Scheduled work, background tasks, subagents, and delivery state. |
-| Voice | `hermes_cli/voice.py`, `tools/voice_mode.py`, audio routes in `hermes_cli/web_server.py` | Server STT/TTS and the narrower Termux voice path. |
+| Voice | Desktop `apps/desktop/src/hermes.ts`, `lib/voice-playback.ts`, `lib/speech-text.ts`; `hermes_cli/voice.py`, `tools/voice_mode.py`, `tools/tts_tool.py`, audio routes in `hermes_cli/web_server.py` | `/api/audio/transcribe` accepts recorded audio. `/api/audio/speak` calls Hermes' configured `text_to_speech_tool` provider chain, removes its temporary server file, and returns a base64 audio data URL for client playback. |
 | Android/Termux support | `pyproject.toml:230-250`, `constraints-termux.txt`, `scripts/install.sh`, `hermes_constants.py` | Official Tier 2 local-runtime path and its dependency exclusions. |
 | Contract tests | `tests/tui_gateway/`, `tests/test_tui_gateway_ws.py`, `tests/hermes_cli/test_dashboard_auth_*`, `apps/desktop/**/*.test.*` | Primary evidence for protocol, auth, reconnect, and Desktop behavior. |
 

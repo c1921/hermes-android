@@ -30,6 +30,8 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [x] Provider API-key and custom-endpoint management through Hermes-owned APIs
 - [x] SAF file, image, and PDF attachments with bounded reads and server-queue cleanup
 - [x] Managed workspace browsing with directory navigation, bounded text/source/image/PDF previews, network-isolated HTML rendering, streamed SAF downloads, cancellation, and MIME/path validation
+- [x] Press-to-talk and lockable voice capture through Hermes `/api/audio/transcribe`, with slide-to-lock/cancel, live level feedback, bounded temporary audio, permission recovery, and audio-focus interruption handling
+- [x] Per-reply spoken playback through Hermes' own `/api/audio/speak` provider chain, with pause, resume, stop, system output routing, Bluetooth support, and temporary-audio cleanup
 - [x] Profile list, create, rename, delete, selection, and profile-scoped sessions
 - [x] Installed skills plus Skill Hub search, review, scan, install, update, enable/disable, and removal
 - [x] Cron list, create, edit, delete, enable/disable, run-now, and recent server-side runs
@@ -52,7 +54,6 @@ The current `main` checkout passes all unit tests, Android lint, and debug APK a
 - [ ] Background push notifications and notification actions
 - [ ] Pending-message queue and composer history
 - [ ] Optional appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` skins; Nous remains the default
-- [ ] Voice recording, transcription, spoken replies, audio focus, and Bluetooth handling
 - [ ] MCP and toolset configuration
 - [ ] Messaging-gateway management
 - [ ] Agents, subagents, background tasks, and Command Center
@@ -189,8 +190,9 @@ Current automated coverage includes:
 - Password non-persistence at the connect-and-save boundary
 - Transport policy, protocol fixtures, reducers, session lifecycle, management routes, provider routes, Skill Hub routes, and diagnostic redaction
 - Sensitive sudo/secret request and expiry reduction plus physical Compose instrumentation for password semantics, exact submission, cancellation, and cross-request value isolation
+- Hermes voice REST payloads, spoken-audio MIME/base64 validation, Desktop-equivalent speech sanitisation, and numeric/string session-history message identifiers
 
-Automated tests do not require a paid provider key or production credentials. A physical-device smoke against an isolated secured Dashboard from the pinned upstream source has passed. A final smoke against any intended production deployment is still required before calling that deployment verified.
+Automated tests do not require a paid provider key or production credentials. A physical-device smoke against an isolated secured Dashboard from the pinned upstream source has passed. Voice QA on the Samsung covered microphone permission denial/recovery, press-to-talk without the keyboard, locked recording, slide-to-lock, slide-to-cancel, transcription failure recovery, cache cleanup, real Hermes Edge TTS generation, playback pause/resume/stop/completion, and Android's system output switcher. A final smoke against any intended production deployment is still required before calling that deployment verified.
 
 ## Current issues and blockers
 

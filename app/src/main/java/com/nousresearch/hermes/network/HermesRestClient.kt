@@ -3,6 +3,8 @@ package com.nousresearch.hermes.network
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.protocol.ActionResponse
 import com.nousresearch.hermes.protocol.ActionStatusResponse
+import com.nousresearch.hermes.protocol.AudioSpeakResponse
+import com.nousresearch.hermes.protocol.AudioTranscriptionResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
@@ -116,6 +118,40 @@ class HermesRestClient(
         token,
         "/api/files/read?path=${encodePathSegment(path)}",
         ManagedFileReadResponse.serializer(),
+    )
+
+    suspend fun transcribeAudio(
+        config: BackendConfig,
+        token: String,
+        dataUrl: String,
+        mimeType: String,
+    ): AudioTranscriptionResponse = json.decodeFromJsonElement(
+        AudioTranscriptionResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/audio/transcribe",
+            method = "POST",
+            body = buildJsonObject {
+                put("data_url", dataUrl)
+                put("mime_type", mimeType)
+            },
+        ),
+    )
+
+    suspend fun speakText(
+        config: BackendConfig,
+        token: String,
+        text: String,
+    ): AudioSpeakResponse = json.decodeFromJsonElement(
+        AudioSpeakResponse.serializer(),
+        request(
+            config,
+            token,
+            "/api/audio/speak",
+            method = "POST",
+            body = buildJsonObject { put("text", text) },
+        ),
     )
 
     suspend fun downloadManagedFile(

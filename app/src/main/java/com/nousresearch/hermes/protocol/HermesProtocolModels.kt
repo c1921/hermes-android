@@ -97,6 +97,7 @@ data class SessionMessagePage(
 
 @Serializable
 data class ProtocolMessage(
+    @Serializable(with = NullableFlexibleStringSerializer::class)
     val id: String? = null,
     val role: String,
     val content: JsonElement? = null,
