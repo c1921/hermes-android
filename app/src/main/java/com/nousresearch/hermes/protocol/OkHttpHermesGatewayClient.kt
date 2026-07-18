@@ -33,6 +33,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
     private val authClient: DashboardAuthClient,
 ) : HermesGatewayClient {
     private val requestIds = AtomicLong(0)
+    private val connectionIds = AtomicLong(0)
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<JsonElement>>()
     private val mutableConnectionState = MutableStateFlow<GatewayConnectionState>(GatewayConnectionState.Idle)
     private val mutableEvents = MutableSharedFlow<GatewayEvent>(
@@ -55,6 +56,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
     }
 
     private suspend fun connect(url: HttpUrl) {
+        val connectionId = connectionIds.incrementAndGet()
         val previous = socket
         socket = null
         previous?.close(1000, "connection replaced")
@@ -65,7 +67,11 @@ class OkHttpHermesGatewayClient @Inject constructor(
             .url(url)
             .header("User-Agent", "Hermes-Android/0.1")
             .build()
-        val nextSocket = client.newWebSocket(request, listener(opened))
+        val nextSocket = client.newWebSocket(request, listener(opened, connectionId))
+        if (connectionIds.get() != connectionId) {
+            nextSocket.cancel()
+            throw HermesRpcException("Hermes gateway connection was superseded")
+        }
         socket = nextSocket
         try {
             withTimeout(CONNECT_TIMEOUT_MILLIS) { opened.await() }
@@ -77,6 +83,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
     }
 
     override suspend fun disconnect() {
+        connectionIds.incrementAndGet()
         val previous = socket
         socket = null
         previous?.close(1000, "client disconnect")
@@ -102,15 +109,18 @@ class OkHttpHermesGatewayClient @Inject constructor(
         }
     }
 
-    private fun listener(opened: CompletableDeferred<Unit>) = object : WebSocketListener() {
+    private fun listener(
+        opened: CompletableDeferred<Unit>,
+        connectionId: Long,
+    ) = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            if (socket !== webSocket) return
+            if (connectionIds.get() != connectionId) return
             mutableConnectionState.value = GatewayConnectionState.Open
             opened.complete(Unit)
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            if (socket !== webSocket) return
+            if (connectionIds.get() != connectionId) return
             val frame = runCatching { json.decodeFromString(JsonRpcFrame.serializer(), text) }
                 .getOrElse { return }
             frame.params?.takeIf { frame.method == "event" }?.let {
@@ -134,7 +144,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            if (socket !== webSocket) return
+            if (connectionIds.get() != connectionId) return
             socket = null
             failPending(HermesRpcException("Hermes gateway closed: $reason"))
             mutableConnectionState.value = GatewayConnectionState.Closed(reason)
@@ -142,7 +152,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
         }
 
         override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
-            if (socket !== webSocket) return
+            if (connectionIds.get() != connectionId) return
             socket = null
             failPending(throwable)
             mutableConnectionState.value = GatewayConnectionState.Failed(
