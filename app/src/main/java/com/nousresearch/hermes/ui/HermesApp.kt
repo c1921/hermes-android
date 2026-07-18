@@ -67,6 +67,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Mic
@@ -83,6 +84,8 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -133,6 +136,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -142,6 +151,8 @@ import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
 import com.nousresearch.hermes.data.SlashSuggestion
 import com.nousresearch.hermes.domain.MessageRole
+import com.nousresearch.hermes.domain.ComposerBrowseState
+import com.nousresearch.hermes.domain.ComposerHistory
 import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
@@ -153,6 +164,7 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
+private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
 private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, AGENTS }
 
 private data class ModelActions(
@@ -1200,6 +1212,8 @@ private fun ChatSurface(
             )
             Composer(
                 backend = requireNotNull(state.backend),
+                historySessionId = requireNotNull(state.runtimeSessionId),
+                userHistory = remember(state.timeline.items) { ComposerHistory.derive(state.timeline) },
                 draft = state.draft,
                 slashSuggestions = state.slashSuggestions,
                 slashLoading = state.slashLoading,
@@ -1413,6 +1427,8 @@ private fun StatusBlock(status: TimelineItem.Status) {
 @Composable
 private fun Composer(
     backend: com.nousresearch.hermes.data.BackendConfig,
+    historySessionId: String,
+    userHistory: List<String>,
     draft: String,
     slashSuggestions: List<SlashSuggestion>,
     slashLoading: Boolean,
@@ -1433,6 +1449,9 @@ private fun Composer(
 ) {
     var pendingDestructiveSlash by rememberSaveable { mutableStateOf<String?>(null) }
     var microphoneDenied by rememberSaveable { mutableStateOf(false) }
+    var historyMenuOpen by rememberSaveable(historySessionId) { mutableStateOf(false) }
+    var historyCursor by rememberSaveable(historySessionId) { mutableIntStateOf(-1) }
+    var historyDraftSnapshot by rememberSaveable(historySessionId) { mutableStateOf("") }
     val focus = LocalFocusManager.current
     val softwareKeyboard = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
@@ -1472,6 +1491,22 @@ private fun Composer(
             VoicePhase.TRANSCRIBING -> voiceViewModel.cancelRecording()
         }
     }
+    fun resetHistoryBrowse() {
+        historyCursor = -1
+        historyDraftSnapshot = ""
+    }
+    fun browseHistory(backward: Boolean): Boolean {
+        val current = ComposerBrowseState(historyCursor, historyDraftSnapshot)
+        val result = if (backward) {
+            ComposerHistory.backward(current, draft, userHistory)
+        } else {
+            ComposerHistory.forward(current, userHistory)
+        } ?: return false
+        historyCursor = result.state.cursor
+        historyDraftSnapshot = result.state.draftSnapshot
+        onDraftChange(result.text)
+        return true
+    }
     fun submit() {
         if (draft.isBlank()) return
         if (draft.trimStart().startsWith('/')) {
@@ -1486,6 +1521,7 @@ private fun Composer(
                 onExecuteSlash(slash)
             }
         } else if (sending) onSteer(draft) else onSend(draft)
+        resetHistoryBrowse()
         focus.clearFocus()
     }
     LaunchedEffect(draft) { onCompleteSlash(draft) }
@@ -1554,9 +1590,34 @@ private fun Composer(
                     Icon(Icons.Outlined.AttachFile, "Attach a file")
                 }
             }
+            Box {
+                IconButton(
+                    onClick = { historyMenuOpen = true },
+                    enabled = connected && userHistory.isNotEmpty(),
+                    modifier = Modifier.semantics { contentDescription = "Open message history" },
+                ) { Icon(Icons.Outlined.History, null) }
+                DropdownMenu(
+                    expanded = historyMenuOpen,
+                    onDismissRequest = { historyMenuOpen = false },
+                ) {
+                    userHistory.take(MAX_VISIBLE_COMPOSER_HISTORY).forEach { message ->
+                        DropdownMenuItem(
+                            text = { Text(message, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                            onClick = {
+                                resetHistoryBrowse()
+                                onDraftChange(message)
+                                historyMenuOpen = false
+                            },
+                        )
+                    }
+                }
+            }
             OutlinedTextField(
                 value = draft,
-                onValueChange = onDraftChange,
+                onValueChange = {
+                    resetHistoryBrowse()
+                    onDraftChange(it)
+                },
                 placeholder = {
                     Text(
                         when {
@@ -1566,7 +1627,19 @@ private fun Composer(
                         },
                     )
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) {
+                            false
+                        } else {
+                            when (event.key) {
+                                Key.DirectionUp -> browseHistory(backward = true)
+                                Key.DirectionDown -> browseHistory(backward = false)
+                                else -> false
+                            }
+                        }
+                    },
                 enabled = connected,
                 maxLines = 6,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
