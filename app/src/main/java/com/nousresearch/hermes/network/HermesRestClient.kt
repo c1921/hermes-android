@@ -3,6 +3,7 @@ package com.nousresearch.hermes.network
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.protocol.ActionResponse
 import com.nousresearch.hermes.protocol.ActionStatusResponse
+import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.AudioSpeakResponse
 import com.nousresearch.hermes.protocol.AudioTranscriptionResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
@@ -277,6 +278,21 @@ class HermesRestClient(
             body = buildJsonObject { put("enabled", enabled) },
         ),
     )
+
+    suspend fun usageAnalytics(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        days: Int,
+    ): AnalyticsResponse {
+        require(days in 1..3650) { "Usage period must be between 1 and 3,650 days" }
+        return get(
+            config,
+            token,
+            "/api/analytics/usage?days=$days&profile=${encodePathSegment(profile)}",
+            AnalyticsResponse.serializer(),
+        )
+    }
 
     suspend fun downloadManagedFile(
         config: BackendConfig,

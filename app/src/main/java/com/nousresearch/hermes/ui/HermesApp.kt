@@ -60,6 +60,7 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -152,7 +153,7 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, AGENTS }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, AGENTS }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -208,6 +209,7 @@ private data class ManagementActions(
     val refreshMcp: () -> Unit,
     val testMcpServer: (String) -> Unit,
     val setMcpServerEnabled: (String, Boolean) -> Unit,
+    val refreshUsage: (Int) -> Unit,
     val refreshAgents: () -> Unit,
     val setDelegationPaused: (Boolean) -> Unit,
     val interruptSubagent: (String) -> Unit,
@@ -275,6 +277,7 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             refreshMcp = viewModel::refreshMcp,
             testMcpServer = viewModel::testMcpServer,
             setMcpServerEnabled = viewModel::setMcpServerEnabled,
+            refreshUsage = viewModel::refreshUsage,
             refreshAgents = viewModel::refreshAgents,
             setDelegationPaused = viewModel::setDelegationPaused,
             interruptSubagent = viewModel::interruptSubagent,
@@ -550,6 +553,7 @@ private fun HermesWorkspace(
                     onProviders = { destination = WorkspaceDestination.PROVIDERS },
                     onMessaging = { destination = WorkspaceDestination.MESSAGING },
                     onMcp = { destination = WorkspaceDestination.MCP },
+                    onUsage = { destination = WorkspaceDestination.USAGE },
                     onAgents = { destination = WorkspaceDestination.AGENTS },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
@@ -625,6 +629,12 @@ private fun HermesWorkspace(
                         onRefresh = managementActions.refreshMcp,
                         onTest = managementActions.testMcpServer,
                         onSetEnabled = managementActions.setMcpServerEnabled,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.USAGE -> UsageScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshUsage,
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -740,6 +750,12 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    WorkspaceDestination.USAGE -> UsageScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshUsage,
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                    )
                     WorkspaceDestination.AGENTS -> AgentsScreen(
                         state = state,
                         onRefresh = managementActions.refreshAgents,
@@ -764,6 +780,7 @@ private fun HermesWorkspace(
                         onProviders = { destination = WorkspaceDestination.PROVIDERS },
                         onMessaging = { destination = WorkspaceDestination.MESSAGING },
                         onMcp = { destination = WorkspaceDestination.MCP },
+                        onUsage = { destination = WorkspaceDestination.USAGE },
                         onAgents = { destination = WorkspaceDestination.AGENTS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
@@ -791,6 +808,7 @@ private fun SessionRail(
     onProviders: () -> Unit,
     onMessaging: () -> Unit,
     onMcp: () -> Unit,
+    onUsage: () -> Unit,
     onAgents: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -914,7 +932,11 @@ private fun SessionRail(
                 Spacer(Modifier.width(6.dp))
                 Text("Agents")
             }
-            Spacer(Modifier.weight(1f))
+            OutlinedButton(onClick = onUsage, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.BarChart, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Usage")
+            }
         }
         OutlinedTextField(
             value = query,

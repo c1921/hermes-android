@@ -31,6 +31,7 @@ For protocol work, inspect the exact upstream Hermes source and cite the commit 
 
 Recent completed slices on `main`:
 
+- Usage management adds profile-scoped 7/30/90-day token, API-call, model, tool, skill and cost summaries plus the live session's `session.context_breakdown`.
 - MCP management adds profile-scoped configured-server and Nous catalogue inspection, backend connection probes, enable/disable, and live `reload.mcp`; server creation/edit/removal, catalog install, OAuth, and per-tool filters remain follow-up work.
 - `889aa37` adds the mobile Command Center with live delegation status, subagent trees, pause/resume, confirmed interruption, session-owned background processes, and confirmed process stop.
 - `072f2b9` adds messaging gateway management.
@@ -66,7 +67,6 @@ Good unblocked candidates include:
 
 - MCP server creation/edit/removal, catalog installation, OAuth setup, and per-tool filters using the existing audited REST contracts.
 - Toolset and structured general-configuration management.
-- Usage, token accounting, and context breakdown.
 - Checkpoint list, diff, and explicitly confirmed rollback.
 - Pending-message queue and composer history.
 - Persisted spawn-tree replay using the existing server contract.
@@ -111,6 +111,8 @@ This run is cloud-only.
 Record device-only verification as deferred, with exact steps for the next local pass.
 
 For the MCP slice, the deferred pass must inspect configured and catalog layouts on phone and expanded widths; exercise TalkBack, 130%+ text, keyboard focus, and profile switching; then use a disposable MCP server on a pinned Hermes backend to verify probe success/failure, enable/disable, live-session reload without transcript loss, and the saved-but-reload-failed recovery message. None of those checks are established by the cloud unit/lint/build gate.
+
+For the usage slice, the deferred pass must inspect 7/30/90-day, empty, large-number and partial-context states on phone and expanded widths; exercise TalkBack traversal, 130%+ text and keyboard focus; compare one disposable profile's totals with the pinned Dashboard; and verify an open session's context category total and capacity before and after a message. The cloud gate does not establish those visual, accessibility or live-accounting checks.
 
 ## Working method
 

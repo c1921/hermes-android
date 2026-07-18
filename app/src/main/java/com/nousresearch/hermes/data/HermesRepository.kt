@@ -9,12 +9,14 @@ import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.domain.lastUserPrompt
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.ConfigSetResult
+import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.BackgroundProcess
 import com.nousresearch.hermes.protocol.BackgroundProcessKillResponse
 import com.nousresearch.hermes.protocol.BackgroundProcessListResponse
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
+import com.nousresearch.hermes.protocol.ContextBreakdown
 import com.nousresearch.hermes.protocol.FileAttachResult
 import com.nousresearch.hermes.protocol.DelegationPauseResponse
 import com.nousresearch.hermes.protocol.DelegationStatusResponse
@@ -124,6 +126,11 @@ data class HermesState(
     val mcpLoading: Boolean = false,
     val mcpNotice: String? = null,
     val mcpError: String? = null,
+    val usageAnalytics: AnalyticsResponse? = null,
+    val contextBreakdown: ContextBreakdown? = null,
+    val usageDays: Int = 30,
+    val usageLoading: Boolean = false,
+    val usageError: String? = null,
     val delegationStatus: DelegationStatusResponse? = null,
     val activeSubagents: List<SubagentProgress> = emptyList(),
     val subagentsBySession: Map<String, List<SubagentProgress>> = emptyMap(),
@@ -1520,6 +1527,58 @@ class HermesRepository @Inject constructor(
         }
     }
 
+    suspend fun refreshUsage(days: Int = mutableState.value.usageDays) {
+        require(days in USAGE_PERIODS) { "Unsupported usage period" }
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            usageDays = days,
+            usageLoading = true,
+            usageError = null,
+        )
+        runCatching {
+            val active = restClient.activeProfile(backend, token)
+            val analytics = restClient.usageAnalytics(backend, token, active.active, days)
+            val context = mutableState.value.runtimeSessionId?.let { sessionId ->
+                try {
+                    Result.success(
+                        gateway.request(
+                            "session.context_breakdown",
+                            buildJsonObject { put("session_id", sessionId) },
+                        ).let { json.decodeFromJsonElement(ContextBreakdown.serializer(), it) },
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    Result.failure(error)
+                }
+            }
+            Triple(active, analytics, context)
+        }.onSuccess { (active, analytics, context) ->
+            val safeContext = context?.getOrNull()?.let { breakdown ->
+                breakdown.copy(
+                    categories = breakdown.categories
+                        .filter { it.id.isNotBlank() && it.id.length <= MAX_USAGE_LABEL_CHARACTERS && it.tokens >= 0 }
+                        .distinctBy { it.id }
+                        .take(MAX_CONTEXT_CATEGORIES),
+                )
+            }
+            mutableState.value = mutableState.value.copy(
+                activeProfile = active.active,
+                currentProfile = active.current,
+                usageAnalytics = analytics,
+                contextBreakdown = safeContext,
+                usageLoading = false,
+                usageError = context?.exceptionOrNull()?.message?.let {
+                    "Profile analytics loaded, but the live context breakdown is unavailable: ${DiagnosticRedactor.redact(it)}"
+                },
+                error = null,
+            )
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            failUsage(error)
+        }
+    }
+
     suspend fun refreshAgents() {
         if (mutableState.value.agentsLoading) return
         mutableState.value = mutableState.value.copy(agentsLoading = true, agentsError = null)
@@ -2082,6 +2141,7 @@ class HermesRepository @Inject constructor(
             messagingLoading = false,
             gatewayRestarting = false,
             mcpLoading = false,
+            usageLoading = false,
             agentsLoading = false,
             skillHubLoading = false,
             sessionSearchLoading = false,
@@ -2114,6 +2174,21 @@ class HermesRepository @Inject constructor(
         mutableState.value = mutableState.value.copy(
             mcpLoading = false,
             mcpError = error.message ?: error::class.simpleName ?: "Hermes MCP request failed",
+        )
+    }
+
+    private fun failUsage(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException ||
+            (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        if (reconnect) {
+            fail(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            usageLoading = false,
+            usageError = DiagnosticRedactor.redact(
+                error.message ?: error::class.simpleName ?: "Hermes usage request failed",
+            ),
         )
     }
 
@@ -2155,9 +2230,12 @@ private const val MAX_SLASH_SUGGESTIONS = 12
 private const val MAX_SLASH_ALIAS_DEPTH = 5
 private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
 private const val MAX_MCP_NAME_CHARACTERS = 200
+private const val MAX_USAGE_LABEL_CHARACTERS = 200
+private const val MAX_CONTEXT_CATEGORIES = 32
 private const val MAX_AGENT_EVENT_SESSIONS = 32
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
+private val USAGE_PERIODS = setOf(7, 30, 90)
 
 private val MOBILE_SLASH_COMMANDS = setOf(
     "/agents", "/background", "/bg", "/btw", "/branch", "/compress", "/debug",

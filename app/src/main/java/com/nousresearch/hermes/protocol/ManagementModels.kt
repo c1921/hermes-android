@@ -324,3 +324,97 @@ data class McpReloadResponse(
     val message: String? = null,
     @SerialName("turn_isolation") val turnIsolation: Boolean = false,
 )
+
+@Serializable
+data class ContextUsageCategory(
+    val id: String,
+    val label: String,
+    val color: String = "",
+    val tokens: Long,
+)
+
+@Serializable
+data class ContextBreakdown(
+    val categories: List<ContextUsageCategory> = emptyList(),
+    @SerialName("context_max") val contextMax: Long,
+    @SerialName("context_percent") val contextPercent: Double,
+    @SerialName("context_used") val contextUsed: Long,
+    @SerialName("estimated_total") val estimatedTotal: Long,
+    val model: String? = null,
+)
+
+@Serializable
+data class AnalyticsDailyEntry(
+    val day: String,
+    @SerialName("input_tokens") val inputTokens: Long,
+    @SerialName("output_tokens") val outputTokens: Long,
+    @SerialName("cache_read_tokens") val cacheReadTokens: Long,
+    @SerialName("reasoning_tokens") val reasoningTokens: Long,
+    @SerialName("estimated_cost") val estimatedCost: Double,
+    @SerialName("actual_cost") val actualCost: Double,
+    val sessions: Long,
+    @SerialName("api_calls") val apiCalls: Long,
+)
+
+@Serializable
+data class AnalyticsModelEntry(
+    val model: String,
+    @SerialName("input_tokens") val inputTokens: Long,
+    @SerialName("output_tokens") val outputTokens: Long,
+    @SerialName("estimated_cost") val estimatedCost: Double,
+    val sessions: Long,
+    @SerialName("api_calls") val apiCalls: Long,
+)
+
+@Serializable
+data class AnalyticsToolEntry(
+    val tool: String,
+    val count: Long,
+    val percentage: Double,
+)
+
+@Serializable
+data class AnalyticsSkillEntry(
+    val skill: String,
+    @SerialName("last_used_at") val lastUsedAt: Double? = null,
+    @SerialName("manage_count") val manageCount: Long,
+    val percentage: Double,
+    @SerialName("total_count") val totalCount: Long,
+    @SerialName("view_count") val viewCount: Long,
+)
+
+@Serializable
+data class AnalyticsSkillsSummary(
+    @SerialName("distinct_skills_used") val distinctSkillsUsed: Long,
+    @SerialName("total_skill_actions") val totalSkillActions: Long,
+    @SerialName("total_skill_edits") val totalSkillEdits: Long,
+    @SerialName("total_skill_loads") val totalSkillLoads: Long,
+)
+
+@Serializable
+data class AnalyticsSkills(
+    val summary: AnalyticsSkillsSummary,
+    @SerialName("top_skills") val topSkills: List<AnalyticsSkillEntry> = emptyList(),
+)
+
+@Serializable
+data class AnalyticsTotals(
+    @SerialName("total_actual_cost") val totalActualCost: Double,
+    @SerialName("total_api_calls") val totalApiCalls: Long? = null,
+    @SerialName("total_cache_read") val totalCacheRead: Long? = null,
+    @SerialName("total_estimated_cost") val totalEstimatedCost: Double,
+    @SerialName("total_input") val totalInput: Long? = null,
+    @SerialName("total_output") val totalOutput: Long? = null,
+    @SerialName("total_reasoning") val totalReasoning: Long? = null,
+    @SerialName("total_sessions") val totalSessions: Long,
+)
+
+@Serializable
+data class AnalyticsResponse(
+    val daily: List<AnalyticsDailyEntry> = emptyList(),
+    @SerialName("by_model") val byModel: List<AnalyticsModelEntry> = emptyList(),
+    val totals: AnalyticsTotals,
+    @SerialName("period_days") val periodDays: Int,
+    val skills: AnalyticsSkills,
+    val tools: List<AnalyticsToolEntry> = emptyList(),
+)
