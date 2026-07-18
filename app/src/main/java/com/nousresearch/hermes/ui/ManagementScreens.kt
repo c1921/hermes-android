@@ -659,7 +659,7 @@ private fun ProfileRenameDialog(
 }
 
 @Composable
-private fun ManagementHeader(
+internal fun ManagementHeader(
     title: String,
     subtitle: String,
     loading: Boolean,
@@ -843,7 +843,7 @@ private fun CronEditorDialog(
 }
 
 @Composable
-private fun ManagementError(message: String) {
+internal fun ManagementError(message: String) {
     Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
 }
 

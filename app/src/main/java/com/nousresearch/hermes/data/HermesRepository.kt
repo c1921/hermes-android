@@ -2,15 +2,22 @@ package com.nousresearch.hermes.data
 
 import android.net.Uri
 import com.nousresearch.hermes.domain.SensitiveInputKind
+import com.nousresearch.hermes.domain.SubagentProgress
+import com.nousresearch.hermes.domain.SubagentReducer
 import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.domain.lastUserPrompt
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.ConfigSetResult
+import com.nousresearch.hermes.protocol.BackgroundProcess
+import com.nousresearch.hermes.protocol.BackgroundProcessKillResponse
+import com.nousresearch.hermes.protocol.BackgroundProcessListResponse
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
 import com.nousresearch.hermes.protocol.FileAttachResult
+import com.nousresearch.hermes.protocol.DelegationPauseResponse
+import com.nousresearch.hermes.protocol.DelegationStatusResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.HermesGatewayClient
@@ -42,6 +49,7 @@ import com.nousresearch.hermes.protocol.SlashCommandResult
 import com.nousresearch.hermes.protocol.SlashCompletionResult
 import com.nousresearch.hermes.protocol.StatusResponse
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.protocol.SubagentInterruptResponse
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import java.util.UUID
 import javax.inject.Inject
@@ -106,6 +114,13 @@ data class HermesState(
     val messagingNotice: String? = null,
     val messagingTests: Map<String, MessagingPlatformTestResponse> = emptyMap(),
     val gatewayRestarting: Boolean = false,
+    val delegationStatus: DelegationStatusResponse? = null,
+    val activeSubagents: List<SubagentProgress> = emptyList(),
+    val subagentsBySession: Map<String, List<SubagentProgress>> = emptyMap(),
+    val backgroundProcesses: List<BackgroundProcess> = emptyList(),
+    val agentsLoading: Boolean = false,
+    val agentsNotice: String? = null,
+    val agentsError: String? = null,
     val reconnectRequiredBackendId: String? = null,
     val error: String? = null,
 ) {
@@ -222,7 +237,15 @@ class HermesRepository @Inject constructor(
         }
         scope.launch {
             gateway.events.collect { event ->
-                val current = mutableState.value
+                var current = mutableState.value
+                if (event.type in SubagentReducer.eventTypes) {
+                    val sessionKey = event.sessionId?.takeIf(String::isNotBlank) ?: "unscoped"
+                    val sessions = LinkedHashMap(current.subagentsBySession)
+                    sessions[sessionKey] = SubagentReducer.reduce(sessions[sessionKey].orEmpty(), event)
+                    while (sessions.size > MAX_AGENT_EVENT_SESSIONS) sessions.remove(sessions.keys.first())
+                    current = current.copy(subagentsBySession = sessions)
+                    mutableState.value = current
+                }
                 val runtimeId = current.runtimeSessionId
                 if (event.sessionId == null || runtimeId == null || event.sessionId == runtimeId) {
                     val runtimeInfo = if (event.type == "session.info" && event.payload != null) {
@@ -1367,6 +1390,107 @@ class HermesRepository @Inject constructor(
         }
     }
 
+    suspend fun refreshAgents() {
+        if (mutableState.value.agentsLoading) return
+        mutableState.value = mutableState.value.copy(agentsLoading = true, agentsError = null)
+        runCatching {
+            activeCredentials()
+            val status = gateway.request("delegation.status", buildJsonObject {})
+                .let { json.decodeFromJsonElement(DelegationStatusResponse.serializer(), it) }
+            val runtimeId = mutableState.value.runtimeSessionId
+            val processes = if (runtimeId == null) {
+                emptyList()
+            } else {
+                gateway.request("process.list", buildJsonObject { put("session_id", runtimeId) })
+                    .let { json.decodeFromJsonElement(BackgroundProcessListResponse.serializer(), it).processes }
+            }
+            status to processes
+        }.onSuccess { (status, processes) ->
+            val observed = mutableState.value.subagentsBySession.values.flatten().associateBy(SubagentProgress::id)
+            mutableState.value = mutableState.value.copy(
+                delegationStatus = status,
+                activeSubagents = status.active.filter { it.id.isNotBlank() }.map { active ->
+                    SubagentReducer.fromActive(active, observed[active.id])
+                },
+                backgroundProcesses = processes.filter { it.id.isNotBlank() },
+                agentsLoading = false,
+                agentsError = null,
+            )
+        }.onFailure(::failAgents)
+    }
+
+    suspend fun setDelegationPaused(paused: Boolean) {
+        mutableState.value = mutableState.value.copy(agentsLoading = true, agentsNotice = null, agentsError = null)
+        runCatching {
+            activeCredentials()
+            gateway.request(
+                "delegation.pause",
+                buildJsonObject { put("paused", paused) },
+            ).let { json.decodeFromJsonElement(DelegationPauseResponse.serializer(), it) }
+                .also { require(it.paused == paused) { "Hermes returned a different delegation pause state" } }
+        }.onSuccess { result ->
+            mutableState.value = mutableState.value.copy(
+                delegationStatus = mutableState.value.delegationStatus?.copy(paused = result.paused),
+                agentsLoading = false,
+                agentsNotice = if (result.paused) {
+                    "New subagent spawns are paused. Running subagents continue until they finish or are interrupted."
+                } else {
+                    "New subagent spawns are enabled."
+                },
+                agentsError = null,
+            )
+        }.onFailure(::failAgents)
+    }
+
+    suspend fun interruptSubagent(id: String) {
+        mutableState.value = mutableState.value.copy(agentsLoading = true, agentsNotice = null, agentsError = null)
+        runCatching {
+            require(mutableState.value.activeSubagents.any { it.id == id }) { "This subagent is no longer active" }
+            activeCredentials()
+            gateway.request(
+                "subagent.interrupt",
+                buildJsonObject { put("subagent_id", id) },
+            ).let { json.decodeFromJsonElement(SubagentInterruptResponse.serializer(), it) }
+                .also { require(it.found && it.subagentId == id) { "Hermes could not find the requested subagent" } }
+        }.onSuccess { result ->
+            mutableState.value = mutableState.value.copy(
+                agentsLoading = false,
+                agentsNotice = "Interrupt requested for subagent $id.",
+                agentsError = null,
+            )
+            refreshAgents()
+        }.onFailure(::failAgents)
+    }
+
+    suspend fun stopBackgroundProcess(id: String) {
+        mutableState.value = mutableState.value.copy(agentsLoading = true, agentsNotice = null, agentsError = null)
+        runCatching {
+            val process = mutableState.value.backgroundProcesses.firstOrNull { it.id == id }
+                ?: error("This background process is no longer reported by Hermes")
+            require(process.status == "running") { "Only a running background process can be stopped" }
+            val runtimeId = mutableState.value.runtimeSessionId ?: error("Open the process owner session first")
+            activeCredentials()
+            gateway.request(
+                "process.kill",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("process_id", id)
+                },
+            ).let { json.decodeFromJsonElement(BackgroundProcessKillResponse.serializer(), it) }
+                .also { result ->
+                    require(result.status == "killed" || result.status == "already_exited") {
+                        result.error ?: "Hermes did not confirm the process stopped"
+                    }
+                }
+        }.onSuccess { result ->
+            mutableState.value = mutableState.value.copy(
+                agentsNotice = "Background process $id stopped.",
+                agentsError = null,
+            )
+            refreshAgents()
+        }.onFailure(::failAgents)
+    }
+
     private fun advertisedMessagingPlatform(platformId: String): MessagingPlatformInfo =
         mutableState.value.messagingPlatforms.firstOrNull { it.id == platformId }
             ?: error("Hermes did not advertise this messaging platform")
@@ -1823,11 +1947,25 @@ class HermesRepository @Inject constructor(
             providersLoading = false,
             messagingLoading = false,
             gatewayRestarting = false,
+            agentsLoading = false,
             skillHubLoading = false,
             sessionSearchLoading = false,
             reconnectRequiredBackendId = if (reconnect) reconnectBackendId else mutableState.value.reconnectRequiredBackendId,
             error = if (reconnect) "Dashboard session expired or was rejected. Reconnect with your username and password." else
                 error.message ?: error::class.simpleName ?: "Hermes operation failed",
+        )
+    }
+
+    private fun failAgents(error: Throwable) {
+        val reconnect = error is ReconnectRequiredException ||
+            (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+        if (reconnect) {
+            fail(error)
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            agentsLoading = false,
+            agentsError = error.message ?: error::class.simpleName ?: "Hermes orchestration request failed",
         )
     }
 
@@ -1868,6 +2006,7 @@ private const val MAX_SLASH_OUTPUT_CHARACTERS = 20_000
 private const val MAX_SLASH_SUGGESTIONS = 12
 private const val MAX_SLASH_ALIAS_DEPTH = 5
 private const val MAX_MESSAGING_VALUE_CHARACTERS = 32_768
+private const val MAX_AGENT_EVENT_SESSIONS = 32
 private const val GATEWAY_RESTART_POLL_INTERVAL_MILLIS = 1_200L
 private const val GATEWAY_RESTART_POLL_LIMIT = 18
 

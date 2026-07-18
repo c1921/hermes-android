@@ -67,6 +67,8 @@ The official [Programmatic Integration](https://hermes-agent.nousresearch.com/do
 
 Desktop combines the WebSocket with REST from `hermes_cli/web_server.py`. REST supplies status/version, profiles, aggregate session lists, config/schema, models/providers, skills and Skill Hub, MCP, cron, messaging configuration, analytics, logs, diagnostics, file transfer, voice, and operational actions.
 
+Delegation control is already a typed gateway surface. `delegation.status` returns the active registry plus `paused`, `max_spawn_depth` and `max_concurrent_children`; `delegation.pause` changes only whether future delegate calls may spawn; and `subagent.interrupt` cooperatively stops one advertised child. Live detail arrives through `subagent.spawn_requested`, `subagent.start`, `subagent.thinking`, `subagent.tool`, `subagent.progress` and `subagent.complete`. Background processes are separate: `process.list` is scoped by runtime session and returns an output tail, while `process.kill` verifies the process belongs to that session before terminating it. `spawn_tree.list/load` provides server-persisted completed trees, but is not required for live intervention.
+
 `GET /api/status` is always public and currently returns the Hermes package version, release date, config versions, gateway lifecycle, active work, `auth_required`, and `auth_providers`; see [`hermes_cli/web_server.py:2752-2775`](https://github.com/NousResearch/hermes-agent/blob/5122ddd478143a6901bb752cf8ebcd1c5154b6da/hermes_cli/web_server.py#L2752-L2775). This is useful for connection bootstrap, but it is not a versioned method/event capability document.
 
 ### OpenAI-compatible API server

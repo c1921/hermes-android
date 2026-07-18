@@ -14,7 +14,7 @@ The session-atlas direction is selected. Chat remains home, while tools, approva
 
 - Phone: session atlas → conversation. Predictive back returns to the atlas without closing the live session.
 - Tablet/foldable expanded: persistent 330dp session rail plus conversation.
-- Future durable destinations: Skills, Automations, Agents, Artifacts and Settings.
+- Durable management destinations: Skills, Cron, Profiles, Providers, Files, Diagnostics, Messaging and Command Center. Artifacts and structured Settings join only when their backend paths are complete.
 - Short tasks: model selection, approval, clarification, rename and backend switch use sheets/dialogs.
 - Detail panes: tool output and artifacts may expand side-by-side on wide layouts without stealing focus.
 
@@ -43,6 +43,7 @@ Dark surfaces carry a low-opacity carousel of six purpose-built Nous field plate
 - Voice input is a composer-owned interaction. Holding the rounded microphone control records press-to-talk; a quick tap or upward slide locks recording, and a leftward slide cancels it. Recording clears composer focus and hides the IME so the microphone state never competes with the keyboard. An always-visible cancel/transcribe surface provides a non-gesture alternative.
 - Completed assistant messages expose a labelled read-aloud action. The app sends Desktop-equivalent sanitised reply text to Hermes `/api/audio/speak`, then plays only the audio returned by Hermes' configured TTS provider. Android provides pause, resume, stop and the system media-output switcher; it does not silently replace Hermes TTS with platform synthesis.
 - Messaging management is a server-control surface, not an Android chat adapter. A rounded searchable catalogue shows the selected profile's Hermes gateway platforms and their exact reported states. Platform detail can replace or remove only server-advertised fields, enable or disable the adapter, run the backend connection check, and restart the selected profile's gateway only after an explicit impact confirmation. Android never claims to execute gateway delivery locally.
+- Command Center is a live orchestration surface, not a decorative agents dashboard. It reads Hermes' global delegation status and cross-session subagent events, preserves parent-child order, exposes emitted tool/output/file/token/cost detail, and lists only background processes owned by the open runtime session. Pausing affects future spawns only. Subagent interrupt and process stop are separate, confirmed operations, and each row states its exact consequence.
 
 ## Notifications and permissions
 
@@ -71,4 +72,4 @@ Interrupted animations settle to semantic state. Process recreation restores the
 
 ## Accessibility
 
-Minimum 48dp controls, scalable text, semantic headings, labelled icon actions, logical master/detail traversal and no colour-only state. Voice actions expose TalkBack labels for record, stop, read, pause, resume and output selection; recording mode and interruption state are also written as text. Streaming updates do not continuously steal TalkBack focus. Hardware Enter sends only from the composer; Escape/back affects the topmost owned interaction once. Tool state combines icon, text and colour.
+Minimum 48dp controls, scalable text, semantic headings, labelled icon actions, logical master/detail traversal and no colour-only state. Voice actions expose TalkBack labels for record, stop, read, pause, resume and output selection; recording mode and interruption state are also written as text. Command Center uses explicit status labels in addition to colour, exposes a labelled pause switch, and requires confirmation before intervention. Streaming updates do not continuously steal TalkBack focus. Hardware Enter sends only from the composer; Escape/back affects the topmost owned interaction once. Tool state combines icon, text and colour.

@@ -152,7 +152,7 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
 
 private val WideLayout = 840.dp
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING }
+private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, AGENTS }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -205,6 +205,10 @@ private data class ManagementActions(
     val clearMessagingSetting: (String, String) -> Unit,
     val testMessagingPlatform: (String) -> Unit,
     val restartMessagingGateway: () -> Unit,
+    val refreshAgents: () -> Unit,
+    val setDelegationPaused: (Boolean) -> Unit,
+    val interruptSubagent: (String) -> Unit,
+    val stopBackgroundProcess: (String) -> Unit,
 )
 
 @Composable
@@ -265,6 +269,10 @@ fun HermesApp(viewModel: HermesViewModel = hiltViewModel()) {
             clearMessagingSetting = viewModel::clearMessagingSetting,
             testMessagingPlatform = viewModel::testMessagingPlatform,
             restartMessagingGateway = viewModel::restartMessagingGateway,
+            refreshAgents = viewModel::refreshAgents,
+            setDelegationPaused = viewModel::setDelegationPaused,
+            interruptSubagent = viewModel::interruptSubagent,
+            stopBackgroundProcess = viewModel::stopBackgroundProcess,
         )
     }
     HermesTheme {
@@ -535,6 +543,7 @@ private fun HermesWorkspace(
                     onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                     onProviders = { destination = WorkspaceDestination.PROVIDERS },
                     onMessaging = { destination = WorkspaceDestination.MESSAGING },
+                    onAgents = { destination = WorkspaceDestination.AGENTS },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
@@ -601,6 +610,16 @@ private fun HermesWorkspace(
                         onClear = managementActions.clearMessagingSetting,
                         onTest = managementActions.testMessagingPlatform,
                         onRestartGateway = managementActions.restartMessagingGateway,
+                        onBack = null,
+                        modifier = Modifier.weight(1f),
+                    )
+                    WorkspaceDestination.AGENTS -> AgentsScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshAgents,
+                        onSetPaused = managementActions.setDelegationPaused,
+                        onInterrupt = managementActions.interruptSubagent,
+                        onStopProcess = managementActions.stopBackgroundProcess,
+                        onOpenSession = { onSession(it); destination = WorkspaceDestination.CHAT },
                         onBack = null,
                         modifier = Modifier.weight(1f),
                     )
@@ -698,6 +717,16 @@ private fun HermesWorkspace(
                         onBack = { destination = WorkspaceDestination.SESSIONS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    WorkspaceDestination.AGENTS -> AgentsScreen(
+                        state = state,
+                        onRefresh = managementActions.refreshAgents,
+                        onSetPaused = managementActions.setDelegationPaused,
+                        onInterrupt = managementActions.interruptSubagent,
+                        onStopProcess = managementActions.stopBackgroundProcess,
+                        onOpenSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+                    )
                     WorkspaceDestination.SESSIONS -> SessionRail(
                         state, connection, onRefresh, onSearchSessions,
                         onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
@@ -711,6 +740,7 @@ private fun HermesWorkspace(
                         onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
                         onProviders = { destination = WorkspaceDestination.PROVIDERS },
                         onMessaging = { destination = WorkspaceDestination.MESSAGING },
+                        onAgents = { destination = WorkspaceDestination.AGENTS },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
                 }
@@ -736,6 +766,7 @@ private fun SessionRail(
     onDiagnostics: () -> Unit,
     onProviders: () -> Unit,
     onMessaging: () -> Unit,
+    onAgents: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -834,13 +865,20 @@ private fun SessionRail(
                 Text("Diagnostics")
             }
         }
-        OutlinedButton(
-            onClick = onMessaging,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Icons.Outlined.Forum, null)
-            Spacer(Modifier.width(6.dp))
-            Text("Messaging gateway")
+            OutlinedButton(onClick = onMessaging, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Forum, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Messaging")
+            }
+            OutlinedButton(onClick = onAgents, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Outlined.Terminal, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Agents")
+            }
         }
         OutlinedTextField(
             value = query,
