@@ -3,15 +3,15 @@ package com.nousresearch.hermes.ui
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.CallSplit
 import androidx.compose.material.icons.outlined.Compress
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RestartAlt
-import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -63,7 +63,7 @@ internal fun SessionActions(
         )
         DropdownMenuItem(
             text = { Text("Branch conversation") },
-            leadingIcon = { Icon(Icons.Outlined.CallSplit, null) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, null) },
             enabled = hasHistory && !running,
             onClick = {
                 input = ""
@@ -82,7 +82,7 @@ internal fun SessionActions(
         )
         DropdownMenuItem(
             text = { Text("Undo last turn") },
-            leadingIcon = { Icon(Icons.Outlined.Undo, null) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Undo, null) },
             enabled = hasHistory && !running,
             onClick = {
                 menuOpen = false

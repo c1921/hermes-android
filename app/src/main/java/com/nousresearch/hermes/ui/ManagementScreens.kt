@@ -13,8 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.History
@@ -46,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -206,7 +207,11 @@ private fun BackendConnectionDialog(
                         Text("Allow private-network HTTP")
                         Text("Only literal LAN, loopback, or Tailscale IPs.", style = MaterialTheme.typography.bodySmall)
                     }
-                    Switch(allowPrivate, { allowPrivate = it })
+                    Switch(
+                        checked = allowPrivate,
+                        onCheckedChange = { allowPrivate = it },
+                        modifier = Modifier.semantics { contentDescription = "Allow private-network HTTP" },
+                    )
                 }
             }
         },
@@ -684,11 +689,19 @@ private fun ProfileCreateDialog(
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Clone sessions and full state", Modifier.weight(1f))
-                    Switch(cloneAll, { cloneAll = it })
+                    Switch(
+                        checked = cloneAll,
+                        onCheckedChange = { cloneAll = it },
+                        modifier = Modifier.semantics { contentDescription = "Clone sessions and full state" },
+                    )
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Start without bundled skills", Modifier.weight(1f))
-                    Switch(noSkills, { noSkills = it })
+                    Switch(
+                        checked = noSkills,
+                        onCheckedChange = { noSkills = it },
+                        modifier = Modifier.semantics { contentDescription = "Start without bundled skills" },
+                    )
                 }
             }
         },
@@ -725,7 +738,7 @@ internal fun ManagementHeader(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        onBack?.let { IconButton(onClick = it) { Icon(Icons.Outlined.ArrowBack, "Back") } }
+        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -759,7 +772,11 @@ private fun SkillRow(
                 Text(skill.description, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 skill.usage?.let { Text("$it observed actions", style = MaterialTheme.typography.labelSmall) }
             }
-            Switch(checked = skill.enabled, onCheckedChange = { onToggle(skill.name, it) })
+            Switch(
+                checked = skill.enabled,
+                onCheckedChange = { onToggle(skill.name, it) },
+                modifier = Modifier.semantics { contentDescription = "Enable ${skill.name}" },
+            )
             IconButton(onClick = { onUninstall(skill.name) }) { Icon(Icons.Outlined.Delete, "Uninstall ${skill.name}") }
         }
     }
@@ -795,6 +812,7 @@ private fun ToolsetRow(
                 checked = toolset.enabled,
                 onCheckedChange = { onToggle(toolset.name, it) },
                 enabled = !loading,
+                modifier = Modifier.semantics { contentDescription = "Enable ${toolset.label}" },
             )
         }
     }

@@ -27,6 +27,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -526,7 +528,16 @@ private fun OnboardingScreen(
                     HermesField(username, { username = it }, "Dashboard username")
                     HermesField(password, { password = it }, "Dashboard password", KeyboardType.Password, secret = true)
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Switch) { privateHttp = !privateHttp }.padding(vertical = 8.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .semantics(mergeDescendants = true) {}
+                            .toggleable(
+                                value = privateHttp,
+                                role = Role.Switch,
+                                onValueChange = { privateHttp = it },
+                            )
+                            .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -534,7 +545,7 @@ private fun OnboardingScreen(
                             Text("Allow private-network HTTP", style = MaterialTheme.typography.titleMedium)
                             Text("Only literal LAN, loopback or Tailscale IPs. HTTPS is required otherwise.", style = MaterialTheme.typography.bodySmall)
                         }
-                        Switch(checked = privateHttp, onCheckedChange = { privateHttp = it })
+                        Switch(checked = privateHttp, onCheckedChange = null)
                     }
                     error?.let { ErrorBanner(it) }
                     Button(
@@ -1938,7 +1949,10 @@ private fun Composer(
                     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
                             Text(attachment.label, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                            IconButton(onClick = { onRemoveAttachment(attachment.id) }, modifier = Modifier.size(36.dp)) {
+                            IconButton(
+                                onClick = { onRemoveAttachment(attachment.id) },
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+                            ) {
                                 Icon(Icons.Outlined.Close, "Remove ${attachment.label}", modifier = Modifier.size(16.dp))
                             }
                         }
@@ -2214,18 +2228,18 @@ private fun PendingMessageQueue(
                                 IconButton(
                                     onClick = { onSendNow(entry.id) },
                                     enabled = !draining,
-                                    modifier = Modifier.size(36.dp),
+                                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                                 ) { Icon(Icons.Outlined.Refresh, "Retry pending message", modifier = Modifier.size(17.dp)) }
                             }
                             IconButton(
                                 onClick = { onEdit(entry) },
                                 enabled = !draining,
-                                modifier = Modifier.size(36.dp),
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                             ) { Icon(Icons.Outlined.Edit, "Edit pending message", modifier = Modifier.size(17.dp)) }
                             IconButton(
                                 onClick = { onRemove(entry.id) },
                                 enabled = !draining,
-                                modifier = Modifier.size(36.dp),
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                             ) { Icon(Icons.Outlined.Delete, "Remove pending message", modifier = Modifier.size(17.dp)) }
                         }
                     }

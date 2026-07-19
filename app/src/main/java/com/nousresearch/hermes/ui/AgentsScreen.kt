@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.StopCircle
@@ -360,7 +360,7 @@ private fun SubagentCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     matchingSession?.let { session ->
                         OutlinedButton(onClick = { onOpenSession(session) }) {
-                            Icon(Icons.Outlined.OpenInNew, null)
+                            Icon(Icons.AutoMirrored.Outlined.OpenInNew, null)
                             Spacer(Modifier.width(6.dp))
                             Text("Open session")
                         }

@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -197,6 +198,7 @@ private fun ServerConfigRow(
                     checked = field.value.jsonPrimitive.boolean,
                     onCheckedChange = onBoolean,
                     enabled = enabled,
+                    modifier = Modifier.semantics { contentDescription = "Toggle ${field.key}" },
                 )
             } else {
                 Icon(Icons.Outlined.Edit, contentDescription = "Edit ${field.key}")

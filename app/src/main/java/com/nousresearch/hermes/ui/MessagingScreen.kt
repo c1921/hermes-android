@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -229,6 +230,7 @@ private fun MessagingDetail(
                                 checked = platform.enabled,
                                 onCheckedChange = { onSetEnabled(platform.id, it) },
                                 enabled = !state.messagingLoading && !state.gatewayRestarting,
+                                modifier = Modifier.semantics { contentDescription = "Enable ${platform.id}" },
                             )
                         }
                         Text(platform.description.ifBlank { "Hermes messaging platform ${platform.id}." }, style = MaterialTheme.typography.bodySmall)

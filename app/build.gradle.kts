@@ -133,6 +133,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
     testImplementation(libs.turbine)
     androidTestImplementation(libs.compose.ui.test.junit4)
 }
