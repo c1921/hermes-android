@@ -133,6 +133,8 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/hermes-release/hermes-android-release.apk"
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-release/hermes-android-release.aab"
           cp app/build/outputs/mapping/release/mapping.txt "$RUNNER_TEMP/hermes-release/hermes-android-release-mapping.txt"
+          cd "$RUNNER_TEMP/hermes-release"
+          sha256sum hermes-android-release.apk hermes-android-release.aab hermes-android-release-mapping.txt > hermes-android-release.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: hermes-android-release
@@ -140,6 +142,7 @@ jobs:
             ${{ runner.temp }}/hermes-release/hermes-android-release.apk
             ${{ runner.temp }}/hermes-release/hermes-android-release.aab
             ${{ runner.temp }}/hermes-release/hermes-android-release-mapping.txt
+            ${{ runner.temp }}/hermes-release/hermes-android-release.sha256
           if-no-files-found: error
       - name: Publish latest release downloads
         env:
@@ -152,6 +155,7 @@ jobs:
             "$release_dir/hermes-android-release.apk"
             "$release_dir/hermes-android-release.aab"
             "$release_dir/hermes-android-release-mapping.txt"
+            "$release_dir/hermes-android-release.sha256"
           )
 
           if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
