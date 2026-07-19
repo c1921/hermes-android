@@ -1,5 +1,9 @@
 # Hermes for Android
 
+<p align="center">
+  <img src="docs/assets/readme/hermes-android-banner.png" alt="Hermes Agent for Android" width="100%">
+</p>
+
 [![Download latest release APK](https://img.shields.io/badge/download-latest%20release%20APK-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/releases/latest/download/hermes-android-release.apk)
 [![Download latest release AAB](https://img.shields.io/badge/download-latest%20release%20AAB-0000ff?logo=googleplay&logoColor=white)](https://github.com/luinbytes/hermes-android/releases/latest/download/hermes-android-release.aab)
 [![Download latest dev APK and AAB](https://img.shields.io/badge/dev-debug%20APK%20%2B%20AAB-3158ad?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Adev+status%3Asuccess)
@@ -8,9 +12,24 @@ Native Android client for [Nous Research Hermes Agent](https://github.com/NousRe
 
 This repository is an independent work in progress. It is not currently an official Nous Research release. Visible controls are backed by real Hermes REST or JSON-RPC/WebSocket operations; unavailable features are omitted rather than simulated.
 
+<table>
+  <tr>
+    <td width="33%"><img src="docs/assets/readme/showcase-onboarding.png" alt="Hermes Android onboarding in dark mode"></td>
+    <td width="33%"><img src="docs/assets/readme/showcase-billing.png" alt="Hermes Android billing in dark mode"></td>
+    <td width="33%"><img src="docs/assets/readme/showcase-command-center.png" alt="Hermes Android Command Center in dark mode"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Nous onboarding</sub></td>
+    <td align="center"><sub>Nous Portal billing</sub></td>
+    <td align="center"><sub>Command Center</sub></td>
+  </tr>
+</table>
+
+The screenshots were captured on a Samsung SM-S906E running Android 16 in dark mode. Billing and Command Center use deterministic, non-secret showcase state.
+
 ## Project status
 
-Last verified: 18 July 2026.
+Last verified: 19 July 2026.
 
 The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly locally with JDK 17. Pushes to `dev` publish artifacts under one stable debug certificate. Successful pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
@@ -200,7 +219,7 @@ Install the debug build:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-CI publishes the successful debug APK and AAB together as the `hermes-android-debug` workflow artifact. The download badge opens the successful `main` runs with the newest run first. GitHub requires sign-in to download workflow artifacts. These are debug builds, not signed public releases.
+Successful `dev` pushes publish update-compatible debug APK and AAB files in the `hermes-android-debug` workflow artifact. Successful `main` pushes publish signed, minified APK and AAB files to the latest GitHub release. The release badges at the top of this README point directly to those stable latest-release assets.
 
 ## Test coverage
 
@@ -241,7 +260,7 @@ Current concrete blockers:
 - **Exact reconnect replay:** Hermes does not currently expose a universal ordered event cursor/replay contract for every in-flight stream.
 - **Background mobile delivery:** approvals, clarifications, completions, failures, and cron results need an upstream device-registration, revocation, acknowledgement, and single-use action-token contract.
 - **Remote artifacts:** full safe browsing and generated-artifact delivery would benefit from a canonical remote artifact descriptor rather than desktop filesystem assumptions.
-- **Release readiness:** real-device phone/tablet/foldable inspection, accessibility testing, performance/battery testing, security review, release signing, AAB generation, and reproducibility evidence are incomplete.
+- **Release readiness:** tablet and foldable inspection, complete accessibility testing, performance and battery testing, security review, Play App Signing handoff, and reproducibility evidence are incomplete.
 
 Unimplemented items that do not depend on an upstream change remain local engineering work, not protocol blockers. No upstream pull request has been opened from this repository.
 
