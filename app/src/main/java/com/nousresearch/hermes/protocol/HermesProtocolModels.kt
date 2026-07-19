@@ -124,8 +124,21 @@ data class SessionResumeResult(
     val messages: List<ProtocolMessage> = emptyList(),
     val status: String = "idle",
     val running: Boolean = false,
-    val inflight: JsonElement? = null,
+    val inflight: SessionInflightProjection? = null,
+    val queued: SessionQueuedProjection? = null,
     val info: SessionRuntimeInfo = SessionRuntimeInfo(),
+)
+
+@Serializable
+data class SessionInflightProjection(
+    val user: String = "",
+    val assistant: String = "",
+    val streaming: Boolean = false,
+)
+
+@Serializable
+data class SessionQueuedProjection(
+    val user: String = "",
 )
 
 @Serializable

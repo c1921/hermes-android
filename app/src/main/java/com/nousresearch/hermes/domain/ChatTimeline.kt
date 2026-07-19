@@ -2,6 +2,8 @@ package com.nousresearch.hermes.domain
 
 import com.nousresearch.hermes.protocol.GatewayEvent
 import com.nousresearch.hermes.protocol.ProtocolMessage
+import com.nousresearch.hermes.protocol.SessionInflightProjection
+import com.nousresearch.hermes.protocol.SessionQueuedProjection
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -89,6 +91,86 @@ object TimelineReducer {
             )
         }
         return TimelineState(items = items)
+    }
+
+    fun reconcileResume(
+        messages: List<ProtocolMessage>,
+        runtimeSessionId: String,
+        inflight: SessionInflightProjection?,
+        queued: SessionQueuedProjection?,
+        running: Boolean,
+        previousRuntimeSessionId: String?,
+        previous: TimelineState,
+    ): TimelineState {
+        val state = hydrate(messages)
+        val sameRuntime = previousRuntimeSessionId == runtimeSessionId
+        val liveItems = buildList {
+            inflight?.user?.trim()?.takeIf(String::isNotEmpty)?.let {
+                add(TimelineItem.Message("resume:user:$runtimeSessionId", MessageRole.USER, it))
+            }
+            if (
+                inflight != null &&
+                (inflight.assistant.isNotEmpty() || inflight.streaming || (inflight.user.isNotBlank() && queued?.user?.isNotBlank() == true))
+            ) {
+                add(
+                    TimelineItem.Message(
+                        "resume:assistant:$runtimeSessionId",
+                        MessageRole.ASSISTANT,
+                        inflight.assistant,
+                        streaming = inflight.streaming,
+                    ),
+                )
+            }
+            queued?.user?.trim()?.takeIf(String::isNotEmpty)?.let {
+                add(TimelineItem.Message("resume:queued:$runtimeSessionId", MessageRole.USER, it))
+            }
+        }
+        val preserveLiveState = running && sameRuntime
+        val reconciled = state.copy(
+            items = state.items + liveItems,
+            approval = previous.approval.takeIf { preserveLiveState },
+            clarification = previous.clarification.takeIf { preserveLiveState },
+            sensitiveInput = previous.sensitiveInput.takeIf { preserveLiveState },
+            generation = previous.generation.takeIf { sameRuntime } ?: state.generation,
+        )
+        if (!preserveLiveState) return reconciled
+
+        val authoritativeByRole = mutableMapOf<Pair<MessageRole, Int>, TimelineItem.Message>()
+        val authoritativeCounts = mutableMapOf<MessageRole, Int>()
+        reconciled.items.filterIsInstance<TimelineItem.Message>().forEach { message ->
+            val ordinal = authoritativeCounts.getOrDefault(message.role, 0)
+            authoritativeCounts[message.role] = ordinal + 1
+            authoritativeByRole[message.role to ordinal] = message
+        }
+
+        val previousCounts = mutableMapOf<MessageRole, Int>()
+        val pending = previous.items.filterIsInstance<TimelineItem.Message>().mapNotNull { message ->
+            val ordinal = previousCounts.getOrDefault(message.role, 0)
+            previousCounts[message.role] = ordinal + 1
+            val isLocalUser = message.role == MessageRole.USER && message.id.startsWith("local:")
+            val isStreamingAssistant = message.role == MessageRole.ASSISTANT && message.streaming
+            if (!isLocalUser && !isStreamingAssistant) return@mapNotNull null
+            val authoritative = authoritativeByRole[message.role to ordinal]
+            when {
+                authoritative == null -> message
+                isLocalUser && authoritative.text.trim() != message.text.trim() -> message
+                else -> null
+            }
+        }
+        val pendingIds = pending.mapTo(mutableSetOf(), TimelineItem::id)
+        val authoritativeIds = reconciled.items.mapTo(mutableSetOf(), TimelineItem::id)
+        val preserved = previous.items.filter {
+            it.id in pendingIds ||
+                (it.id !in authoritativeIds &&
+                    ((it is TimelineItem.Tool && it.state == ToolState.RUNNING) ||
+                        (it is TimelineItem.Reasoning && it.streaming)))
+        }
+        val insertionIndex = reconciled.items.indexOfFirst {
+            it.id == "resume:assistant:$runtimeSessionId" || it.id == "resume:queued:$runtimeSessionId"
+        }.takeIf { it >= 0 } ?: reconciled.items.size
+        return reconciled.copy(
+            items = reconciled.items.toMutableList().apply { addAll(insertionIndex, preserved) },
+        )
     }
 
     fun reduce(state: TimelineState, event: GatewayEvent): TimelineState {

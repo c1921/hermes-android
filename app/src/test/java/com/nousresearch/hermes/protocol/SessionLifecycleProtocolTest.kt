@@ -9,6 +9,18 @@ class SessionLifecycleProtocolTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
+    fun `decodes live turn projection returned by current Hermes`() {
+        val result = json.decodeFromString<SessionResumeResult>(
+            checkNotNull(javaClass.getResource("/fixtures/session-resume-live-614dc194.json")).readText(),
+        )
+
+        assertEquals("Current question", result.inflight?.user)
+        assertEquals("Partial answer", result.inflight?.assistant)
+        assertTrue(result.inflight?.streaming == true)
+        assertEquals("Next question", result.queued?.user)
+    }
+
+    @Test
     fun `decodes branch identity returned by Hermes 0 18 2`() {
         val result = json.decodeFromString<SessionBranchResult>(
             """{"session_id":"live-branch","title":"Investigation (branch)","parent":"stored-parent"}""",

@@ -37,7 +37,7 @@ Hermes distinguishes stored/durable session IDs from live runtime IDs. Android k
 - Gateway streaming and prompt control: runtime ID returned by `session.resume` or `session.create`.
 - Profile is part of every cache and navigation key.
 
-`tool_id` and request IDs are stable event identities. Message-stream identity is currently scoped to `(runtime session, local generation)` because upstream emits no replay cursor. After reconnect, Android must re-run `session.resume`, hydrate authoritative history, then merge only stable pending items. Exact delta replay is blocked on the upstream sequence proposal.
+`tool_id` and request IDs are stable event identities. Message-stream identity is currently scoped to `(runtime session, local generation)` because upstream emits no replay cursor. Current upstream `session.resume` and `session.activate` return the accepted live user turn, partial assistant text, queued user turn, and running state. After reconnect, Android re-runs `session.resume`, accepts any returned compression-continuation identity, reconciles only matching backend history, overlays the live projection, and preserves same-runtime blocking requests, running tool/reasoning state, or a local pending turn that an older server cannot project. A request generation prevents late session opens from replacing a newer selection. Exact missed-delta replay remains blocked on the upstream sequence proposal.
 
 ## Connection lifecycle
 

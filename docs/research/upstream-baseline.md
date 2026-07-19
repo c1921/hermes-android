@@ -1,6 +1,6 @@
 # Upstream baseline
 
-Latest verification: **2026-07-18** (Europe/London)
+Latest verification: **2026-07-19** (Europe/London)
 
 This document records the upstream contract audited for the Android client. It describes only behavior present in the pinned upstream source, except where an item is explicitly labeled as an open issue, open pull request, or inference.
 
@@ -22,6 +22,8 @@ The Desktop billing contract was rechecked against the same fetched commit after
 The provider-account OAuth contract was also rechecked at that commit, which reports Hermes Agent `0.18.2` and Desktop `0.17.0`. The verified profile-scoped surface is `/api/providers/oauth` plus its advertised start, submit, poll, cancel, and disconnect routes. The oldest verified Hermes version for this Android path is `0.18.2`; the commit pin remains authoritative because the package version did not change across these upstream commits.
 
 The Desktop message and artifact action contract was rechecked against fetched `origin/main` commit [`e45d12642d5d0753e492d51be17cccf687aa8b06`](https://github.com/NousResearch/hermes-agent/commit/e45d12642d5d0753e492d51be17cccf687aa8b06) on 18 July 2026. Completed assistant messages retain an always-mounted copy action in `assistant-message.tsx`; `markdown-text.tsx` routes supported links through the constrained Desktop external-link bridge; and the artifact surface provides copy and native-open outcomes. Android preserves those outcomes through explicit touch actions and adds the platform share sheet as a mobile adaptation. This targeted recheck does not replace the pinned full protocol audit above.
+
+The latest source refresh inspected fetched `origin/main` commit [`614dc194ea7d853d39f9e84582ec62156f41a475`](https://github.com/NousResearch/hermes-agent/commit/614dc194ea7d853d39f9e84582ec62156f41a475) on 19 July 2026. Agent and Desktop versions remain `0.18.2` and `0.17.0`. Commit [`2637aa607`](https://github.com/NousResearch/hermes-agent/commit/2637aa607) adds live `inflight`, `queued`, and `running` projections to `session.resume` and `session.activate` so reconnecting clients can preserve accepted turns. Commits [`3f84b7a16`](https://github.com/NousResearch/hermes-agent/commit/3f84b7a16) and [`11cb9e571`](https://github.com/NousResearch/hermes-agent/commit/11cb9e571) add and harden `/model --once`; Android's dynamic slash-command path already forwards that server-owned command without a curated command list. This targeted refresh does not replace the pinned full protocol audit above.
 
 No Hermes backend was started for this baseline refresh. Runtime behavior is not claimed unless it is represented by upstream source or tests. The official documentation was checked against source, but source controls where they disagree.
 

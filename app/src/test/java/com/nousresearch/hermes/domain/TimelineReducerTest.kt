@@ -2,6 +2,8 @@ package com.nousresearch.hermes.domain
 
 import com.nousresearch.hermes.protocol.GatewayEvent
 import com.nousresearch.hermes.protocol.ProtocolMessage
+import com.nousresearch.hermes.protocol.SessionInflightProjection
+import com.nousresearch.hermes.protocol.SessionQueuedProjection
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.add
@@ -12,6 +14,131 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineReducerTest {
+    @Test
+    fun `resume restores the authoritative live and queued turns without stale local text`() {
+        val previous = TimelineState(
+            items = listOf(
+                TimelineItem.Message("history-user", MessageRole.USER, "Earlier"),
+                TimelineItem.Message("history-assistant", MessageRole.ASSISTANT, "Done"),
+                TimelineItem.Message("local:current", MessageRole.USER, "Current question"),
+                TimelineItem.Message("assistant:runtime-1:1", MessageRole.ASSISTANT, "Stale partial", streaming = true),
+            ),
+        )
+
+        val result = TimelineReducer.reconcileResume(
+            messages = listOf(
+                ProtocolMessage(id = "history-user", role = "user", text = "Earlier"),
+                ProtocolMessage(id = "history-assistant", role = "assistant", text = "Done"),
+            ),
+            runtimeSessionId = "runtime-1",
+            inflight = SessionInflightProjection("Current question", "Fresh partial", streaming = true),
+            queued = SessionQueuedProjection("Next question"),
+            running = true,
+            previousRuntimeSessionId = "runtime-1",
+            previous = previous,
+        )
+
+        val messages = result.items.filterIsInstance<TimelineItem.Message>()
+        assertEquals(listOf("Earlier", "Done", "Current question", "Fresh partial", "Next question"), messages.map { it.text })
+        assertEquals(
+            listOf(MessageRole.USER, MessageRole.ASSISTANT, MessageRole.USER, MessageRole.ASSISTANT, MessageRole.USER),
+            messages.map { it.role },
+        )
+        assertTrue(messages[3].streaming)
+    }
+
+    @Test
+    fun `resume keeps the local pending turn when an older Hermes has no live projection`() {
+        val previous = TimelineState(
+            items = listOf(
+                TimelineItem.Message("history-user", MessageRole.USER, "Earlier"),
+                TimelineItem.Message("history-assistant", MessageRole.ASSISTANT, "Done"),
+                TimelineItem.Message("local:current", MessageRole.USER, "Current question"),
+                TimelineItem.Message("assistant:runtime-1:1", MessageRole.ASSISTANT, "Partial answer", streaming = true),
+            ),
+        )
+
+        val result = TimelineReducer.reconcileResume(
+            messages = listOf(
+                ProtocolMessage(id = "history-user", role = "user", text = "Earlier"),
+                ProtocolMessage(id = "history-assistant", role = "assistant", text = "Done"),
+            ),
+            runtimeSessionId = "runtime-1",
+            inflight = null,
+            queued = null,
+            running = true,
+            previousRuntimeSessionId = "runtime-1",
+            previous = previous,
+        )
+
+        val messages = result.items.filterIsInstance<TimelineItem.Message>()
+        assertEquals(listOf("Earlier", "Done", "Current question", "Partial answer"), messages.map { it.text })
+        assertTrue(messages.last().streaming)
+    }
+
+    @Test
+    fun `resume keeps blocking requests and stable live activity for the same running session`() {
+        val previous = TimelineState(
+            items = listOf(
+                TimelineItem.Reasoning("reasoning:runtime-1:3:reasoning.delta", "Checking", streaming = true),
+                TimelineItem.Tool("tool-7", "terminal", context = "workspace", state = ToolState.RUNNING),
+            ),
+            approval = ApprovalRequest("runtime-1", "git status", "Inspect worktree", listOf("once", "deny")),
+            clarification = ClarificationRequest("runtime-1", "clarify-8", "Which branch?", listOf("dev", "main")),
+            sensitiveInput = SensitiveInputRequest(
+                "runtime-1",
+                "secret-9",
+                SensitiveInputKind.SECRET,
+                "Token required",
+                "TEST_TOKEN",
+            ),
+            generation = 3,
+        )
+
+        val result = TimelineReducer.reconcileResume(
+            messages = emptyList(),
+            runtimeSessionId = "runtime-1",
+            inflight = SessionInflightProjection("Current question", streaming = true),
+            queued = null,
+            running = true,
+            previousRuntimeSessionId = "runtime-1",
+            previous = previous,
+        )
+
+        assertEquals(previous.approval, result.approval)
+        assertEquals(previous.clarification, result.clarification)
+        assertEquals(previous.sensitiveInput, result.sensitiveInput)
+        assertEquals(3, result.generation)
+        assertTrue(result.items.any { it.id == "reasoning:runtime-1:3:reasoning.delta" })
+        assertTrue(result.items.any { it.id == "tool-7" })
+    }
+
+    @Test
+    fun `resume never carries pending state into a replacement runtime`() {
+        val previous = TimelineState(
+            items = listOf(
+                TimelineItem.Message("local:current", MessageRole.USER, "Current question"),
+                TimelineItem.Message("assistant:old-runtime:1", MessageRole.ASSISTANT, "Partial", streaming = true),
+            ),
+            approval = ApprovalRequest("old-runtime", "git status", null, listOf("once", "deny")),
+            generation = 1,
+        )
+
+        val result = TimelineReducer.reconcileResume(
+            messages = emptyList(),
+            runtimeSessionId = "replacement-runtime",
+            inflight = null,
+            queued = null,
+            running = true,
+            previousRuntimeSessionId = "old-runtime",
+            previous = previous,
+        )
+
+        assertTrue(result.items.isEmpty())
+        assertTrue(result.approval == null)
+        assertEquals(0, result.generation)
+    }
+
     @Test
     fun `accepted queued prompt is inserted before an already streaming assistant`() {
         val streaming = TimelineReducer.reduce(TimelineState(), GatewayEvent("message.start", "runtime-1"))

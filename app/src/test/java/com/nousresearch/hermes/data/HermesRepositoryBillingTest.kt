@@ -5,10 +5,13 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.nousresearch.hermes.network.DashboardAuthClient
 import com.nousresearch.hermes.network.DashboardSessionCookie
 import com.nousresearch.hermes.network.HermesRestClient
+import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.GatewayEvent
 import com.nousresearch.hermes.protocol.HermesGatewayClient
+import com.nousresearch.hermes.protocol.StoredSession
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,6 +24,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -181,6 +186,126 @@ class HermesRepositoryBillingTest {
         }
     }
 
+    @Test
+    fun `latest session open wins when an earlier resume finishes last`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody("""{"sessions":[]}""")
+                    "/api/sessions/session-a/messages" -> MockResponse().setBody(
+                        """{"session_id":"session-a","messages":[{"role":"user","text":"A"}]}""",
+                    )
+                    "/api/sessions/session-b/messages" -> MockResponse().setBody(
+                        """{"session_id":"session-b","messages":[{"role":"user","text":"B"}]}""",
+                    )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            val firstStarted = CompletableDeferred<Unit>()
+            val releaseFirst = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("session.resume") {
+                firstStarted.complete(Unit)
+                releaseFirst.await()
+                json.parseToJsonElement(
+                    """{"session_id":"live-a","session_key":"session-a","messages":[{"role":"user","text":"A"}]}""",
+                )
+            }
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-b","session_key":"session-b","messages":[{"role":"user","text":"B"}]}""",
+                ),
+            )
+            repeat(2) { gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}""")) }
+
+            val first = launch { repository.openSession(StoredSession(sessionId = "session-a")) }
+            withTimeout(5_000L) { firstStarted.await() }
+            val second = launch { repository.openSession(StoredSession(sessionId = "session-b")) }
+            withTimeout(5_000L) { repository.state.first { it.runtimeSessionId == "live-b" } }
+            releaseFirst.complete(Unit)
+            first.join()
+            second.join()
+
+            assertEquals("session-b", repository.state.value.activeStoredSession?.durableId)
+            assertEquals("live-b", repository.state.value.runtimeSessionId)
+        }
+    }
+
+    @Test
+    fun `completion received during history refresh survives the older resume snapshot`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody("""{"sessions":[]}""")
+                    "/api/sessions/session-1/messages" -> MockResponse()
+                        .setBodyDelay(1, TimeUnit.SECONDS)
+                        .setBody(
+                            """{"session_id":"session-1","messages":[{"role":"user","text":"Question"},{"role":"assistant","text":"Complete answer"}]}""",
+                        )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-1","session_key":"session-1","messages":[],"running":true,"inflight":{"user":"Question","assistant":"Partial","streaming":true},"info":{"running":true}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            val opening = launch { repository.openSession(StoredSession(sessionId = "session-1")) }
+            withTimeout(5_000L) {
+                repository.state.first { state ->
+                    state.runtimeSessionId == "live-1" && state.timeline.items.any {
+                        it is TimelineItem.Message && it.text == "Partial" && it.streaming
+                    }
+                }
+            }
+            gateway.emit(
+                GatewayEvent(
+                    "message.complete",
+                    "live-1",
+                    buildJsonObject { put("text", "Complete answer"); put("status", "complete") },
+                ),
+            )
+            withTimeout(5_000L) {
+                repository.state.first { state ->
+                    !state.runtimeInfo.running && state.timeline.items.any {
+                        it is TimelineItem.Message && it.text == "Complete answer" && !it.streaming
+                    }
+                }
+            }
+            opening.join()
+
+            val assistant = repository.state.value.timeline.items.filterIsInstance<TimelineItem.Message>().last()
+            assertEquals("Complete answer", assistant.text)
+            assertFalse(assistant.streaming)
+            assertFalse(repository.state.value.runtimeInfo.running)
+        }
+    }
+
     private fun repository(
         context: Context,
         registry: BackendRegistry,
@@ -295,6 +420,10 @@ private class RecordingGateway(
 
     fun failConnection(reason: String) {
         mutableConnectionState.value = GatewayConnectionState.Failed(reason)
+    }
+
+    fun emit(event: GatewayEvent) {
+        check(mutableEvents.tryEmit(event))
     }
 
     override suspend fun connect(config: BackendConfig, token: String) {

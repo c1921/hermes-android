@@ -1,0 +1,15 @@
+{
+  "session_id": "live-1",
+  "session_key": "stored-1",
+  "messages": [],
+  "running": true,
+  "status": "working",
+  "inflight": {
+    "user": "Current question",
+    "assistant": "Partial answer",
+    "streaming": true
+  },
+  "queued": {
+    "user": "Next question"
+  }
+}

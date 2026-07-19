@@ -43,6 +43,7 @@ import com.nousresearch.hermes.protocol.MessagingPlatformTestResponse
 import com.nousresearch.hermes.protocol.PdfAttachResult
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
 import com.nousresearch.hermes.protocol.ProfileInfo
+import com.nousresearch.hermes.protocol.ProtocolMessage
 import com.nousresearch.hermes.protocol.PromptSubmitResult
 import com.nousresearch.hermes.protocol.RollbackCheckpoint
 import com.nousresearch.hermes.protocol.RollbackDiffResult
@@ -54,6 +55,7 @@ import com.nousresearch.hermes.protocol.SessionCompressResult
 import com.nousresearch.hermes.protocol.SessionCloseResult
 import com.nousresearch.hermes.protocol.SessionDeleteResult
 import com.nousresearch.hermes.protocol.SessionHistoryResult
+import com.nousresearch.hermes.protocol.SessionMessagePage
 import com.nousresearch.hermes.protocol.SessionResumeResult
 import com.nousresearch.hermes.protocol.SessionRuntimeInfo
 import com.nousresearch.hermes.protocol.SessionSearchHit
@@ -79,6 +81,7 @@ import com.nousresearch.hermes.platform.mergeSharedText
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import java.util.UUID
 import java.math.BigDecimal
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -92,6 +95,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -348,6 +352,7 @@ class HermesRepository @Inject constructor(
     private var extensionSlashCommands: Set<String>? = null
     private var cachedSlashCatalog: List<SlashSuggestion>? = null
     private var intentionalDisconnect = false
+    private val openSessionGeneration = AtomicLong()
     val state = mutableState.asStateFlow()
     val connectionState = gateway.connectionState
 
@@ -410,12 +415,13 @@ class HermesRepository @Inject constructor(
                 }
                 val runtimeId = current.runtimeSessionId
                 if (event.sessionId == null || runtimeId == null || event.sessionId == runtimeId) {
-                    val runtimeInfo = if (event.type == "session.info" && event.payload != null) {
-                        runCatching {
+                    val runtimeInfo = when {
+                        event.type == "session.info" && event.payload != null -> runCatching {
                             json.decodeFromJsonElement(SessionRuntimeInfo.serializer(), event.payload)
                         }.getOrDefault(current.runtimeInfo)
-                    } else {
-                        current.runtimeInfo
+                        event.type == "message.start" -> current.runtimeInfo.copy(running = true)
+                        event.type == "message.complete" -> current.runtimeInfo.copy(running = false)
+                        else -> current.runtimeInfo
                     }
                     val activeStoredSession = if (
                         runtimeInfo.storedSessionId.isNotBlank() &&
@@ -526,29 +532,40 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun openSession(session: StoredSession) {
-        val (_, _) = activeCredentials()
+        val (backend, token) = activeCredentials()
+        val requestGeneration = openSessionGeneration.incrementAndGet()
         flushDraft()
-        setLoading(true)
-        val current = mutableState.value
-        mutableState.value = current.copy(
-            activeStoredSession = session,
-            timeline = TimelineState(),
-            checkpointsEnabled = null,
-            checkpoints = emptyList(),
-            checkpointPreview = null,
-            checkpointsLoading = false,
-            checkpointNotice = null,
-            checkpointError = null,
-            error = null,
-        )
-        var opened = false
+        var previousTimeline = TimelineState()
+        var previousRuntimeSessionId: String? = null
+        var selected = false
+        mutableState.update { live ->
+            if (openSessionGeneration.get() != requestGeneration || live.backend?.id != backend.id) {
+                live
+            } else {
+                selected = true
+                val reopeningCurrent = live.activeStoredSession?.let {
+                    it.durableId == session.durableId && it.profile == session.profile
+                } == true
+                previousTimeline = if (reopeningCurrent) live.timeline else TimelineState()
+                previousRuntimeSessionId = live.runtimeSessionId
+                live.copy(
+                    activeStoredSession = session,
+                    timeline = previousTimeline,
+                    loading = true,
+                    checkpointsEnabled = null,
+                    checkpoints = emptyList(),
+                    checkpointPreview = null,
+                    checkpointsLoading = false,
+                    checkpointNotice = null,
+                    checkpointError = null,
+                    error = null,
+                )
+            }
+        }
+        if (!selected) return
+
+        var resumedResult: SessionResumeResult? = null
         runCatching {
-            val prefetch = restClient.sessionMessages(
-                requireNotNull(mutableState.value.backend),
-                requireNotNull(tokenStore.get(requireNotNull(mutableState.value.backend).id)).headerValue,
-                session.durableId,
-                session.profile,
-            )
             val resumed = gateway.request(
                 "session.resume",
                 buildJsonObject {
@@ -558,25 +575,108 @@ class HermesRepository @Inject constructor(
                     session.profile?.let { put("profile", it) }
                 },
             )
-            val decoded = json.decodeFromJsonElement(SessionResumeResult.serializer(), resumed)
-            prefetch to decoded
-        }.onSuccess { (prefetch, resumed) ->
-            mutableState.value = mutableState.value.copy(
-                runtimeSessionId = resumed.runtimeSessionId,
-                timeline = TimelineReducer.hydrate(prefetch.messages.ifEmpty { resumed.messages }),
-                runtimeInfo = resumed.info,
-                loading = false,
-                error = null,
-            )
-            opened = true
-        }.onFailure(::fail)
-        if (opened) {
-            loadComposerState()
-            refreshModelOptions()
+            json.decodeFromJsonElement(SessionResumeResult.serializer(), resumed)
+        }.onSuccess { resumed ->
+            val activeSession = resumedStoredSession(session, resumed)
+            var applied = false
+            mutableState.update { live ->
+                val currentRequest = openSessionGeneration.get() == requestGeneration &&
+                    live.backend?.id == backend.id &&
+                    live.activeStoredSession?.durableId == session.durableId &&
+                    live.activeStoredSession?.profile == session.profile
+                if (!currentRequest) {
+                    live
+                } else {
+                    applied = true
+                    val liveTimeline = live.timeline.takeIf { live.runtimeSessionId == previousRuntimeSessionId }
+                        ?: previousTimeline
+                    val running = resumed.running || resumed.info.running
+                    live.copy(
+                        activeStoredSession = activeSession,
+                        runtimeSessionId = resumed.runtimeSessionId,
+                        timeline = TimelineReducer.reconcileResume(
+                            messages = resumed.messages,
+                            runtimeSessionId = resumed.runtimeSessionId,
+                            inflight = resumed.inflight,
+                            queued = resumed.queued,
+                            running = running,
+                            previousRuntimeSessionId = live.runtimeSessionId,
+                            previous = liveTimeline,
+                        ),
+                        runtimeInfo = resumed.info.copy(
+                            running = running,
+                            storedSessionId = activeSession.durableId,
+                        ),
+                        loading = false,
+                        error = null,
+                    )
+                }
+            }
+            if (applied) resumedResult = resumed
+        }.onFailure { error ->
+            val currentRequest = mutableState.value.let { live ->
+                openSessionGeneration.get() == requestGeneration &&
+                    live.backend?.id == backend.id &&
+                    live.activeStoredSession?.durableId == session.durableId &&
+                    live.activeStoredSession?.profile == session.profile
+            }
+            if (currentRequest) fail(error)
         }
+
+        val resumed = resumedResult ?: return
+        val activeSession = resumedStoredSession(session, resumed)
+        val committedTimeline = mutableState.value.timeline
+        runCatching {
+            restClient.sessionMessages(backend, token, activeSession.durableId, activeSession.profile)
+        }.onSuccess { prefetch ->
+            mutableState.update { live ->
+                val stillCurrent = openSessionGeneration.get() == requestGeneration &&
+                    live.backend?.id == backend.id &&
+                    live.activeStoredSession?.durableId == activeSession.durableId &&
+                    live.activeStoredSession?.profile == activeSession.profile &&
+                    live.runtimeSessionId == resumed.runtimeSessionId &&
+                    live.timeline == committedTimeline
+                if (!stillCurrent) {
+                    live
+                } else {
+                    val prefetchSupersedes = prefetchSupersedesResume(prefetch, resumed)
+                    val running = (resumed.running || resumed.info.running) && !prefetchSupersedes
+                    live.copy(
+                        timeline = TimelineReducer.reconcileResume(
+                            messages = selectResumeMessages(prefetch, resumed),
+                            runtimeSessionId = resumed.runtimeSessionId,
+                            inflight = resumed.inflight.takeUnless { prefetchSupersedes },
+                            queued = resumed.queued.takeUnless { prefetchSupersedes },
+                            running = running,
+                            previousRuntimeSessionId = resumed.runtimeSessionId,
+                            previous = committedTimeline,
+                        ),
+                        runtimeInfo = live.runtimeInfo.copy(running = running),
+                    )
+                }
+            }
+        }.onFailure { error ->
+            mutableState.update { live ->
+                if (
+                    openSessionGeneration.get() == requestGeneration &&
+                    live.backend?.id == backend.id &&
+                    live.runtimeSessionId == resumed.runtimeSessionId &&
+                    live.error == null
+                ) {
+                    live.copy(
+                        error = "Session opened, but full history could not be refreshed: ${DiagnosticRedactor.redact(error.message.orEmpty())}",
+                    )
+                } else {
+                    live
+                }
+            }
+        }
+        loadComposerState()
+        refreshModelOptions()
     }
 
     suspend fun newSession(profile: String? = null) {
+        openSessionGeneration.incrementAndGet()
         activeCredentials()
         flushDraft()
         setLoading(true)
@@ -4031,6 +4131,42 @@ class HermesRepository @Inject constructor(
             )
         }
     }
+}
+
+internal fun selectResumeMessages(
+    prefetch: SessionMessagePage,
+    resumed: SessionResumeResult,
+): List<ProtocolMessage> {
+    val resumedDurableId = resumed.durableSessionId?.takeIf(String::isNotBlank)
+        ?: resumed.resumed?.takeIf(String::isNotBlank)
+    val prefetchMatches = resumedDurableId == null || prefetch.sessionId == resumedDurableId
+    val hasLiveProjection = resumed.running || resumed.inflight != null || resumed.queued != null
+    return when {
+        prefetchSupersedesResume(prefetch, resumed) -> prefetch.messages
+        !prefetchMatches || hasLiveProjection -> resumed.messages
+        resumed.messages.size > prefetch.messages.size -> resumed.messages
+        else -> prefetch.messages
+    }
+}
+
+internal fun prefetchSupersedesResume(
+    prefetch: SessionMessagePage,
+    resumed: SessionResumeResult,
+): Boolean {
+    val resumedDurableId = resumed.durableSessionId?.takeIf(String::isNotBlank)
+        ?: resumed.resumed?.takeIf(String::isNotBlank)
+    return (resumedDurableId == null || prefetch.sessionId == resumedDurableId) &&
+        prefetch.messages.size > resumed.messages.size
+}
+
+internal fun resumedStoredSession(
+    requested: StoredSession,
+    resumed: SessionResumeResult,
+): StoredSession {
+    val durableId = resumed.durableSessionId?.takeIf(String::isNotBlank)
+        ?: resumed.resumed?.takeIf(String::isNotBlank)
+        ?: requested.durableId
+    return requested.copy(sessionId = durableId)
 }
 
 private const val DIAGNOSTIC_POLL_INTERVAL_MILLIS = 1_000L
