@@ -2,7 +2,7 @@
 
 ## Nous Research Hermes artwork
 
-The bundled Hermes badge and hero artwork are first-party assets retrieved from `https://hermes-agent.nousresearch.com/` on 18 July 2026. The launcher artwork comes from `apps/desktop/assets/icon.png` at the audited Hermes Agent commit `5122ddd478143a6901bb752cf8ebcd1c5154b6da`.
+The bundled Hermes badge and hero artwork are first-party assets retrieved from `https://hermes-agent.nousresearch.com/` on 18 July 2026. The launcher artwork comes from `apps/desktop/assets/icon.png` at the current audited Hermes Agent commit `eaa53de4eb00ac2686438f4d5e4c674158059ba9`.
 
 These assets are used to preserve the Hermes and Nous visual identity. They are not generated substitutes.
 

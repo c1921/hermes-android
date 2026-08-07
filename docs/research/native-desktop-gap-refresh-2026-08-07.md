@@ -84,16 +84,15 @@ product APIs:
   The Android destination set already follows that adaptation rather than
   trying to copy Electron panes: [`HermesApp.kt`](../../app/src/main/java/com/nousresearch/hermes/ui/HermesApp.kt#L197-L199).
 
-## Release/provenance issue found during the audit
+## Release/provenance issue resolved by issue #12
 
-The Android build embeds `AUDITED_HERMES_COMMIT` as the older
-`5122ddd478143a6901bb752cf8ebcd1c5154b6da` in
-[`app/build.gradle.kts`](../../app/build.gradle.kts#L55-L61), while this report
-audits current Agent `eaa53de4...` and the previous auth refresh report used
-`f15a38ee...`. This does not change runtime parity, but it makes diagnostics and
-compatibility claims stale. Before release, make the build provenance a single
-generated/pinned value and update the capability display and fixture metadata
-to the exact tested upstream commit/version.
+The audit found that the Android build embedded the older
+`5122ddd478143a6901bb752cf8ebcd1c5154b6da` commit while this report audited
+current Agent `eaa53de4...`. Issue #12 now pins the full current audit metadata
+(`eaa53de4eb00ac2686438f4d5e4c674158059ba9`, Agent `0.20.0`, Desktop `0.17.0`)
+through one generated Gradle/`BuildConfig` source. Diagnostics, the redacted
+support export, CI artifacts, and release notes consume that same source; local
+builds use explicit `unknown`, `local`, and `unsigned` fallbacks.
 
 ## Suggested execution order and definition of done
 

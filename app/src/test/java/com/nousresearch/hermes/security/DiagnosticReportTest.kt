@@ -10,8 +10,8 @@ class DiagnosticReportTest {
         val report = buildDiagnosticReport(
             DiagnosticReportInput(
                 generatedAt = "2026-07-18T15:00:00Z",
-                appVersion = "0.1.0",
-                auditedCommit = "5122ddd",
+                appVersion = "0.2.0-debug",
+                auditedCommit = "eaa53de4eb00ac2686438f4d5e4c674158059ba9",
                 backendLabel = "Home Hermes",
                 endpoint = "https://user:password@example.test/dashboard?token=secret-token",
                 connection = "Live / JSON-RPC",

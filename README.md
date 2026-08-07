@@ -88,7 +88,7 @@ See [Android signing and branch flow](docs/release-signing.md) for the public ce
 - [ ] **Partial:** tool activity is structured and expandable; specialised renderers and canonical inline media for every Hermes tool are not complete.
 - [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews/actions work; upload progress, large streamed uploads, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
-- [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report. Release checksums are published; SBOM and signed provenance remain.
+- [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report. Generated build provenance and release checksums are published; SBOM and attestation-based reproducibility remain.
 
 ### Correctness fixes
 
@@ -192,15 +192,15 @@ See [`docs/security/threat-model.md`](docs/security/threat-model.md) for the bro
 Requirements:
 
 - JDK 17
-- Android SDK Platform 35
-- Android SDK Build Tools 35.0.0
+- Android SDK Platform 36
+- Android SDK Build Tools 36.0.0
 
 JDK 26 is not supported by the current Gradle/Android Gradle Plugin toolchain and can fail before project configuration. Point `JAVA_HOME` at JDK 17 when necessary.
 
 Run the same project gate used by CI:
 
 ```bash
-./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleDebug
+./gradlew --no-daemon -Phermes.provenance.channel=debug :app:testDebugUnitTest :app:lintDebug :app:writeBuildProvenance :app:assembleDebug :app:bundleDebug
 ```
 
 Run only the Dashboard-authentication contract tests:
@@ -268,7 +268,7 @@ Unimplemented items that do not depend on an upstream change remain local engine
 
 The client uses Hermes REST APIs for backend-owned management data and the TUI Gateway JSON-RPC/WebSocket protocol for interactive sessions. It is not a WebView wrapper, an OpenAI-compatible chat-only client, or a messaging-platform adapter.
 
-The source audit is pinned to Hermes Agent commit `5122ddd478143a6901bb752cf8ebcd1c5154b6da` (Hermes Agent `0.18.2`, Desktop `0.17.0`) from 18 July 2026. That exact commit is the verified source contract; version strings alone are insufficient because it is 120 commits ahead of the previous baseline without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
+The current source audit is pinned to Hermes Agent commit `eaa53de4eb00ac2686438f4d5e4c674158059ba9` (Hermes Agent `0.20.0`, Desktop `0.17.0`) from 7 August 2026. That exact commit is the verified source contract; version strings alone are insufficient because the backend can change without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
 
 Upstream Hermes remains read-only from this repository. Proposed general protocol changes are documented locally for owner-led upstream review.
 
@@ -276,6 +276,7 @@ Upstream Hermes remains read-only from this repository. Proposed general protoco
 
 - [`docs/research/upstream-baseline.md`](docs/research/upstream-baseline.md) — audited source baseline and protocol entry points
 - [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md) — detailed Desktop capability audit
+- [`docs/release-provenance.md`](docs/release-provenance.md) — generated build identity and release metadata contract
 - [`docs/architecture/android-client-rfc.md`](docs/architecture/android-client-rfc.md) — architecture alternatives and chosen hybrid client
 - [`docs/design/mobile-product-spec.md`](docs/design/mobile-product-spec.md) — mobile information architecture, states, motion, and accessibility intent
 - [`docs/security/threat-model.md`](docs/security/threat-model.md) — Android and remote-client threats and release gates

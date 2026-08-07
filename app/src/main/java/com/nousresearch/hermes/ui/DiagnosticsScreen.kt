@@ -49,11 +49,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.nousresearch.hermes.BuildConfig
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.DiagnosticRunState
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
+import com.nousresearch.hermes.provenance.BuildProvenance
+import com.nousresearch.hermes.provenance.BuildProvenanceSource
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import com.nousresearch.hermes.security.DiagnosticReportInput
 import com.nousresearch.hermes.security.DiagnosticReportSection
@@ -121,7 +122,7 @@ internal fun DiagnosticsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                DiagnosticInfoCard(state, connection)
+                DiagnosticInfoCard(state, connection, BuildProvenanceSource.current)
             }
             item {
                 AppearancePicker(skin, onSkinChange)
@@ -276,11 +277,17 @@ private fun AppearancePicker(
 }
 
 @Composable
-private fun DiagnosticInfoCard(state: HermesState, connection: GatewayConnectionState) {
+private fun DiagnosticInfoCard(
+    state: HermesState,
+    connection: GatewayConnectionState,
+    provenance: BuildProvenance,
+) {
     val status = state.status
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DiagnosticValue("Android app", BuildConfig.VERSION_NAME)
+            DiagnosticValue("Android app", provenance.androidVersion)
+            DiagnosticValue("Build channel", provenance.channel)
+            DiagnosticValue("Android commit", provenance.androidCommit)
             DiagnosticValue("Backend", state.backend?.label.orEmpty())
             DiagnosticValue("Endpoint", state.backend?.baseUrl.orEmpty())
             DiagnosticValue("Connection", DiagnosticRedactor.redact(connection.displayName()))
@@ -292,7 +299,14 @@ private fun DiagnosticInfoCard(state: HermesState, connection: GatewayConnection
                 "Capabilities",
                 status?.capabilities?.toString()?.let(DiagnosticRedactor::redact)?.take(1_000) ?: "Not reported",
             )
-            DiagnosticValue("Audited upstream", BuildConfig.AUDITED_HERMES_COMMIT)
+            DiagnosticValue("Audited upstream", provenance.auditedHermesCommit)
+            DiagnosticValue("Hermes Agent", "${provenance.hermesAgentVersion} (${provenance.hermesAgentVersionRange})")
+            DiagnosticValue("Hermes Desktop", "${provenance.hermesDesktopVersion} (${provenance.hermesDesktopVersionRange})")
+            DiagnosticValue("Toolchain digest", provenance.toolchainDigest)
+            DiagnosticValue("Build identity", provenance.buildIdentity)
+            DiagnosticValue("Package", provenance.packageName)
+            DiagnosticValue("Signing fingerprint", provenance.signingFingerprint)
+            DiagnosticValue("Build author", provenance.author)
         }
     }
 }
@@ -348,11 +362,12 @@ private fun DiagnosticActionCard(
 
 private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState): String {
     val status = status
+    val provenance = BuildProvenanceSource.current
     return buildDiagnosticReport(
         DiagnosticReportInput(
             generatedAt = Instant.now().toString(),
-            appVersion = BuildConfig.VERSION_NAME,
-            auditedCommit = BuildConfig.AUDITED_HERMES_COMMIT,
+            appVersion = provenance.androidVersion,
+            auditedCommit = provenance.auditedHermesCommit,
             backendLabel = backend?.label,
             endpoint = backend?.baseUrl,
             connection = connection.displayName(),
@@ -361,6 +376,7 @@ private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState
             authRequired = status?.authRequired,
             desktopContract = runtimeInfo.desktopContract,
             capabilities = status?.capabilities?.toString(),
+            provenance = provenance,
             sections = DiagnosticAction.entries.mapNotNull { action ->
                 diagnostics[action]?.let { run ->
                     DiagnosticReportSection(

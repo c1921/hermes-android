@@ -1,5 +1,7 @@
 package com.nousresearch.hermes.security
 
+import com.nousresearch.hermes.provenance.BuildProvenance
+
 data class DiagnosticReportInput(
     val generatedAt: String,
     val appVersion: String,
@@ -13,6 +15,7 @@ data class DiagnosticReportInput(
     val desktopContract: Int?,
     val capabilities: String?,
     val sections: List<DiagnosticReportSection>,
+    val provenance: BuildProvenance? = null,
 )
 
 data class DiagnosticReportSection(
@@ -23,7 +26,7 @@ data class DiagnosticReportSection(
 
 fun buildDiagnosticReport(input: DiagnosticReportInput): String = buildString {
     appendLine("Hermes Android diagnostic report")
-    appendLine("format: 1")
+    appendLine("format: 2")
     appendReportValue("generated_at", input.generatedAt)
     appendReportValue("app_version", input.appVersion)
     appendReportValue("audited_upstream", input.auditedCommit)
@@ -35,6 +38,9 @@ fun buildDiagnosticReport(input: DiagnosticReportInput): String = buildString {
     appendReportValue("authentication_required", input.authRequired?.toString())
     appendReportValue("desktop_contract", input.desktopContract?.toString())
     appendReportValue("capabilities", input.capabilities, MAX_CAPABILITIES_CHARACTERS)
+    input.provenance?.reportEntries()?.forEach { (label, value) ->
+        appendReportValue("provenance_${label.lowercase().replace(' ', '_')}", value)
+    }
 
     input.sections.take(MAX_SECTIONS).forEach { section ->
         appendLine()
