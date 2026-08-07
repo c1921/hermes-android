@@ -164,6 +164,11 @@ import androidx.compose.ui.input.key.type
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
@@ -188,6 +193,12 @@ import com.nousresearch.hermes.platform.textShareIntent
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.Warning as WarningColor
+import com.nousresearch.hermes.ui.navigation.HermesNavigator
+import com.nousresearch.hermes.ui.navigation.HermesRoute
+import com.nousresearch.hermes.ui.navigation.ManagementDestination
+import com.nousresearch.hermes.ui.navigation.SessionIdentity
+import com.nousresearch.hermes.ui.navigation.conversationMutationsEnabled
+import com.nousresearch.hermes.ui.navigation.resolveRestoredRoute
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.highlightedCodeBlock
 import com.mikepenz.markdown.compose.elements.highlightedCodeFence
@@ -200,7 +211,7 @@ import kotlinx.coroutines.flow.first
 
 private val WideLayout = 840.dp
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
-private enum class WorkspaceDestination { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, BILLING, AGENTS, CONFIG }
+private enum class WorkspaceContent { SESSIONS, CHAT, SKILLS, CRON, PROFILES, BACKENDS, FILES, DIAGNOSTICS, PROVIDERS, MESSAGING, MCP, USAGE, BILLING, AGENTS, CONFIG }
 
 private data class ModelActions(
     val refresh: () -> Unit,
@@ -401,58 +412,141 @@ fun HermesApp(
             stopBackgroundProcess = viewModel::stopBackgroundProcess,
         )
     }
+    val appNavController = rememberNavController()
+    val navigator = remember(appNavController) { HermesNavigator(appNavController) }
+    val currentEntry by appNavController.currentBackStackEntryAsState()
+    var recoveryNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(
+        state.backend?.id,
+        state.savedBackends.size,
+        state.status,
+        state.loading,
+        state.error,
+        connection,
+        recoveryNotice,
+        currentEntry?.destination?.route,
+    ) {
+        val destination = currentEntry?.destination ?: return@LaunchedEffect
+        val routeName = destination.route.orEmpty()
+        val onboarding = routeName.startsWith(HermesRoute.Onboarding::class.qualifiedName.orEmpty())
+        val backendPicker = if (routeName.startsWith(HermesRoute.BackendPicker::class.qualifiedName.orEmpty())) {
+            currentEntry?.toRoute<HermesRoute.BackendPicker>()
+        } else {
+            null
+        }
+        val backend = state.backend
+        if (backend == null) {
+            if (state.savedBackends.isEmpty()) {
+                if (!onboarding) navigator.openOnboarding(clearHistory = true)
+            } else if (backendPicker == null) {
+                recoveryNotice = "Choose and authenticate a Hermes backend to continue."
+                navigator.openBackendPicker(clearHistory = true)
+            }
+            return@LaunchedEffect
+        }
+        val authenticationExpired = state.error?.lowercase()?.let { error ->
+            listOf("401", "unauthorized", "authentication", "sign in", "login").any(error::contains)
+        } == true
+        if (authenticationExpired && !state.loading && backendPicker == null) {
+            recoveryNotice = "Your Hermes authentication expired. Reconnect before continuing."
+            navigator.openBackendPicker(clearHistory = true)
+        } else if (state.status != null) {
+            val recoveryPicker = backendPicker != null &&
+                backendPicker.returnBackendId != backend.id && recoveryNotice == null
+            if (onboarding || recoveryPicker) {
+                recoveryNotice = null
+                navigator.openAtlas(backend.id, state.currentProfile, clearHistory = true)
+            }
+        }
+    }
+
+    @Composable
+    fun WorkspaceRoute(route: HermesRoute) {
+        if (state.backend == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return
+        }
+        HermesWorkspace(
+            route = route,
+            navigator = navigator,
+            onRecovery = { recoveryNotice = it },
+            state = state,
+            connection = connection,
+            onRefresh = viewModel::refresh,
+            onSearchSessions = viewModel::searchSessions,
+            onSession = viewModel::openSession,
+            onDeleteSession = viewModel::deleteSession,
+            onNewSession = viewModel::newSession,
+            onSend = viewModel::send,
+            onSteer = viewModel::steer,
+            onDraftChange = viewModel::updateDraft,
+            onCompleteSlash = viewModel::completeSlash,
+            onExecuteSlash = viewModel::executeSlash,
+            onAttach = viewModel::attach,
+            onRemoveAttachment = viewModel::removeAttachment,
+            onInterrupt = viewModel::interrupt,
+            onApprove = viewModel::approve,
+            onClarify = viewModel::clarify,
+            onSensitiveInput = viewModel::submitSensitiveInput,
+            modelActions = modelActions,
+            sessionActions = sessionActions,
+            queueActions = queueActions,
+            managementActions = managementActions,
+            onConnectBackend = viewModel::connect,
+            onSelectBackend = viewModel::selectBackend,
+            onForgetBackend = viewModel::forgetBackend,
+            secureScreen = secureScreen,
+            onSecureScreenChange = onSecureScreenChange,
+            skin = skin,
+            onSkinChange = onSkinChange,
+            sharedContentId = sharedContent?.id,
+        )
+    }
     HermesTheme(skin) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(Modifier.fillMaxSize()) {
                 NousBackdrop(skin = skin, modifier = Modifier.fillMaxSize())
-                if (state.backend == null && state.savedBackends.isEmpty()) {
-                    OnboardingScreen(
-                        busy = state.loading,
-                        error = state.error,
-                        onConnect = viewModel::connect,
-                    )
-                } else if (state.backend == null) {
-                    BackendsScreen(
-                        state = state,
-                        onConnect = viewModel::connect,
-                        onSelect = viewModel::selectBackend,
-                        onForget = viewModel::forgetBackend,
-                        onBack = null,
-                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
-                    )
-                } else {
-                    HermesWorkspace(
-                        state = state,
-                        connection = connection,
-                        onRefresh = viewModel::refresh,
-                        onSearchSessions = viewModel::searchSessions,
-                        onSession = viewModel::openSession,
-                        onDeleteSession = viewModel::deleteSession,
-                        onNewSession = viewModel::newSession,
-                        onSend = viewModel::send,
-                        onSteer = viewModel::steer,
-                        onDraftChange = viewModel::updateDraft,
-                        onCompleteSlash = viewModel::completeSlash,
-                        onExecuteSlash = viewModel::executeSlash,
-                        onAttach = viewModel::attach,
-                        onRemoveAttachment = viewModel::removeAttachment,
-                        onInterrupt = viewModel::interrupt,
-                        onApprove = viewModel::approve,
-                        onClarify = viewModel::clarify,
-                        onSensitiveInput = viewModel::submitSensitiveInput,
-                        modelActions = modelActions,
-                        sessionActions = sessionActions,
-                        queueActions = queueActions,
-                        managementActions = managementActions,
-                        onConnectBackend = viewModel::connect,
-                        onSelectBackend = viewModel::selectBackend,
-                        onForgetBackend = viewModel::forgetBackend,
-                        secureScreen = secureScreen,
-                        onSecureScreenChange = onSecureScreenChange,
-                        skin = skin,
-                        onSkinChange = onSkinChange,
-                        sharedContentId = sharedContent?.id,
-                    )
+                NavHost(
+                    navController = appNavController,
+                    startDestination = HermesRoute.Onboarding,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    composable<HermesRoute.Onboarding> {
+                        OnboardingScreen(state.loading, state.error) { label, url, token, password, insecure ->
+                            recoveryNotice = null
+                            viewModel.connect(label, url, token, password, insecure)
+                        }
+                    }
+                    composable<HermesRoute.BackendPicker> { entry ->
+                        val route = entry.toRoute<HermesRoute.BackendPicker>()
+                        BackendsScreen(
+                            state = state,
+                            onConnect = { label, url, token, password, insecure ->
+                                recoveryNotice = null
+                                viewModel.connect(label, url, token, password, insecure)
+                            },
+                            onSelect = { id ->
+                                recoveryNotice = null
+                                viewModel.selectBackend(id)
+                            },
+                            onForget = viewModel::forgetBackend,
+                            onBack = route.returnBackendId?.let { { navigator.back(it, route.profileId ?: "default") } },
+                            modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                        )
+                    }
+                    composable<HermesRoute.SessionAtlas> { WorkspaceRoute(it.toRoute<HermesRoute.SessionAtlas>()) }
+                    composable<HermesRoute.Conversation> { WorkspaceRoute(it.toRoute<HermesRoute.Conversation>()) }
+                    composable<HermesRoute.Files> { WorkspaceRoute(it.toRoute<HermesRoute.Files>()) }
+                    composable<HermesRoute.Management> { WorkspaceRoute(it.toRoute<HermesRoute.Management>()) }
+                }
+                recoveryNotice?.let { notice ->
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(12.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(notice, Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                    }
                 }
             }
         }
@@ -632,6 +726,9 @@ private fun ArchitectureStrip() {
 
 @Composable
 private fun HermesWorkspace(
+    route: HermesRoute,
+    navigator: HermesNavigator,
+    onRecovery: (String?) -> Unit,
     state: HermesState,
     connection: GatewayConnectionState,
     onRefresh: () -> Unit,
@@ -682,84 +779,133 @@ private fun HermesWorkspace(
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayout
-        var destination by rememberSaveable { mutableStateOf(WorkspaceDestination.SESSIONS) }
-        LaunchedEffect(state.runtimeSessionId) {
-            if (state.runtimeSessionId != null && destination == WorkspaceDestination.SESSIONS) {
-                destination = WorkspaceDestination.CHAT
+        val backendId = requireNotNull(state.backend).id
+        val profileId = route.profileIdOr(state.currentProfile)
+        var pendingNewConversationFromId by rememberSaveable { mutableStateOf<String?>(null) }
+        val openStoredSession: (StoredSession) -> Unit = { session ->
+            pendingNewConversationFromId = null
+            onRecovery(null)
+            navigator.openConversation(
+                backendId = backendId,
+                profileId = session.profile?.takeIf(String::isNotBlank) ?: state.currentProfile,
+                sessionId = session.durableId,
+            )
+        }
+        val createConversation: (String?) -> Unit = { profile ->
+            pendingNewConversationFromId = state.activeStoredSession?.durableId.orEmpty()
+            onNewSession(profile)
+        }
+        LaunchedEffect(pendingNewConversationFromId, state.activeStoredSession?.durableId) {
+            val previousSessionId = pendingNewConversationFromId
+            val session = state.activeStoredSession
+            if (previousSessionId != null && session != null &&
+                session.durableId.isNotBlank() && session.durableId != previousSessionId
+            ) {
+                pendingNewConversationFromId = null
+                navigator.openConversation(
+                    backendId = backendId,
+                    profileId = session.profile?.takeIf(String::isNotBlank) ?: state.currentProfile,
+                    sessionId = session.durableId,
+                )
             }
         }
-        LaunchedEffect(sharedContentId) {
-            if (sharedContentId != null) destination = WorkspaceDestination.CHAT
-        }
-        BackHandler(enabled = !wide && destination != WorkspaceDestination.SESSIONS) {
-            destination = WorkspaceDestination.SESSIONS
+        LaunchedEffect(sharedContentId, state.activeStoredSession?.durableId) {
+            val session = state.activeStoredSession
+            if (sharedContentId != null && session != null && session.durableId.isNotBlank()) {
+                navigator.openConversation(
+                    backendId = backendId,
+                    profileId = session.profile?.takeIf(String::isNotBlank) ?: state.currentProfile,
+                    sessionId = session.durableId,
+                )
+            }
         }
 
-        if (wide) {
-            Row(Modifier.fillMaxSize().statusBarsPadding()) {
+        fun navigate(destination: WorkspaceContent) {
+            onRecovery(null)
+            when (destination) {
+                WorkspaceContent.SESSIONS -> navigator.openAtlas(backendId, profileId)
+                WorkspaceContent.FILES -> navigator.openFiles(
+                    backendId,
+                    profileId,
+                    state.runtimeInfo.cwd.takeIf(String::isNotBlank),
+                )
+                WorkspaceContent.BACKENDS -> navigator.openBackendPicker(backendId, profileId)
+                WorkspaceContent.CHAT -> Unit
+                else -> navigator.openManagement(backendId, profileId, destination.toManagementDestination())
+            }
+        }
+
+        @Composable
+        fun WorkspaceRouteContent(
+            destination: WorkspaceContent,
+            filesPath: String? = null,
+            conversationReady: Boolean = true,
+        ) {
+            if (wide) {
+                Row(Modifier.fillMaxSize().statusBarsPadding()) {
                 SessionRail(
                     state, connection, onRefresh, onSearchSessions,
-                    onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                    onSession = openStoredSession,
                     onDeleteSession = onDeleteSession,
-                    onNewSession = { onNewSession(null); destination = WorkspaceDestination.CHAT },
-                    onSkills = { destination = WorkspaceDestination.SKILLS },
-                    onCron = { destination = WorkspaceDestination.CRON },
-                    onProfiles = { destination = WorkspaceDestination.PROFILES },
-                    onBackends = { destination = WorkspaceDestination.BACKENDS },
-                    onFiles = { destination = WorkspaceDestination.FILES },
-                    onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
-                    onProviders = { destination = WorkspaceDestination.PROVIDERS },
-                    onMessaging = { destination = WorkspaceDestination.MESSAGING },
-                    onMcp = { destination = WorkspaceDestination.MCP },
-                    onUsage = { destination = WorkspaceDestination.USAGE },
-                    onBilling = { destination = WorkspaceDestination.BILLING },
-                    onAgents = { destination = WorkspaceDestination.AGENTS },
-                    onConfig = { destination = WorkspaceDestination.CONFIG },
+                    onNewSession = { createConversation(null) },
+                    onSkills = { navigate(WorkspaceContent.SKILLS) },
+                    onCron = { navigate(WorkspaceContent.CRON) },
+                    onProfiles = { navigate(WorkspaceContent.PROFILES) },
+                    onBackends = { navigate(WorkspaceContent.BACKENDS) },
+                    onFiles = { navigate(WorkspaceContent.FILES) },
+                    onDiagnostics = { navigate(WorkspaceContent.DIAGNOSTICS) },
+                    onProviders = { navigate(WorkspaceContent.PROVIDERS) },
+                    onMessaging = { navigate(WorkspaceContent.MESSAGING) },
+                    onMcp = { navigate(WorkspaceContent.MCP) },
+                    onUsage = { navigate(WorkspaceContent.USAGE) },
+                    onBilling = { navigate(WorkspaceContent.BILLING) },
+                    onAgents = { navigate(WorkspaceContent.AGENTS) },
+                    onConfig = { navigate(WorkspaceContent.CONFIG) },
                     modifier = Modifier.width(330.dp).fillMaxHeight(),
                 )
                 HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
                 when (destination) {
-                    WorkspaceDestination.SKILLS -> SkillsScreen(
+                    WorkspaceContent.SKILLS -> SkillsScreen(
                         state, managementActions.refreshSkills, managementActions.toggleSkill,
                         managementActions.refreshToolsets, managementActions.setToolsetEnabled,
                         managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
                         managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
-                        null, Modifier.weight(1f),
+                        { navigator.back(backendId, profileId) }, Modifier.weight(1f),
                     )
-                    WorkspaceDestination.CRON -> CronScreen(
+                    WorkspaceContent.CRON -> CronScreen(
                         state, managementActions.refreshCron, managementActions.setCronEnabled,
                         managementActions.triggerCron, managementActions.refreshCronRuns,
-                        { onSession(it); destination = WorkspaceDestination.CHAT },
+                        openStoredSession,
                         managementActions.createCron,
                         managementActions.updateCron, managementActions.deleteCron,
-                        null, Modifier.weight(1f),
+                        { navigator.back(backendId, profileId) }, Modifier.weight(1f),
                     )
-                    WorkspaceDestination.PROFILES -> ProfilesScreen(
+                    WorkspaceContent.PROFILES -> ProfilesScreen(
                         state = state,
                         onRefresh = managementActions.refreshProfiles,
-                        onStartSession = { onNewSession(it); destination = WorkspaceDestination.CHAT },
+                        onStartSession = createConversation,
                         onCreate = managementActions.createProfile,
                         onRename = managementActions.renameProfile,
                         onSetActive = managementActions.setActiveProfile,
                         onDelete = managementActions.deleteProfile,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.BACKENDS -> BackendsScreen(
+                    WorkspaceContent.BACKENDS -> BackendsScreen(
                         state = state,
                         onConnect = onConnectBackend,
                         onSelect = onSelectBackend,
                         onForget = onForgetBackend,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.FILES -> WorkspaceFilesScreen(
+                    WorkspaceContent.FILES -> WorkspaceFilesScreen(
                         backend = requireNotNull(state.backend),
-                        initialPath = state.runtimeInfo.cwd.takeIf(String::isNotBlank),
-                        onBack = null,
+                        initialPath = filesPath ?: state.runtimeInfo.cwd.takeIf(String::isNotBlank),
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.DIAGNOSTICS -> DiagnosticsScreen(
+                    WorkspaceContent.DIAGNOSTICS -> DiagnosticsScreen(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
@@ -767,10 +913,10 @@ private fun HermesWorkspace(
                         onSecureScreenChange = onSecureScreenChange,
                         skin = skin,
                         onSkinChange = onSkinChange,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.PROVIDERS -> ProvidersScreen(
+                    WorkspaceContent.PROVIDERS -> ProvidersScreen(
                         state = state,
                         onRefresh = managementActions.refreshProviders,
                         onSave = managementActions.saveProviderSetting,
@@ -781,10 +927,10 @@ private fun HermesWorkspace(
                         onDisconnectOAuth = managementActions.disconnectProviderOAuth,
                         onOpenUrl = openExternalUrl,
                         onCopy = copyProviderText,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.MESSAGING -> MessagingScreen(
+                    WorkspaceContent.MESSAGING -> MessagingScreen(
                         state = state,
                         onRefresh = managementActions.refreshMessaging,
                         onSetEnabled = managementActions.setMessagingEnabled,
@@ -792,26 +938,26 @@ private fun HermesWorkspace(
                         onClear = managementActions.clearMessagingSetting,
                         onTest = managementActions.testMessagingPlatform,
                         onRestartGateway = managementActions.restartMessagingGateway,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.MCP -> McpScreen(
+                    WorkspaceContent.MCP -> McpScreen(
                         state = state,
                         onRefresh = managementActions.refreshMcp,
                         onTest = managementActions.testMcpServer,
                         onSetEnabled = managementActions.setMcpServerEnabled,
                         onRemove = managementActions.removeMcpServer,
                         onInstall = managementActions.installMcpCatalogEntry,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.USAGE -> UsageScreen(
+                    WorkspaceContent.USAGE -> UsageScreen(
                         state = state,
                         onRefresh = managementActions.refreshUsage,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.BILLING -> BillingScreen(
+                    WorkspaceContent.BILLING -> BillingScreen(
                         state = state,
                         onRefresh = managementActions.refreshBilling,
                         onCharge = managementActions.chargeBillingCredits,
@@ -819,10 +965,10 @@ private fun HermesWorkspace(
                         onStepUp = managementActions.startBillingStepUp,
                         onAcknowledgeUnconfirmedCharge = managementActions.acknowledgeUnconfirmedBillingCharge,
                         onOpenUrl = openExternalUrl,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.AGENTS -> AgentsScreen(
+                    WorkspaceContent.AGENTS -> AgentsScreen(
                         state = state,
                         onRefresh = managementActions.refreshAgents,
                         onRefreshArchives = managementActions.refreshSpawnTrees,
@@ -830,87 +976,97 @@ private fun HermesWorkspace(
                         onSetPaused = managementActions.setDelegationPaused,
                         onInterrupt = managementActions.interruptSubagent,
                         onStopProcess = managementActions.stopBackgroundProcess,
-                        onOpenSession = { onSession(it); destination = WorkspaceDestination.CHAT },
-                        onBack = null,
+                        onOpenSession = openStoredSession,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceDestination.CONFIG -> ServerConfigScreen(
+                    WorkspaceContent.CONFIG -> ServerConfigScreen(
                         state = state,
                         onRefresh = managementActions.refreshServerConfig,
                         onUpdate = managementActions.updateServerConfig,
-                        onBack = null,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    else -> ChatSurface(
-                        state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
-                        onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions, Modifier.weight(1f),
-                    )
+                    else -> if (conversationReady) {
+                        ChatSurface(
+                            state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
+                            onAttach, onRemoveAttachment, onInterrupt,
+                            onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions, Modifier.weight(1f),
+                            onFiles = { navigate(WorkspaceContent.FILES) },
+                        )
+                    } else {
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    }
                 }
-            }
-        } else {
-            AnimatedContent(
+                }
+            } else {
+                AnimatedContent(
                 targetState = destination,
                 transitionSpec = {
-                    if (targetState != WorkspaceDestination.SESSIONS) {
+                    if (targetState != WorkspaceContent.SESSIONS) {
                         slideInHorizontally(tween(260)) { it / 3 } togetherWith slideOutHorizontally(tween(220)) { -it / 4 }
                     } else {
                         slideInHorizontally(tween(260)) { -it / 3 } togetherWith slideOutHorizontally(tween(220)) { it / 4 }
                     }
                 },
                 label = "mobile-master-detail",
-            ) { activeDestination ->
-                when (activeDestination) {
-                    WorkspaceDestination.CHAT -> ChatSurface(
-                        state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
-                        onAttach, onRemoveAttachment, onInterrupt,
-                        onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions,
-                        Modifier.fillMaxSize(),
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
-                    )
-                    WorkspaceDestination.SKILLS -> SkillsScreen(
+                ) { activeDestination ->
+                    when (activeDestination) {
+                    WorkspaceContent.CHAT -> if (conversationReady) {
+                        ChatSurface(
+                            state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
+                            onAttach, onRemoveAttachment, onInterrupt,
+                            onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions,
+                            Modifier.fillMaxSize(),
+                            onBack = { navigator.back(backendId, profileId) },
+                            onFiles = { navigate(WorkspaceContent.FILES) },
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    }
+                    WorkspaceContent.SKILLS -> SkillsScreen(
                         state, managementActions.refreshSkills, managementActions.toggleSkill,
                         managementActions.refreshToolsets, managementActions.setToolsetEnabled,
                         managementActions.loadSkillHub, managementActions.reviewSkill, managementActions.closeSkillReview,
                         managementActions.installReviewedSkill, managementActions.uninstallSkill, managementActions.updateSkills,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.CRON -> CronScreen(
+                    WorkspaceContent.CRON -> CronScreen(
                         state, managementActions.refreshCron, managementActions.setCronEnabled,
                         managementActions.triggerCron, managementActions.refreshCronRuns,
-                        { onSession(it); destination = WorkspaceDestination.CHAT },
+                        openStoredSession,
                         managementActions.createCron,
                         managementActions.updateCron, managementActions.deleteCron,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.PROFILES -> ProfilesScreen(
+                    WorkspaceContent.PROFILES -> ProfilesScreen(
                         state = state,
                         onRefresh = managementActions.refreshProfiles,
-                        onStartSession = { onNewSession(it); destination = WorkspaceDestination.CHAT },
+                        onStartSession = createConversation,
                         onCreate = managementActions.createProfile,
                         onRename = managementActions.renameProfile,
                         onSetActive = managementActions.setActiveProfile,
                         onDelete = managementActions.deleteProfile,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.BACKENDS -> BackendsScreen(
+                    WorkspaceContent.BACKENDS -> BackendsScreen(
                         state = state,
                         onConnect = onConnectBackend,
                         onSelect = onSelectBackend,
                         onForget = onForgetBackend,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.FILES -> WorkspaceFilesScreen(
+                    WorkspaceContent.FILES -> WorkspaceFilesScreen(
                         backend = requireNotNull(state.backend),
-                        initialPath = state.runtimeInfo.cwd.takeIf(String::isNotBlank),
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        initialPath = filesPath ?: state.runtimeInfo.cwd.takeIf(String::isNotBlank),
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.DIAGNOSTICS -> DiagnosticsScreen(
+                    WorkspaceContent.DIAGNOSTICS -> DiagnosticsScreen(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
@@ -918,10 +1074,10 @@ private fun HermesWorkspace(
                         onSecureScreenChange = onSecureScreenChange,
                         skin = skin,
                         onSkinChange = onSkinChange,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.PROVIDERS -> ProvidersScreen(
+                    WorkspaceContent.PROVIDERS -> ProvidersScreen(
                         state = state,
                         onRefresh = managementActions.refreshProviders,
                         onSave = managementActions.saveProviderSetting,
@@ -932,10 +1088,10 @@ private fun HermesWorkspace(
                         onDisconnectOAuth = managementActions.disconnectProviderOAuth,
                         onOpenUrl = openExternalUrl,
                         onCopy = copyProviderText,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.MESSAGING -> MessagingScreen(
+                    WorkspaceContent.MESSAGING -> MessagingScreen(
                         state = state,
                         onRefresh = managementActions.refreshMessaging,
                         onSetEnabled = managementActions.setMessagingEnabled,
@@ -943,26 +1099,26 @@ private fun HermesWorkspace(
                         onClear = managementActions.clearMessagingSetting,
                         onTest = managementActions.testMessagingPlatform,
                         onRestartGateway = managementActions.restartMessagingGateway,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.MCP -> McpScreen(
+                    WorkspaceContent.MCP -> McpScreen(
                         state = state,
                         onRefresh = managementActions.refreshMcp,
                         onTest = managementActions.testMcpServer,
                         onSetEnabled = managementActions.setMcpServerEnabled,
                         onRemove = managementActions.removeMcpServer,
                         onInstall = managementActions.installMcpCatalogEntry,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.USAGE -> UsageScreen(
+                    WorkspaceContent.USAGE -> UsageScreen(
                         state = state,
                         onRefresh = managementActions.refreshUsage,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.BILLING -> BillingScreen(
+                    WorkspaceContent.BILLING -> BillingScreen(
                         state = state,
                         onRefresh = managementActions.refreshBilling,
                         onCharge = managementActions.chargeBillingCredits,
@@ -970,10 +1126,10 @@ private fun HermesWorkspace(
                         onStepUp = managementActions.startBillingStepUp,
                         onAcknowledgeUnconfirmedCharge = managementActions.acknowledgeUnconfirmedBillingCharge,
                         onOpenUrl = openExternalUrl,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.AGENTS -> AgentsScreen(
+                    WorkspaceContent.AGENTS -> AgentsScreen(
                         state = state,
                         onRefresh = managementActions.refreshAgents,
                         onRefreshArchives = managementActions.refreshSpawnTrees,
@@ -981,42 +1137,142 @@ private fun HermesWorkspace(
                         onSetPaused = managementActions.setDelegationPaused,
                         onInterrupt = managementActions.interruptSubagent,
                         onStopProcess = managementActions.stopBackgroundProcess,
-                        onOpenSession = { onSession(it); destination = WorkspaceDestination.CHAT },
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onOpenSession = openStoredSession,
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.CONFIG -> ServerConfigScreen(
+                    WorkspaceContent.CONFIG -> ServerConfigScreen(
                         state = state,
                         onRefresh = managementActions.refreshServerConfig,
                         onUpdate = managementActions.updateServerConfig,
-                        onBack = { destination = WorkspaceDestination.SESSIONS },
+                        onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
-                    WorkspaceDestination.SESSIONS -> SessionRail(
+                    WorkspaceContent.SESSIONS -> SessionRail(
                         state, connection, onRefresh, onSearchSessions,
-                        onSession = { onSession(it); destination = WorkspaceDestination.CHAT },
+                        onSession = openStoredSession,
                         onDeleteSession = onDeleteSession,
-                        onNewSession = { onNewSession(null); destination = WorkspaceDestination.CHAT },
-                        onSkills = { destination = WorkspaceDestination.SKILLS },
-                        onCron = { destination = WorkspaceDestination.CRON },
-                        onProfiles = { destination = WorkspaceDestination.PROFILES },
-                        onBackends = { destination = WorkspaceDestination.BACKENDS },
-                        onFiles = { destination = WorkspaceDestination.FILES },
-                        onDiagnostics = { destination = WorkspaceDestination.DIAGNOSTICS },
-                        onProviders = { destination = WorkspaceDestination.PROVIDERS },
-                        onMessaging = { destination = WorkspaceDestination.MESSAGING },
-                        onMcp = { destination = WorkspaceDestination.MCP },
-                        onUsage = { destination = WorkspaceDestination.USAGE },
-                        onBilling = { destination = WorkspaceDestination.BILLING },
-                        onAgents = { destination = WorkspaceDestination.AGENTS },
-                        onConfig = { destination = WorkspaceDestination.CONFIG },
+                        onNewSession = { createConversation(null) },
+                        onSkills = { navigate(WorkspaceContent.SKILLS) },
+                        onCron = { navigate(WorkspaceContent.CRON) },
+                        onProfiles = { navigate(WorkspaceContent.PROFILES) },
+                        onBackends = { navigate(WorkspaceContent.BACKENDS) },
+                        onFiles = { navigate(WorkspaceContent.FILES) },
+                        onDiagnostics = { navigate(WorkspaceContent.DIAGNOSTICS) },
+                        onProviders = { navigate(WorkspaceContent.PROVIDERS) },
+                        onMessaging = { navigate(WorkspaceContent.MESSAGING) },
+                        onMcp = { navigate(WorkspaceContent.MCP) },
+                        onUsage = { navigate(WorkspaceContent.USAGE) },
+                        onBilling = { navigate(WorkspaceContent.BILLING) },
+                        onAgents = { navigate(WorkspaceContent.AGENTS) },
+                        onConfig = { navigate(WorkspaceContent.CONFIG) },
                         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                     )
+                    }
                 }
+            }
+        }
+
+        val authoritativeReady = state.status != null && connection == GatewayConnectionState.Open
+        val authoritativeSessions = (state.sessions + listOfNotNull(state.activeStoredSession)).mapTo(mutableSetOf()) { session ->
+            SessionIdentity(
+                backendId = backendId,
+                profileId = session.profile?.takeIf(String::isNotBlank) ?: state.currentProfile,
+                sessionId = session.durableId,
+            )
+        }
+        val resolution = if (authoritativeReady) {
+            resolveRestoredRoute(
+                route = route,
+                availableBackendIds = (state.savedBackends.map { it.id } + backendId).toSet(),
+                authenticatedBackendId = backendId,
+                authoritativeSessions = authoritativeSessions,
+            )
+        } else {
+            null
+        }
+        LaunchedEffect(route, resolution) {
+            if (resolution != null && resolution.route != route) {
+                onRecovery(resolution.explanation)
+                navigator.replace(resolution.route)
+            }
+        }
+
+        if (!authoritativeReady || resolution == null || resolution.route != route || !resolution.mutationsEnabled) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        } else {
+            when (route) {
+                is HermesRoute.SessionAtlas -> WorkspaceRouteContent(WorkspaceContent.SESSIONS)
+                is HermesRoute.Files -> WorkspaceRouteContent(WorkspaceContent.FILES, filesPath = route.path)
+                is HermesRoute.Management -> WorkspaceRouteContent(route.destination.toWorkspaceContent())
+                is HermesRoute.Conversation -> {
+                    val active = state.activeStoredSession
+                    val activeProfile = active?.profile?.takeIf(String::isNotBlank) ?: state.currentProfile
+                    val conversationReady = conversationMutationsEnabled(
+                        route = route,
+                        activeBackendId = backendId,
+                        activeSession = active?.let { SessionIdentity(backendId, activeProfile, it.durableId) },
+                        runtimeStoredSessionId = state.runtimeInfo.storedSessionId,
+                        runtimeSessionId = state.runtimeSessionId,
+                    )
+                    LaunchedEffect(route, state.loading, conversationReady) {
+                        if (!conversationReady && !state.loading) {
+                            state.sessions.firstOrNull { candidate ->
+                                candidate.durableId == route.sessionId &&
+                                    (candidate.profile?.takeIf(String::isNotBlank) ?: state.currentProfile) == route.profileId
+                            }?.let(onSession)
+                        }
+                    }
+                    WorkspaceRouteContent(WorkspaceContent.CHAT, conversationReady = conversationReady)
+                }
+                HermesRoute.Onboarding, is HermesRoute.BackendPicker -> Unit
             }
         }
     }
 }
+
+private fun WorkspaceContent.toManagementDestination(): ManagementDestination = when (this) {
+    WorkspaceContent.SKILLS -> ManagementDestination.SKILLS
+    WorkspaceContent.CRON -> ManagementDestination.CRON
+    WorkspaceContent.PROFILES -> ManagementDestination.PROFILES
+    WorkspaceContent.DIAGNOSTICS -> ManagementDestination.DIAGNOSTICS
+    WorkspaceContent.PROVIDERS -> ManagementDestination.PROVIDERS
+    WorkspaceContent.MESSAGING -> ManagementDestination.MESSAGING
+    WorkspaceContent.MCP -> ManagementDestination.MCP
+    WorkspaceContent.USAGE -> ManagementDestination.USAGE
+    WorkspaceContent.BILLING -> ManagementDestination.BILLING
+    WorkspaceContent.AGENTS -> ManagementDestination.AGENTS
+    WorkspaceContent.CONFIG -> ManagementDestination.CONFIG
+    WorkspaceContent.SESSIONS,
+    WorkspaceContent.CHAT,
+    WorkspaceContent.BACKENDS,
+    WorkspaceContent.FILES,
+    -> error("$this is not a management destination")
+}
+
+private fun ManagementDestination.toWorkspaceContent(): WorkspaceContent = when (this) {
+    ManagementDestination.SKILLS -> WorkspaceContent.SKILLS
+    ManagementDestination.CRON -> WorkspaceContent.CRON
+    ManagementDestination.PROFILES -> WorkspaceContent.PROFILES
+    ManagementDestination.BACKENDS -> WorkspaceContent.BACKENDS
+    ManagementDestination.DIAGNOSTICS -> WorkspaceContent.DIAGNOSTICS
+    ManagementDestination.PROVIDERS -> WorkspaceContent.PROVIDERS
+    ManagementDestination.MESSAGING -> WorkspaceContent.MESSAGING
+    ManagementDestination.MCP -> WorkspaceContent.MCP
+    ManagementDestination.USAGE -> WorkspaceContent.USAGE
+    ManagementDestination.BILLING -> WorkspaceContent.BILLING
+    ManagementDestination.AGENTS -> WorkspaceContent.AGENTS
+    ManagementDestination.CONFIG -> WorkspaceContent.CONFIG
+}
+
+private fun HermesRoute.profileIdOr(fallback: String): String = when (this) {
+    is HermesRoute.BackendPicker -> profileId
+    is HermesRoute.SessionAtlas -> profileId
+    is HermesRoute.Conversation -> profileId
+    is HermesRoute.Files -> profileId
+    is HermesRoute.Management -> profileId
+    HermesRoute.Onboarding -> null
+}.orEmpty().ifBlank { fallback }
 
 @Composable
 private fun SessionRail(
@@ -1394,6 +1650,7 @@ private fun ChatSurface(
     queueActions: QueueActions,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    onFiles: (() -> Unit)? = null,
 ) {
     val voiceViewModel: VoiceViewModel = hiltViewModel()
     val speechState by voiceViewModel.speechState.collectAsStateWithLifecycle()
@@ -1405,7 +1662,7 @@ private fun ChatSurface(
         }
     }
     Column(modifier.statusBarsPadding()) {
-        ChatHeader(state, onBack, sessionActions)
+        ChatHeader(state, onBack, onFiles, sessionActions)
         Box(Modifier.weight(1f)) {
             if (state.runtimeSessionId == null) {
                 Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1493,6 +1750,7 @@ private fun ChatSurface(
 private fun ChatHeader(
     state: HermesState,
     onBack: (() -> Unit)?,
+    onFiles: (() -> Unit)?,
     sessionActions: SessionActionCallbacks,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1509,6 +1767,7 @@ private fun ChatHeader(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        onFiles?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Folder, "Open session files") } }
         SessionActions(
             state = state,
             onRename = sessionActions.rename,
