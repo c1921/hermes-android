@@ -8,7 +8,7 @@ class HermesNavigator(private val controller: NavHostController) {
     }
 
     fun openAtlas(backendId: String, profileId: String, clearHistory: Boolean = false) {
-        navigate(HermesRoute.SessionAtlas(backendId, profileId), clearHistory)
+        navigate(HermesDestinationRoute.Chats(backendId, profileId), clearHistory)
     }
 
     private fun navigate(route: HermesRoute, clearHistory: Boolean = false) {
@@ -37,21 +37,79 @@ class HermesNavigator(private val controller: NavHostController) {
                 launchSingleTop = true
                 if (clearHistory) popUpTo(controller.graph.id) { inclusive = true }
             }
+            is HermesDestinationRoute.Chats -> controller.navigate(route) {
+                launchSingleTop = true
+                if (clearHistory) popUpTo(controller.graph.id) { inclusive = true }
+            }
+            is HermesDestinationRoute.Artifacts -> controller.navigate(route) {
+                launchSingleTop = true
+                if (clearHistory) popUpTo(controller.graph.id) { inclusive = true }
+            }
+            is HermesDestinationRoute.Automations -> controller.navigate(route) {
+                launchSingleTop = true
+                if (clearHistory) popUpTo(controller.graph.id) { inclusive = true }
+            }
+            is HermesDestinationRoute.Manage -> controller.navigate(route) {
+                launchSingleTop = true
+                if (clearHistory) popUpTo(controller.graph.id) { inclusive = true }
+            }
+            is HermesDestinationRoute.AppSettings -> controller.navigate(route) {
+                launchSingleTop = true
+                if (clearHistory) popUpTo(controller.graph.id) { inclusive = true }
+            }
         }
+    }
+
+    fun openProductRoute(route: HermesDestinationRoute, clearHistory: Boolean = false) {
+        navigate(route, clearHistory)
+    }
+
+    fun openChats(backendId: String, profileId: String, sessionId: String? = null) {
+        navigate(HermesDestinationRoute.Chats(backendId, profileId, sessionId))
+    }
+
+    fun openArtifacts(
+        backendId: String,
+        profileId: String,
+        artifactId: String? = null,
+        filePath: String? = null,
+    ) {
+        navigate(HermesDestinationRoute.Artifacts(backendId, profileId, artifactId, filePath))
+    }
+
+    fun openAutomations(
+        backendId: String,
+        profileId: String,
+        destination: AutomationDestination? = null,
+        resourceId: String? = null,
+    ) {
+        navigate(HermesDestinationRoute.Automations(backendId, profileId, destination, resourceId))
+    }
+
+    fun openManage(
+        backendId: String,
+        profileId: String,
+        section: ManageSection? = null,
+        destination: ManageDestination? = null,
+        resourceId: String? = null,
+    ) {
+        navigate(HermesDestinationRoute.Manage(backendId, profileId, section, destination, resourceId))
+    }
+
+    fun openAppSettings(section: AppSettingsSection? = null) {
+        navigate(HermesDestinationRoute.AppSettings(section))
     }
 
     fun openConversation(backendId: String, profileId: String, sessionId: String) {
-        controller.navigate(HermesRoute.Conversation(backendId, profileId, sessionId)) {
-            launchSingleTop = true
-        }
+        navigate(HermesDestinationRoute.Chats(backendId, profileId, sessionId))
     }
 
     fun openFiles(backendId: String, profileId: String, path: String?) {
-        controller.navigate(HermesRoute.Files(backendId, profileId, path)) { launchSingleTop = true }
+        navigate(HermesDestinationRoute.Artifacts(backendId, profileId, filePath = path))
     }
 
     fun openManagement(backendId: String, profileId: String, destination: ManagementDestination) {
-        controller.navigate(HermesRoute.Management(backendId, profileId, destination)) { launchSingleTop = true }
+        navigate(HermesDestinationCatalog.destination(destination, backendId, profileId))
     }
 
     fun openBackendPicker(

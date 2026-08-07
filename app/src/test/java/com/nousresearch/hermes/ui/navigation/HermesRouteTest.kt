@@ -9,6 +9,22 @@ import org.junit.Test
 
 class HermesRouteTest {
     @Test
+    fun `product destinations are authoritative Hermes routes`() {
+        val routes = listOf<HermesRoute>(
+            HermesDestinationRoute.Chats("backend-1", "default"),
+            HermesDestinationRoute.Artifacts("backend-1", "default"),
+            HermesDestinationRoute.Automations("backend-1", "default"),
+            HermesDestinationRoute.Manage("backend-1", "default"),
+            HermesDestinationRoute.AppSettings(),
+        )
+
+        routes.forEach { route ->
+            val encoded = Json.encodeToString<HermesRoute>(route)
+            assertTrue(encoded.contains(route::class.simpleName.orEmpty()))
+        }
+    }
+
+    @Test
     fun `conversation restoration contains durable identity and no runtime or private payload`() {
         val encoded = Json.encodeToString<HermesRoute>(
             HermesRoute.Conversation(
@@ -94,6 +110,70 @@ class HermesRouteTest {
 
         assertEquals(HermesRoute.SessionAtlas("backend-1", "default"), result.route)
         assertTrue(result.explanation.orEmpty().contains("could not be found"))
+        assertFalse(result.mutationsEnabled)
+    }
+
+    @Test
+    fun `missing product chat restores to chats home with explanation`() {
+        val result = resolveRestoredRoute(
+            route = HermesDestinationRoute.Chats("backend-1", "default", "missing-session"),
+            availableBackendIds = setOf("backend-1"),
+            authenticatedBackendId = "backend-1",
+            authoritativeSessions = emptySet(),
+        )
+
+        assertEquals(HermesDestinationRoute.Chats("backend-1", "default"), result.route)
+        assertTrue(result.explanation.orEmpty().contains("could not be found"))
+        assertFalse(result.mutationsEnabled)
+    }
+
+    @Test
+    fun `every remote product route preserves backend and profile through authentication recovery`() {
+        val routes = listOf<HermesRoute>(
+            HermesDestinationRoute.Chats("backend-intended", "research"),
+            HermesDestinationRoute.Artifacts("backend-intended", "research", artifactId = "artifact-1"),
+            HermesDestinationRoute.Automations(
+                "backend-intended",
+                "research",
+                AutomationDestination.COMMAND_CENTER,
+                "run-1",
+            ),
+            HermesDestinationRoute.Manage(
+                "backend-intended",
+                "research",
+                ManageSection.MEMORY_AND_LEARNING,
+                ManageDestination.STARMAP,
+                "node-1",
+            ),
+        )
+
+        routes.forEach { route ->
+            val result = resolveRestoredRoute(
+                route = route,
+                availableBackendIds = setOf("backend-intended"),
+                authenticatedBackendId = null,
+                authoritativeSessions = emptySet(),
+            )
+            assertEquals(
+                HermesRoute.BackendPicker("backend-intended", "research"),
+                result.route,
+            )
+            assertFalse(result.mutationsEnabled)
+        }
+    }
+
+    @Test
+    fun `device local settings do not require backend restoration`() {
+        val route = HermesDestinationRoute.AppSettings(AppSettingsSection.APPEARANCE)
+
+        val result = resolveRestoredRoute(
+            route = route,
+            availableBackendIds = emptySet(),
+            authenticatedBackendId = null,
+            authoritativeSessions = emptySet(),
+        )
+
+        assertEquals(route, result.route)
         assertFalse(result.mutationsEnabled)
     }
 

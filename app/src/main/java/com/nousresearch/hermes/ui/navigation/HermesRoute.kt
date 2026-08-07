@@ -66,6 +66,7 @@ sealed interface HermesRoute {
 enum class ManagementDestination {
     SKILLS,
     CRON,
+    WEBHOOKS,
     PROFILES,
     BACKENDS,
     DIAGNOSTICS,
@@ -75,7 +76,124 @@ enum class ManagementDestination {
     USAGE,
     BILLING,
     AGENTS,
+    COMMAND_CENTER,
+    STARMAP,
+    HOST_CAPABILITIES,
     CONFIG,
+}
+
+/** Authoritative native product hierarchy; legacy routes remain while call sites migrate. */
+@Serializable
+sealed interface HermesDestinationRoute : HermesRoute {
+    @Serializable
+    data class Chats(
+        val backendId: String,
+        val profileId: String,
+        val sessionId: String? = null,
+    ) : HermesDestinationRoute {
+        init {
+            requireRemoteIdentity(backendId, profileId)
+            requireOptionalStableId(sessionId)
+        }
+    }
+
+    @Serializable
+    data class Artifacts(
+        val backendId: String,
+        val profileId: String,
+        val artifactId: String? = null,
+        val filePath: String? = null,
+    ) : HermesDestinationRoute {
+        init {
+            requireRemoteIdentity(backendId, profileId)
+            requireOptionalStableId(artifactId)
+            require(filePath == null || filePath.isNotBlank())
+        }
+    }
+
+    @Serializable
+    data class Automations(
+        val backendId: String,
+        val profileId: String,
+        val destination: AutomationDestination? = null,
+        val resourceId: String? = null,
+    ) : HermesDestinationRoute {
+        init {
+            requireRemoteIdentity(backendId, profileId)
+            requireOptionalStableId(resourceId)
+        }
+    }
+
+    @Serializable
+    data class Manage(
+        val backendId: String,
+        val profileId: String,
+        val section: ManageSection? = null,
+        val destination: ManageDestination? = null,
+        val resourceId: String? = null,
+    ) : HermesDestinationRoute {
+        init {
+            requireRemoteIdentity(backendId, profileId)
+            requireOptionalStableId(resourceId)
+            require(destination == null || section == null || destination.section == section)
+        }
+    }
+
+    /** Device-local preferences deliberately carry no Hermes backend scope. */
+    @Serializable
+    data class AppSettings(
+        val section: AppSettingsSection? = null,
+    ) : HermesDestinationRoute
+}
+
+@Serializable
+enum class ManageSection {
+    CAPABILITIES,
+    PROFILES_AND_MODELS,
+    CONNECTIONS_AND_DELIVERY,
+    MEMORY_AND_LEARNING,
+    SERVER_AND_ACCOUNT,
+}
+
+@Serializable
+enum class AutomationDestination {
+    CRON,
+    AGENTS,
+    WEBHOOKS,
+    COMMAND_CENTER,
+}
+
+@Serializable
+enum class ManageDestination(val section: ManageSection) {
+    SKILLS(ManageSection.CAPABILITIES),
+    MCP(ManageSection.CAPABILITIES),
+    HOST_CAPABILITIES(ManageSection.CAPABILITIES),
+    PROFILES(ManageSection.PROFILES_AND_MODELS),
+    BACKENDS(ManageSection.CONNECTIONS_AND_DELIVERY),
+    PROVIDERS(ManageSection.CONNECTIONS_AND_DELIVERY),
+    MESSAGING(ManageSection.CONNECTIONS_AND_DELIVERY),
+    STARMAP(ManageSection.MEMORY_AND_LEARNING),
+    DIAGNOSTICS(ManageSection.SERVER_AND_ACCOUNT),
+    USAGE(ManageSection.SERVER_AND_ACCOUNT),
+    BILLING(ManageSection.SERVER_AND_ACCOUNT),
+    CONFIG(ManageSection.SERVER_AND_ACCOUNT),
+}
+
+@Serializable
+enum class AppSettingsSection {
+    APPEARANCE,
+    PRIVACY_AND_SECURITY,
+    NOTIFICATIONS,
+    ACCESSIBILITY,
+}
+
+private fun requireRemoteIdentity(backendId: String, profileId: String) {
+    require(backendId.isNotBlank())
+    require(profileId.isNotBlank())
+}
+
+private fun requireOptionalStableId(value: String?) {
+    require(value == null || value.isNotBlank())
 }
 
 data class SessionIdentity(
@@ -122,6 +240,15 @@ fun resolveRestoredRoute(
             )
         }
     }
+    if (route is HermesDestinationRoute.Chats && route.sessionId != null) {
+        val identity = SessionIdentity(route.backendId, route.profileId, route.sessionId)
+        if (identity !in authoritativeSessions) {
+            return RouteResolution(
+                route = HermesDestinationRoute.Chats(route.backendId, route.profileId),
+                explanation = "That Hermes session could not be found. Choose another session.",
+            )
+        }
+    }
     return RouteResolution(route = route, mutationsEnabled = true)
 }
 
@@ -131,6 +258,11 @@ fun HermesRoute.backendIdOrNull(): String? = when (this) {
     is HermesRoute.Conversation -> backendId
     is HermesRoute.Files -> backendId
     is HermesRoute.Management -> backendId
+    is HermesDestinationRoute.Chats -> backendId
+    is HermesDestinationRoute.Artifacts -> backendId
+    is HermesDestinationRoute.Automations -> backendId
+    is HermesDestinationRoute.Manage -> backendId
+    is HermesDestinationRoute.AppSettings -> null
 }
 
 private fun HermesRoute.profileIdOrNull(): String? = when (this) {
@@ -140,6 +272,11 @@ private fun HermesRoute.profileIdOrNull(): String? = when (this) {
     is HermesRoute.Conversation -> profileId
     is HermesRoute.Files -> profileId
     is HermesRoute.Management -> profileId
+    is HermesDestinationRoute.Chats -> profileId
+    is HermesDestinationRoute.Artifacts -> profileId
+    is HermesDestinationRoute.Automations -> profileId
+    is HermesDestinationRoute.Manage -> profileId
+    is HermesDestinationRoute.AppSettings -> null
 }
 
 fun conversationMutationsEnabled(

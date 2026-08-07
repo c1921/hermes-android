@@ -32,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -71,10 +69,6 @@ internal fun DiagnosticsScreen(
     state: HermesState,
     connection: GatewayConnectionState,
     onRun: (DiagnosticAction) -> Unit,
-    secureScreen: Boolean,
-    onSecureScreenChange: (Boolean) -> Unit,
-    skin: HermesSkin,
-    onSkinChange: (HermesSkin) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -123,30 +117,6 @@ internal fun DiagnosticsScreen(
         ) {
             item {
                 DiagnosticInfoCard(state, connection, BuildProvenanceSource.current)
-            }
-            item {
-                AppearancePicker(skin, onSkinChange)
-            }
-            item {
-                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("SECURE SCREEN", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Block screenshots, screen recording and the recent-app thumbnail for Hermes content on this device.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = secureScreen,
-                            onCheckedChange = onSecureScreenChange,
-                            modifier = Modifier.semantics { contentDescription = "Secure screen" },
-                        )
-                    }
-                }
             }
             item {
                 Text(
@@ -202,7 +172,7 @@ internal fun DiagnosticsScreen(
 }
 
 @Composable
-private fun AppearancePicker(
+internal fun AppearancePicker(
     selected: HermesSkin,
     onSelected: (HermesSkin) -> Unit,
 ) {

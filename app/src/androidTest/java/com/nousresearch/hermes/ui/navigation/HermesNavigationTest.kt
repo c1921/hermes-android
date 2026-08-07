@@ -29,18 +29,20 @@ class HermesNavigationTest {
             dispatcher = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher
             val controller = rememberNavController()
             val navigator = remember(controller) { HermesNavigator(controller) }
-            NavHost(controller, startDestination = HermesRoute.SessionAtlas("backend-1", "default")) {
-                composable<HermesRoute.SessionAtlas> {
+            NavHost(controller, startDestination = HermesDestinationRoute.Chats("backend-1", "default")) {
+                composable<HermesDestinationRoute.Chats> { entry ->
+                    val route = entry.toRoute<HermesDestinationRoute.Chats>()
+                    if (route.sessionId != null) {
+                        Button(onClick = { navigator.openFiles("backend-1", "default", "/workspace") }) {
+                            Text("Open files")
+                        }
+                    } else {
                     Button(onClick = {
                         navigator.openConversation("backend-1", "default", "session-1")
                     }) { Text("Open conversation") }
-                }
-                composable<HermesRoute.Conversation> {
-                    Button(onClick = { navigator.openFiles("backend-1", "default", "/workspace") }) {
-                        Text("Open files")
                     }
                 }
-                composable<HermesRoute.Files> {
+                composable<HermesDestinationRoute.Artifacts> {
                     Button(onClick = { navigator.back("backend-1", "default") }) { Text("Back from files") }
                 }
             }
@@ -89,18 +91,20 @@ class HermesNavigationTest {
         restoration.setContent {
             val controller = rememberNavController()
             val navigator = remember(controller) { HermesNavigator(controller) }
-            NavHost(controller, startDestination = HermesRoute.SessionAtlas("backend-1", "default")) {
-                composable<HermesRoute.SessionAtlas> {
+            NavHost(controller, startDestination = HermesDestinationRoute.Chats("backend-1", "default")) {
+                composable<HermesDestinationRoute.Chats> { entry ->
+                    val route = entry.toRoute<HermesDestinationRoute.Chats>()
+                    if (route.sessionId != null) {
+                        Button(onClick = { navigator.openFiles("backend-1", "default", "/workspace") }) {
+                            Text("Open files")
+                        }
+                    } else {
                     Button(onClick = {
                         navigator.openConversation("backend-1", "default", "session-1")
                     }) { Text("Open conversation") }
-                }
-                composable<HermesRoute.Conversation> {
-                    Button(onClick = { navigator.openFiles("backend-1", "default", "/workspace") }) {
-                        Text("Open files")
                     }
                 }
-                composable<HermesRoute.Files> {
+                composable<HermesDestinationRoute.Artifacts> {
                     Button(onClick = { navigator.back("backend-1", "default") }) { Text("Back from files") }
                 }
             }
@@ -120,15 +124,16 @@ class HermesNavigationTest {
         restoration.setContent {
             val controller = rememberNavController()
             val navigator = remember(controller) { HermesNavigator(controller) }
-            NavHost(controller, startDestination = HermesRoute.SessionAtlas("backend-intended", "research")) {
-                composable<HermesRoute.SessionAtlas> {
+            NavHost(controller, startDestination = HermesDestinationRoute.Chats("backend-intended", "research")) {
+                composable<HermesDestinationRoute.Chats> { entry ->
+                    val route = entry.toRoute<HermesDestinationRoute.Chats>()
+                    if (route.sessionId == null) {
                     Button(onClick = {
                         navigator.openConversation("backend-intended", "research", "stored-session")
                     }) { Text("Restore conversation") }
-                }
-                composable<HermesRoute.Conversation> { entry ->
-                    val route = entry.toRoute<HermesRoute.Conversation>()
-                    Text("${route.backendId}/${route.profileId}/${route.sessionId}")
+                    } else {
+                        Text("${route.backendId}/${route.profileId}/${route.sessionId}")
+                    }
                 }
             }
         }

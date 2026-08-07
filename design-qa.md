@@ -66,6 +66,29 @@ Post-fix evidence: `/tmp/hermes-android-qa-qxuQgq/hermes-position-fixed.png`. Th
 
 ## Implementation checklist
 
+### Native hierarchy verification — 2026-08-07
+
+Issue #16 was verified on an isolated Android 16 / API 36 emulator. The existing
+`emulator-5554` instance and its app data were not modified.
+
+- Canonical Chats → conversation → Artifacts back-stack, completed/cancelled
+  predictive back, saved-state recreation, and durable conversation identity:
+  `HermesNavigationTest`, 5/5 passed.
+- Device-local App settings separation, remote Diagnostics separation, and
+  stable scoped-resource rendering: `SettingsSeparationTest`, 3/3 passed.
+- Collapsed-by-default tool disclosure and expanded beautified transcript:
+  `ToolBlockTest`, 1/1 passed.
+- The App settings/scoped-resource/tool suite was repeated with Android
+  `font_scale=1.3`, `debug.force_rtl=1`, and all animation scales set to `0`:
+  4/4 passed with all required semantic targets present.
+- Both app and instrumentation APKs compiled for the phone layout; lint passed
+  against minSdk 28 after the deep-link codec was changed to API-safe URL
+  encoding overloads.
+
+The compact Chats surface uses a modal navigation drawer; expanded layouts keep
+the session rail and detail pane. Manage section containers are flat, avoiding
+nested card hierarchies.
+
 - [x] Exact live-site palette tokens
 - [x] Real first-party hero and badge assets
 - [x] Official Desktop launcher icon

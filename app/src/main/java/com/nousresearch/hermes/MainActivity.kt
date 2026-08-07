@@ -14,6 +14,8 @@ import com.nousresearch.hermes.data.PrivacyPreferences
 import com.nousresearch.hermes.platform.SharedContent
 import com.nousresearch.hermes.platform.sanitizeSharedContent
 import com.nousresearch.hermes.ui.HermesApp
+import com.nousresearch.hermes.ui.navigation.HermesDestinationRoute
+import com.nousresearch.hermes.ui.navigation.HermesDestinationUri
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.UUID
@@ -22,14 +24,33 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
+const val MAX_PENDING_HERMES_DESTINATIONS = 3
+
+/** Public JVM seam for accepting only explicitly registered Hermes VIEW links. */
+fun parseHermesDestination(action: String?, data: String?): HermesDestinationRoute? =
+    data?.takeIf { action == Intent.ACTION_VIEW }?.let(HermesDestinationUri::parse)
+
+fun parseHermesDestinationIntent(intent: Intent?): HermesDestinationRoute? =
+    parseHermesDestination(intent?.action, intent?.dataString)
+
+/** Keep deep-link delivery bounded while the app waits for route validation. */
+fun appendPendingHermesDestination(
+    current: List<HermesDestinationRoute>,
+    route: HermesDestinationRoute,
+): List<HermesDestinationRoute> = current
+    .takeIf { it.size >= MAX_PENDING_HERMES_DESTINATIONS }
+    ?: current.plus(route)
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var privacyPreferences: PrivacyPreferences
     private val sharedContent = MutableStateFlow<List<SharedContent>>(emptyList())
+    private val pendingDestinations = MutableStateFlow<List<HermesDestinationRoute>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         publishSharedContent(intent)
+        publishHermesDestination(intent)
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         lifecycleScope.launch {
@@ -45,6 +66,7 @@ class MainActivity : ComponentActivity() {
             val secureScreen by privacyPreferences.secureScreen.collectAsStateWithLifecycle(initialValue = false)
             val skin by privacyPreferences.skin.collectAsStateWithLifecycle(initialValue = HermesSkin.NOUS)
             val pendingShares by sharedContent.collectAsStateWithLifecycle()
+            val pendingDestinationRoutes by pendingDestinations.collectAsStateWithLifecycle()
             HermesApp(
                 secureScreen = secureScreen,
                 onSecureScreenChange = { enabled ->
@@ -56,6 +78,8 @@ class MainActivity : ComponentActivity() {
                 },
                 sharedContent = pendingShares.firstOrNull(),
                 onSharedContentConsumed = ::consumeSharedContent,
+                pendingDestination = pendingDestinationRoutes.firstOrNull(),
+                onPendingDestinationConsumed = ::consumeHermesDestination,
             )
         }
     }
@@ -64,6 +88,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         publishSharedContent(intent)
+        publishHermesDestination(intent)
+    }
+
+    private fun publishHermesDestination(intent: Intent?) {
+        val route = parseHermesDestinationIntent(intent) ?: return
+        pendingDestinations.value = appendPendingHermesDestination(pendingDestinations.value, route)
+    }
+
+    private fun consumeHermesDestination(route: HermesDestinationRoute) {
+        pendingDestinations.value = pendingDestinations.value.filterNot { it == route }
     }
 
     private fun publishSharedContent(intent: Intent?) {
