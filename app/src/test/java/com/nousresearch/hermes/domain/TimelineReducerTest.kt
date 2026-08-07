@@ -184,6 +184,83 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `history tool messages remain folded tool activity instead of raw chat messages`() {
+        val detail = """{"output":"first line\nsecond line","exit_code":0,"error":null}"""
+
+        val state = TimelineReducer.hydrate(
+            listOf(ProtocolMessage(id = "history-tool", role = "tool", text = detail)),
+        )
+
+        val tool = state.items.single() as TimelineItem.Tool
+        assertEquals("history-tool", tool.id)
+        assertEquals(ToolState.COMPLETE, tool.state)
+        assertEquals(detail, tool.detail)
+        assertTrue(state.items.none { it is TimelineItem.Message && it.role == MessageRole.TOOL })
+    }
+
+    @Test
+    fun `history tool objects preserve complete structured transcript data`() {
+        val content = buildJsonObject {
+            put("name", "terminal")
+            put("output", buildJsonObject { put("path", "/workspace/report.txt") })
+            put("exit_code", 0)
+        }
+
+        val tool = TimelineReducer.hydrate(
+            listOf(ProtocolMessage(id = "history-object", role = "tool", content = content)),
+        ).items.single() as TimelineItem.Tool
+
+        assertTrue(tool.detail.orEmpty().contains("/workspace/report.txt"))
+        assertTrue(tool.presentation().transcript.contains("/workspace/report.txt"))
+    }
+
+    @Test
+    fun `history assistant tool calls become folded tool activity`() {
+        val toolCalls = buildJsonArray {
+            add(buildJsonObject {
+                put("id", "call-history")
+                put("function", buildJsonObject {
+                    put("name", "terminal")
+                    put("arguments", """{"command":"git status"}""")
+                })
+            })
+        }
+
+        val state = TimelineReducer.hydrate(
+            listOf(ProtocolMessage(role = "assistant", toolCalls = toolCalls)),
+        )
+
+        val tool = state.items.single() as TimelineItem.Tool
+        assertEquals("call-history", tool.id)
+        assertEquals("terminal", tool.name)
+        assertTrue(tool.detail.orEmpty().contains("git status"))
+    }
+
+    @Test
+    fun `tool completion decodes structured result without truncating the transcript`() {
+        val output = "x".repeat(25_000)
+        val state = TimelineReducer.reduce(
+            TimelineState(),
+            GatewayEvent(
+                "tool.complete",
+                "runtime-1",
+                buildJsonObject {
+                    put("tool_id", "call-large")
+                    put("name", "terminal")
+                    put("result", buildJsonObject {
+                        put("output", output)
+                        put("exit_code", 0)
+                    })
+                },
+            ),
+        )
+
+        val tool = state.items.single() as TimelineItem.Tool
+        assertTrue(tool.detail.orEmpty().contains(output))
+        assertEquals(output, tool.presentation().transcript.substringAfter("Output\n").substringBefore("\n\nExit code"))
+    }
+
+    @Test
     fun `unknown future events are ignored without losing state`() {
         val original = TimelineState(items = listOf(TimelineItem.Status("x", "ready", "Ready")))
         val result = TimelineReducer.reduce(original, GatewayEvent("future.event", "runtime-1"))

@@ -78,6 +78,8 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Pause
@@ -139,6 +141,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -174,6 +177,7 @@ import com.nousresearch.hermes.domain.QueuedPrompt
 import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
+import com.nousresearch.hermes.domain.presentation
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
@@ -1730,26 +1734,97 @@ private fun MarkdownReply(text: String) {
 }
 
 @Composable
-private fun ToolBlock(tool: TimelineItem.Tool) {
+internal fun ToolBlock(tool: TimelineItem.Tool) {
     var expanded by rememberSaveable(tool.id) { mutableStateOf(false) }
+    val presentation = remember(tool.name, tool.summary, tool.state) { tool.presentation(includeTranscript = false) }
+    val accessibilityDescription = remember(presentation) {
+        listOfNotNull(
+            "Tool usage",
+            presentation.title,
+            presentation.stateDescription,
+            presentation.description.takeUnless { it == presentation.stateDescription },
+        ).joinToString(", ")
+    }
     val colour = when (tool.state) {
         ToolState.RUNNING -> WarningColor
         ToolState.COMPLETE -> MaterialTheme.colorScheme.tertiary
         ToolState.FAILED -> MaterialTheme.colorScheme.error
     }
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable { expanded = !expanded }.padding(12.dp),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, colour.copy(alpha = 0.32f)),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Terminal, null, tint = colour, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(9.dp))
-            Text(tool.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text(tool.summary ?: tool.state.name, style = MaterialTheme.typography.labelMedium, color = colour)
-        }
-        tool.context?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = if (expanded) 20 else 2) }
-        AnimatedVisibility(expanded && !tool.detail.isNullOrBlank(), enter = fadeIn(), exit = fadeOut()) {
-            Text(tool.detail.orEmpty(), Modifier.padding(top = 10.dp), style = MaterialTheme.typography.bodySmall)
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = if (expanded) "Hide tool transcript" else "Show tool transcript",
+                    ) { expanded = !expanded }
+                    .semantics {
+                        contentDescription = accessibilityDescription
+                        stateDescription = if (expanded) "Expanded" else "Collapsed"
+                    }
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Terminal, null, tint = colour, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("TOOL USAGE · ${presentation.title}", style = MaterialTheme.typography.labelMedium, color = colour)
+                    Text(
+                        presentation.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null,
+                )
+            }
+            AnimatedVisibility(expanded, enter = fadeIn(), exit = fadeOut()) {
+                Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    tool.context?.takeIf(String::isNotBlank)?.let { context ->
+                        Text(
+                            context,
+                            Modifier.padding(top = 10.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    val transcript = remember(tool.detail) { tool.presentation().transcript }
+                    if (transcript.isNotBlank()) {
+                        Text(
+                            "TRANSCRIPT",
+                            Modifier.padding(top = 10.dp, bottom = 6.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            SelectionContainer {
+                                Text(
+                                    transcript,
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 480.dp)
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(12.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

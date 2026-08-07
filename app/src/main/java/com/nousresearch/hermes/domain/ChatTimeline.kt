@@ -83,12 +83,30 @@ data class TimelineState(
 
 object TimelineReducer {
     fun hydrate(messages: List<ProtocolMessage>): TimelineState {
-        val items = messages.mapIndexed { index, message ->
-            TimelineItem.Message(
-                id = message.id ?: "history:$index:${message.role}",
-                role = message.role.toMessageRole(),
-                text = displayText(message.content, message.text),
-            )
+        val items: List<TimelineItem> = messages.flatMapIndexed { index, message ->
+            val id = message.id ?: "history:$index:${message.role}"
+            if (message.role.equals("tool", ignoreCase = true)) {
+                listOf<TimelineItem>(
+                    TimelineItem.Tool(
+                        id = id,
+                        name = (message.content as? JsonObject)?.text("name")
+                            ?.ifBlank { (message.content as? JsonObject)?.text("tool_name") }
+                            ?.ifBlank { "tool" }
+                            ?: "tool",
+                        state = ToolState.COMPLETE,
+                        summary = (message.content as? JsonObject)?.text("summary")?.ifBlank { null },
+                        detail = toolHistoryDetail(message.content, message.text),
+                    ),
+                )
+            } else {
+                buildList<TimelineItem> {
+                    val text = displayText(message.content, message.text)
+                    if (text.isNotBlank()) {
+                        add(TimelineItem.Message(id = id, role = message.role.toMessageRole(), text = text))
+                    }
+                    addAll(historyToolCalls(id, message.toolCalls))
+                }
+            }
         }
         return TimelineState(items = items)
     }
@@ -222,7 +240,7 @@ object TimelineReducer {
                     name = payload.text("name").ifBlank { "tool" },
                     summary = payload.text("summary").ifBlank { null },
                     detail = payload.text("result_text").ifBlank {
-                        payload["result"]?.toString()?.take(20_000)
+                        payload["result"]?.toString()
                     },
                     durationSeconds = (payload["duration_s"] as? JsonPrimitive)?.doubleOrNull,
                     state = if (payload.boolean("failed")) ToolState.FAILED else ToolState.COMPLETE,
@@ -438,6 +456,36 @@ private fun displayText(content: JsonElement?, fallback: String?): String = when
     }
     is JsonObject -> content.text("text").ifBlank { content.toString() }
     else -> fallback.orEmpty()
+}
+
+private fun toolHistoryDetail(content: JsonElement?, fallback: String?): String? = when (content) {
+    is JsonPrimitive -> content.contentOrNull
+    is JsonObject, is JsonArray -> content.toString()
+    else -> fallback
+}?.takeIf(String::isNotBlank)
+
+private fun historyToolCalls(messageId: String, toolCalls: JsonElement?): List<TimelineItem.Tool> {
+    val calls = when (toolCalls) {
+        is JsonArray -> toolCalls
+        is JsonObject -> JsonArray(listOf(toolCalls))
+        else -> return emptyList()
+    }
+    return calls.mapIndexedNotNull { index, element ->
+        val call = element as? JsonObject ?: return@mapIndexedNotNull null
+        val function = call["function"] as? JsonObject
+        val name = call.text("name").ifBlank { function?.text("name").orEmpty() }.ifBlank { "tool" }
+        val detail = function?.get("arguments") ?: call["arguments"] ?: call["input"]
+        TimelineItem.Tool(
+            id = call.text("id").ifBlank { "$messageId:tool:$index" },
+            name = name,
+            state = ToolState.COMPLETE,
+            detail = when (detail) {
+                is JsonPrimitive -> detail.contentOrNull
+                null -> null
+                else -> detail.toString()
+            },
+        )
+    }
 }
 
 private fun JsonObject.text(key: String): String = (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
