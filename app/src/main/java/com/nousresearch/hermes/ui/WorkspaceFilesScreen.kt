@@ -111,12 +111,18 @@ internal fun WorkspaceFilesScreen(
     LaunchedEffect(backend.id, initialPath) { viewModel.bind(backend, initialPath) }
     LaunchedEffect(state.listing?.path) { state.listing?.path?.let { pathInput = it } }
 
-    val internalBack: (() -> Unit)? = when {
-        state.preview != null -> viewModel::closePreview
-        state.listing?.parent != null -> ({ viewModel.open(state.listing?.parent) })
-        else -> null
+    val backTarget = workspaceFilesBackTarget(
+        previewOpen = state.preview != null,
+        parentAvailable = state.listing?.parent != null,
+        exitAvailable = onBack != null,
+    )
+    val navigateBack: (() -> Unit)? = when (backTarget) {
+        WorkspaceFilesBackTarget.CLOSE_PREVIEW -> viewModel::closePreview
+        WorkspaceFilesBackTarget.OPEN_PARENT -> ({ viewModel.open(state.listing?.parent) })
+        WorkspaceFilesBackTarget.EXIT_FILES -> onBack
+        null -> null
     }
-    BackHandler(enabled = internalBack != null) { internalBack?.invoke() }
+    BackHandler(enabled = navigateBack != null) { navigateBack?.invoke() }
 
     fun openExternally(preview: WorkspaceFilePreview, share: Boolean) {
         scope.launch {
@@ -144,7 +150,7 @@ internal fun WorkspaceFilesScreen(
             path = state.preview?.entry?.name ?: state.listing?.path.orEmpty(),
             loading = state.loading || state.previewLoading,
             onRefresh = if (state.preview == null) viewModel::refresh else null,
-            onBack = internalBack ?: onBack,
+            onBack = navigateBack,
         )
         state.error?.let { FileStatusSurface(it, error = true) }
         externalActionError?.let { FileStatusSurface(it, error = true) }
@@ -237,6 +243,19 @@ internal fun WorkspaceFilesScreen(
             }
         }
     }
+}
+
+internal enum class WorkspaceFilesBackTarget { CLOSE_PREVIEW, OPEN_PARENT, EXIT_FILES }
+
+internal fun workspaceFilesBackTarget(
+    previewOpen: Boolean,
+    parentAvailable: Boolean,
+    exitAvailable: Boolean,
+): WorkspaceFilesBackTarget? = when {
+    previewOpen -> WorkspaceFilesBackTarget.CLOSE_PREVIEW
+    exitAvailable -> WorkspaceFilesBackTarget.EXIT_FILES
+    parentAvailable -> WorkspaceFilesBackTarget.OPEN_PARENT
+    else -> null
 }
 
 @Composable
