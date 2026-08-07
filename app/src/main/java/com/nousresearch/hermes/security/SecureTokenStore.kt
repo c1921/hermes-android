@@ -44,8 +44,7 @@ class SecureTokenStore @Inject constructor(
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
             val header = String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
-            val separator = header.indexOf('=')
-            DashboardSessionCookie(header.substring(0, separator), header.substring(separator + 1))
+            DashboardSessionCookie.fromCookieHeader(header)
         }.getOrNull()
     }
 

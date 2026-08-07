@@ -47,7 +47,7 @@ class DashboardBackendConnector @Inject constructor(
             throw ReconnectRequiredException("Legacy token-only backend records must reconnect with dashboard credentials.")
         }
         return try {
-            validate(config, cookie)
+            validate(config, cookie).also { credentials.put(config.id, cookie) }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
             if (error is HermesHttpException && error.statusCode != 401 && error.statusCode != 403) throw error

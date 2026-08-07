@@ -1,6 +1,8 @@
 package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.AuthMode
+import com.nousresearch.hermes.data.SessionCredentialStore
 import com.nousresearch.hermes.data.buildServerConfigPatch
 import com.nousresearch.hermes.protocol.ActionResponse
 import com.nousresearch.hermes.protocol.ActionStatusResponse
@@ -75,12 +77,16 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class HermesRestClient(
     private val client: OkHttpClient,
     private val json: Json,
+    private val credentials: SessionCredentialStore? = null,
 ) {
     suspend fun status(config: BackendConfig, token: String?): StatusResponse =
         get(config, token, "/api/status", StatusResponse.serializer())
 
     suspend fun status(config: BackendConfig, cookie: DashboardSessionCookie): StatusResponse =
-        get(config, cookie.headerValue, "/api/status", StatusResponse.serializer())
+        json.decodeFromJsonElement(
+            StatusResponse.serializer(),
+            request(config, cookie.headerValue, "/api/status", sessionCookie = cookie),
+        )
 
     suspend fun sessions(
         config: BackendConfig,
@@ -413,6 +419,7 @@ class HermesRestClient(
                     val detail = response.body?.string().orEmpty().take(500)
                     throw HermesHttpException(response.code, detail.ifBlank { response.message })
                 }
+                updateStoredSession(config, token, response.headers.values("Set-Cookie"))
                 val body = response.body ?: throw IOException("Hermes returned an empty file response")
                 val total = body.contentLength().takeIf { it >= 0 }
                 body.byteStream().use { input ->
@@ -919,6 +926,7 @@ class HermesRestClient(
         path: String,
         method: String = "GET",
         body: JsonElement? = null,
+        sessionCookie: DashboardSessionCookie? = null,
     ): JsonElement = withContext(Dispatchers.IO) {
         val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
         require(path.startsWith('/')) { "Hermes API paths must be absolute" }
@@ -949,8 +957,21 @@ class HermesRestClient(
                 }.getOrDefault(raw.take(500))
                 throw HermesHttpException(response.code, detail.ifBlank { response.message })
             }
+            val setCookies = response.headers.values("Set-Cookie")
+            if (sessionCookie != null) {
+                sessionCookie.mergeSetCookieHeaders(setCookies)
+            } else if (token != null) {
+                updateStoredSession(config, token, setCookies)
+            }
             if (raw.isBlank()) buildJsonObject { put("ok", true) } else json.parseToJsonElement(raw)
         }
+    }
+
+    private fun updateStoredSession(config: BackendConfig, sentHeader: String, setCookieHeaders: List<String>) {
+        if (config.authMode != AuthMode.DASHBOARD_SESSION || setCookieHeaders.isEmpty()) return
+        val current = credentials?.get(config.id) ?: return
+        if (current.headerValue != sentHeader || !current.mergeSetCookieHeaders(setCookieHeaders)) return
+        credentials.put(config.id, current)
     }
 
     private fun encodePathSegment(value: String): String =

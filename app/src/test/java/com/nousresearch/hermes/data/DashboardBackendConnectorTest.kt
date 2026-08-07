@@ -23,7 +23,7 @@ class DashboardBackendConnectorTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @Test
-    fun `successful login REST and websocket validation save only session cookie`() = runBlocking {
+    fun `successful login refreshes and saves the complete session cookie bundle`() = runBlocking {
         FakeDashboard().use { dashboard ->
             dashboard.start()
             val credentials = RecordingSessionCredentialStore()
@@ -32,12 +32,23 @@ class DashboardBackendConnectorTest {
 
             connector.loginValidateAndSave(config(dashboard), "admin", "do-not-persist")
 
-            assertEquals("hermes_session_at=session-value", credentials.saved?.headerValue)
+            assertEquals(
+                "hermes_session_at=refreshed-access; hermes_session_rt=refreshed-refresh; " +
+                    "hermes_session_provider=basic",
+                credentials.saved?.headerValue,
+            )
             assertEquals(AuthMode.DASHBOARD_SESSION, backends.saved?.authMode)
             assertFalse(credentials.toString().contains("do-not-persist"))
             assertFalse(backends.toString().contains("do-not-persist"))
-            assertEquals("hermes_session_at=session-value", dashboard.statusCookie)
-            assertEquals("hermes_session_at=session-value", dashboard.ticketCookie)
+            assertEquals(
+                "hermes_session_at=session-value; hermes_session_rt=refresh-value; hermes_session_provider=basic",
+                dashboard.statusCookie,
+            )
+            assertEquals(
+                "hermes_session_at=refreshed-access; hermes_session_rt=refreshed-refresh; " +
+                    "hermes_session_provider=basic",
+                dashboard.ticketCookie,
+            )
             assertEquals("single-use-ticket", dashboard.webSocketTicket)
             assertNull(dashboard.webSocketCookie)
         }
@@ -160,15 +171,26 @@ private class FakeDashboard(
     fun start() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                "/api/auth/providers" -> MockResponse().setBody(
+                    """{"providers":[{"name":"basic","display_name":"Password","supports_password":true}]}""",
+                )
                 "/auth/password-login" -> MockResponse()
                     .setResponseCode(200)
                     .addHeader("Set-Cookie", "hermes_session_at=session-value; Path=/; HttpOnly")
+                    .addHeader("Set-Cookie", "hermes_session_rt=refresh-value; Path=/; HttpOnly")
+                    .addHeader("Set-Cookie", "hermes_session_provider=basic; Path=/; HttpOnly")
                     .setBody("""{"ok":true}""")
                 "/api/status" -> {
                     statusCookie = request.getHeader("Cookie")
-                    MockResponse().setResponseCode(statusCode).setBody(
-                        if (statusCode == 200) """{"status":"ok","hermes_version":"0.18.2"}""" else """{"detail":"Session expired"}""",
-                    )
+                    MockResponse().setResponseCode(statusCode).apply {
+                        if (statusCode == 200) {
+                            addHeader("Set-Cookie", "hermes_session_at=refreshed-access; Path=/; HttpOnly")
+                            addHeader("Set-Cookie", "hermes_session_rt=refreshed-refresh; Path=/; HttpOnly")
+                            setBody("""{"status":"ok","hermes_version":"0.18.2"}""")
+                        } else {
+                            setBody("""{"detail":"Session expired"}""")
+                        }
+                    }
                 }
                 "/api/auth/ws-ticket" -> {
                     ticketCookie = request.getHeader("Cookie")

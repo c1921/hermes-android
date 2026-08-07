@@ -58,7 +58,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun restClient(client: OkHttpClient, json: Json): HermesRestClient = HermesRestClient(client, json)
+    fun restClient(
+        client: OkHttpClient,
+        json: Json,
+        credentials: SessionCredentialStore,
+    ): HermesRestClient = HermesRestClient(client, json, credentials)
 
     @Provides
     @Singleton
