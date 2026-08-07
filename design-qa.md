@@ -71,11 +71,17 @@ Post-fix evidence: `/tmp/hermes-android-qa-qxuQgq/hermes-position-fixed.png`. Th
 Issue #16 was verified on an isolated Android 16 / API 36 emulator. The existing
 `emulator-5554` instance and its app data were not modified.
 
+- Durable visual evidence: `docs/design/evidence/issue16-app-settings-api36.png`
+  (130% text, RTL-forced, animations disabled).
+
 - Canonical Chats → conversation → Artifacts back-stack, completed/cancelled
   predictive back, saved-state recreation, and durable conversation identity:
   `HermesNavigationTest`, 5/5 passed.
 - Device-local App settings separation, remote Diagnostics separation, and
   stable scoped-resource rendering: `SettingsSeparationTest`, 3/3 passed.
+- A cold `hermes://app-settings` launch with no authenticated backend remained
+  on the device-local settings route instead of being replaced by onboarding;
+  verified both by `AppSettingsDeepLinkTest` and an adb/UI Automator smoke test.
 - Collapsed-by-default tool disclosure and expanded beautified transcript:
   `ToolBlockTest`, 1/1 passed.
 - The App settings/scoped-resource/tool suite was repeated with Android

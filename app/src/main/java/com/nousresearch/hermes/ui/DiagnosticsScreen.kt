@@ -234,7 +234,6 @@ internal fun AppearancePicker(
                                     skin.description,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = preview.onSurfaceVariant,
-                                    maxLines = 2,
                                 )
                             }
                         }

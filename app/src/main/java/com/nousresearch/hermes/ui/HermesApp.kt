@@ -490,6 +490,9 @@ fun HermesApp(
         val destination = currentEntry?.destination ?: return@LaunchedEffect
         val routeName = destination.route.orEmpty()
         val onboarding = routeName.startsWith(HermesRoute.Onboarding::class.qualifiedName.orEmpty())
+        val appSettings = routeName.startsWith(
+            HermesDestinationRoute.AppSettings::class.qualifiedName.orEmpty(),
+        )
         val backendPicker = if (routeName.startsWith(HermesRoute.BackendPicker::class.qualifiedName.orEmpty())) {
             currentEntry?.toRoute<HermesRoute.BackendPicker>()
         } else {
@@ -497,6 +500,7 @@ fun HermesApp(
         }
         val backend = state.backend
         if (backend == null) {
+            if (appSettings) return@LaunchedEffect
             if (state.savedBackends.isEmpty()) {
                 if (!onboarding) navigator.openOnboarding(clearHistory = true)
             } else if (backendPicker == null) {
@@ -508,7 +512,7 @@ fun HermesApp(
         val authenticationExpired = state.error?.lowercase()?.let { error ->
             listOf("401", "unauthorized", "authentication", "sign in", "login").any(error::contains)
         } == true
-        if (authenticationExpired && !state.loading && backendPicker == null) {
+        if (authenticationExpired && !state.loading && backendPicker == null && !appSettings) {
             recoveryNotice = "Your Hermes authentication expired. Reconnect before continuing."
             navigator.openBackendPicker(clearHistory = true)
         } else if (state.status != null) {
