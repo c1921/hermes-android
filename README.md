@@ -38,7 +38,7 @@ See [Android signing and branch flow](docs/release-signing.md) for the public ce
 ### Implemented
 
 - [x] Dashboard username/password onboarding through `POST /auth/password-login`
-- [x] Required `hermes_session_at` session-cookie extraction and validation
+- [x] Advertised password-provider discovery plus bounded access, rotating-refresh, and provider-routing session-cookie validation
 - [x] Authenticated `/api/status` REST validation using the Dashboard cookie
 - [x] Cookie-authenticated `POST /api/auth/ws-ticket` followed by authenticated `/api/ws?ticket=` JSON-RPC WebSocket handshake
 - [x] Save only after login, REST, ticket minting, and WebSocket validation all succeed
@@ -130,7 +130,7 @@ In **Backend Link**, enter:
 3. The existing Dashboard username.
 4. The existing Dashboard password.
 
-The app submits the credentials to the Dashboard login endpoint, requires its secure Hermes session cookie, validates authenticated REST, mints a fresh single-use WebSocket ticket, then validates `/api/ws?ticket=`. It saves the backend and encrypted cookie only after every step succeeds. The password exists only long enough to submit the login request and is cleared from the transient input state; it is not written to DataStore, preferences, backups, diagnostics, or logs.
+The app first reads the Dashboard's public authentication-provider catalogue and uses its sole advertised password provider; it never assumes the provider is named `basic`. It submits the credentials to the Dashboard login endpoint, requires a bounded access-cookie bundle, retains rotating refresh and provider-routing cookies when returned, validates authenticated REST, mints a fresh single-use WebSocket ticket, then validates `/api/ws?ticket=`. It saves the backend and encrypted session only after every step succeeds. Successful authenticated responses merge rotated cookies back into encrypted storage so an expired access token can renew without restoring the password. The password exists only long enough to submit the login request and is cleared from the transient input state; it is not written to DataStore, preferences, backups, diagnostics, or logs.
 
 ### Normal HTTPS
 
@@ -169,13 +169,13 @@ Public hostnames over cleartext HTTP remain rejected. Private DNS names should u
 
 ### Existing token-only records
 
-Records created by earlier builds are not migrated or reinterpreted. They display **Reconnect** and require the Dashboard username and password. A successful reconnect replaces the old encrypted token entry with the new Dashboard session cookie.
+Legacy token records are not migrated or reinterpreted. They display **Reconnect** and require the Dashboard username and password. Existing encrypted access-cookie records remain readable, while a successful reconnect replaces a legacy token with the complete renewable Dashboard session bundle.
 
 If the Dashboard expires or rejects a saved cookie, the app removes it, disconnects the socket, and presents a reconnect-required state for that backend.
 
 ## Security model
 
-- Dashboard session cookies are encrypted with AES-GCM using a non-exportable Android Keystore key.
+- Dashboard access, refresh, and provider-routing session cookies are bounded and encrypted together with AES-GCM using a non-exportable Android Keystore key.
 - `android:allowBackup` is disabled and the secret preferences file is excluded from device transfer.
 - Session-cookie string representations are redacted.
 - REST authentication uses the `Cookie` header; Dashboard sessions are not converted into bearer tokens.

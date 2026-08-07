@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.SessionCredentialStore
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,7 +15,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-class DashboardSessionCookie private constructor(cookies: Map<String, String>) {
+class DashboardSessionCredential private constructor(cookies: Map<String, String>) {
     private val values = LinkedHashMap(cookies)
 
     constructor(name: String, value: String) : this(mapOf(name to value))
@@ -42,9 +43,9 @@ class DashboardSessionCookie private constructor(cookies: Map<String, String>) {
         return true
     }
 
-    override fun toString(): String = "DashboardSessionCookie(<redacted>)"
+    override fun toString(): String = "DashboardSessionCredential(<redacted>)"
 
-    override fun equals(other: Any?): Boolean = other is DashboardSessionCookie && headerValue == other.headerValue
+    override fun equals(other: Any?): Boolean = other is DashboardSessionCredential && headerValue == other.headerValue
 
     override fun hashCode(): Int = headerValue.hashCode()
 
@@ -58,20 +59,20 @@ class DashboardSessionCookie private constructor(cookies: Map<String, String>) {
         private const val MAX_COOKIE_VALUE_LENGTH = 8_192
         private const val MAX_HEADER_LENGTH = 24_576
 
-        fun fromSetCookieHeaders(headers: List<String>): DashboardSessionCookie? {
+        fun fromSetCookieHeaders(headers: List<String>): DashboardSessionCredential? {
             val updates = parseSetCookieHeaders(headers) ?: return null
             val cookies = updates.filterNot(CookieUpdate::deleted).associate { it.name to it.value }
-            return runCatching { DashboardSessionCookie(cookies) }.getOrNull()
+            return runCatching { DashboardSessionCredential(cookies) }.getOrNull()
         }
 
-        fun fromCookieHeader(header: String): DashboardSessionCookie? {
+        fun fromCookieHeader(header: String): DashboardSessionCredential? {
             if (header.isBlank() || header.length > MAX_HEADER_LENGTH) return null
             val cookies = LinkedHashMap<String, String>()
             for (part in header.split(';')) {
                 val pair = parsePair(part) ?: return null
                 if (baseName(pair.first) == null || cookies.put(pair.first, pair.second) != null) return null
             }
-            return runCatching { DashboardSessionCookie(cookies) }.getOrNull()
+            return runCatching { DashboardSessionCredential(cookies) }.getOrNull()
         }
 
         private fun parseSetCookieHeaders(headers: List<String>): List<CookieUpdate>? {
@@ -129,8 +130,9 @@ private data class CookieUpdate(
 class DashboardAuthClient(
     private val client: OkHttpClient,
     private val json: Json,
+    private val credentials: SessionCredentialStore? = null,
 ) {
-    suspend fun login(config: BackendConfig, username: String, password: String): DashboardSessionCookie =
+    suspend fun login(config: BackendConfig, username: String, password: String): DashboardSessionCredential =
         withContext(Dispatchers.IO) {
             val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
             require(username.isNotBlank() && password.isNotEmpty()) { "Dashboard username and password are required" }
@@ -160,7 +162,7 @@ class DashboardAuthClient(
                         },
                     )
                 }
-                DashboardSessionCookie.fromSetCookieHeaders(response.headers.values("Set-Cookie"))
+                DashboardSessionCredential.fromSetCookieHeaders(response.headers.values("Set-Cookie"))
                     ?: throw DashboardAuthenticationException("Hermes Dashboard did not return a valid access session cookie.")
             }
         }
@@ -194,9 +196,10 @@ class DashboardAuthClient(
         }
     }
 
-    suspend fun mintWebSocketTicket(config: BackendConfig, cookie: DashboardSessionCookie): String =
+    suspend fun mintWebSocketTicket(config: BackendConfig, cookie: DashboardSessionCredential): String =
         withContext(Dispatchers.IO) {
             val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+            val sentHeader = cookie.headerValue
             val request = Request.Builder()
                 .url("$base/api/auth/ws-ticket")
                 .post(ByteArray(0).toRequestBody())
@@ -213,7 +216,10 @@ class DashboardAuthClient(
                         },
                     )
                 }
-                cookie.mergeSetCookieHeaders(response.headers.values("Set-Cookie"))
+                if (cookie.mergeSetCookieHeaders(response.headers.values("Set-Cookie"))) {
+                    val stored = credentials?.get(config.id)
+                    if (stored?.headerValue == sentHeader) credentials.put(config.id, cookie)
+                }
                 val ticket = response.body?.string()?.let {
                     runCatching { json.decodeFromString<WebSocketTicketResponse>(it) }.getOrNull()
                 }?.ticket.orEmpty()

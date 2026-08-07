@@ -66,5 +66,9 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun dashboardAuthClient(client: OkHttpClient, json: Json): DashboardAuthClient = DashboardAuthClient(client, json)
+    fun dashboardAuthClient(
+        client: OkHttpClient,
+        json: Json,
+        credentials: SessionCredentialStore,
+    ): DashboardAuthClient = DashboardAuthClient(client, json, credentials)
 }

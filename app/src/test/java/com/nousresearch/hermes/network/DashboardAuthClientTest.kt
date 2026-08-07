@@ -55,7 +55,7 @@ class DashboardAuthClientTest {
     @Test
     fun `session cookie bundle merges rotated cookies and ignores unrelated cookies`() {
         val cookie = checkNotNull(
-            DashboardSessionCookie.fromSetCookieHeaders(
+            DashboardSessionCredential.fromSetCookieHeaders(
                 listOf(
                     "hermes_session_at=access-1; Path=/; HttpOnly",
                     "hermes_session_rt=refresh-1; Path=/; HttpOnly",
@@ -139,8 +139,9 @@ class DashboardAuthClientTest {
         }
     }
 
-    private fun passwordProviderResponse(name: String = "basic") = MockResponse().setBody(
-        """{"providers":[{"name":"$name","display_name":"Password","supports_password":true}]}""",
+    private fun passwordProviderResponse(name: String? = null) = MockResponse().setBody(
+        name?.let { """{"providers":[{"name":"$it","display_name":"Password","supports_password":true}]}""" }
+            ?: checkNotNull(javaClass.getResource("/fixtures/dashboard-auth-providers-f15a38ee.json")).readText(),
     )
 
     private fun config(server: MockWebServer) = BackendConfig(

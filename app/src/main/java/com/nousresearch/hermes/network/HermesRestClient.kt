@@ -82,7 +82,7 @@ class HermesRestClient(
     suspend fun status(config: BackendConfig, token: String?): StatusResponse =
         get(config, token, "/api/status", StatusResponse.serializer())
 
-    suspend fun status(config: BackendConfig, cookie: DashboardSessionCookie): StatusResponse =
+    suspend fun status(config: BackendConfig, cookie: DashboardSessionCredential): StatusResponse =
         json.decodeFromJsonElement(
             StatusResponse.serializer(),
             request(config, cookie.headerValue, "/api/status", sessionCookie = cookie),
@@ -926,7 +926,7 @@ class HermesRestClient(
         path: String,
         method: String = "GET",
         body: JsonElement? = null,
-        sessionCookie: DashboardSessionCookie? = null,
+        sessionCookie: DashboardSessionCredential? = null,
     ): JsonElement = withContext(Dispatchers.IO) {
         val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
         require(path.startsWith('/')) { "Hermes API paths must be absolute" }

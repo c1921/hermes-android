@@ -1,7 +1,7 @@
 package com.nousresearch.hermes.data
 
 import com.nousresearch.hermes.network.DashboardAuthClient
-import com.nousresearch.hermes.network.DashboardSessionCookie
+import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.OkHttpHermesGatewayClient
 import kotlinx.coroutines.runBlocking
@@ -41,7 +41,7 @@ class DashboardBackendConnectorTest {
             assertFalse(credentials.toString().contains("do-not-persist"))
             assertFalse(backends.toString().contains("do-not-persist"))
             assertEquals(
-                "hermes_session_at=session-value; hermes_session_rt=refresh-value; hermes_session_provider=basic",
+                "hermes_session_at=expired-access; hermes_session_rt=refresh-value; hermes_session_provider=basic",
                 dashboard.statusCookie,
             )
             assertEquals(
@@ -97,7 +97,7 @@ class DashboardBackendConnectorTest {
             val connector = connector(dashboard, credentials, backends)
 
             val failure = runCatching {
-                connector.validateSaved(config(dashboard), DashboardSessionCookie("hermes_session_at", "expired"))
+                connector.validateSaved(config(dashboard), DashboardSessionCredential("hermes_session_at", "expired"))
             }.exceptionOrNull()
 
             assertTrue(failure is ReconnectRequiredException)
@@ -113,7 +113,7 @@ class DashboardBackendConnectorTest {
             val legacy = config(dashboard).copy(authMode = AuthMode.TOKEN)
 
             val failure = runCatching {
-                connector.validateSaved(legacy, DashboardSessionCookie("hermes_session_at", "legacy-token"))
+                connector.validateSaved(legacy, DashboardSessionCredential("hermes_session_at", "legacy-token"))
             }.exceptionOrNull()
 
             assertTrue(failure is ReconnectRequiredException)
@@ -144,9 +144,9 @@ class DashboardBackendConnectorTest {
 }
 
 private class RecordingSessionCredentialStore : SessionCredentialStore {
-    var saved: DashboardSessionCookie? = null
-    override fun put(backendId: String, cookie: DashboardSessionCookie) { saved = cookie }
-    override fun get(backendId: String): DashboardSessionCookie? = saved
+    var saved: DashboardSessionCredential? = null
+    override fun put(backendId: String, cookie: DashboardSessionCredential) { saved = cookie }
+    override fun get(backendId: String): DashboardSessionCredential? = saved
     override fun remove(backendId: String) { saved = null }
     override fun toString(): String = "RecordingSessionCredentialStore(saved=${saved?.headerValue})"
 }
@@ -176,14 +176,17 @@ private class FakeDashboard(
                 )
                 "/auth/password-login" -> MockResponse()
                     .setResponseCode(200)
-                    .addHeader("Set-Cookie", "hermes_session_at=session-value; Path=/; HttpOnly")
+                    .addHeader("Set-Cookie", "hermes_session_at=expired-access; Path=/; HttpOnly")
                     .addHeader("Set-Cookie", "hermes_session_rt=refresh-value; Path=/; HttpOnly")
                     .addHeader("Set-Cookie", "hermes_session_provider=basic; Path=/; HttpOnly")
                     .setBody("""{"ok":true}""")
                 "/api/status" -> {
                     statusCookie = request.getHeader("Cookie")
-                    MockResponse().setResponseCode(statusCode).apply {
-                        if (statusCode == 200) {
+                    val refreshAccepted = statusCookie ==
+                        "hermes_session_at=expired-access; hermes_session_rt=refresh-value; hermes_session_provider=basic"
+                    val responseCode = if (statusCode == 200 && !refreshAccepted) 401 else statusCode
+                    MockResponse().setResponseCode(responseCode).apply {
+                        if (responseCode == 200) {
                             addHeader("Set-Cookie", "hermes_session_at=refreshed-access; Path=/; HttpOnly")
                             addHeader("Set-Cookie", "hermes_session_rt=refreshed-refresh; Path=/; HttpOnly")
                             setBody("""{"status":"ok","hermes_version":"0.18.2"}""")

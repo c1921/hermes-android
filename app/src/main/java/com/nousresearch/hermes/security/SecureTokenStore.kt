@@ -6,7 +6,7 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nousresearch.hermes.data.SessionCredentialStore
-import com.nousresearch.hermes.network.DashboardSessionCookie
+import com.nousresearch.hermes.network.DashboardSessionCredential
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -23,7 +23,7 @@ class SecureTokenStore @Inject constructor(
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
-    override fun put(backendId: String, cookie: DashboardSessionCookie) {
+    override fun put(backendId: String, cookie: DashboardSessionCredential) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val ciphertext = cipher.doFinal(cookie.headerValue.toByteArray(StandardCharsets.UTF_8))
@@ -35,7 +35,7 @@ class SecureTokenStore @Inject constructor(
         }
     }
 
-    override fun get(backendId: String): DashboardSessionCookie? {
+    override fun get(backendId: String): DashboardSessionCredential? {
         val encoded = preferences.getString(secretKey(backendId), null) ?: return null
         return runCatching {
             val (iv, ciphertext) = encoded.split(SEPARATOR, limit = 2).map {
@@ -44,7 +44,7 @@ class SecureTokenStore @Inject constructor(
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
             val header = String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
-            DashboardSessionCookie.fromCookieHeader(header)
+            DashboardSessionCredential.fromCookieHeader(header)
         }.getOrNull()
     }
 

@@ -3,7 +3,7 @@ package com.nousresearch.hermes.data
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.nousresearch.hermes.network.DashboardAuthClient
-import com.nousresearch.hermes.network.DashboardSessionCookie
+import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.protocol.GatewayConnectionState
@@ -367,18 +367,18 @@ class HermesRepositoryBillingTest {
     }
 
     private companion object {
-        val SESSION_COOKIE = DashboardSessionCookie("hermes_session_at", "session-value")
+        val SESSION_COOKIE = DashboardSessionCredential("hermes_session_at", "session-value")
     }
 }
 
 private class InMemoryCredentialStore : SessionCredentialStore {
-    private val cookies = mutableMapOf<String, DashboardSessionCookie>()
+    private val cookies = mutableMapOf<String, DashboardSessionCredential>()
 
-    override fun put(backendId: String, cookie: DashboardSessionCookie) {
+    override fun put(backendId: String, cookie: DashboardSessionCredential) {
         cookies[backendId] = cookie
     }
 
-    override fun get(backendId: String): DashboardSessionCookie? = cookies[backendId]
+    override fun get(backendId: String): DashboardSessionCredential? = cookies[backendId]
 
     override fun remove(backendId: String) {
         cookies.remove(backendId)
@@ -430,7 +430,7 @@ private class RecordingGateway(
         connect(config)
     }
 
-    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCookie) {
+    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCredential) {
         connect(config)
     }
 

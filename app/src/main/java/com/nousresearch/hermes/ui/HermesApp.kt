@@ -560,7 +560,7 @@ private fun OnboardingScreen(
                         if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Test HTTP + WebSocket and save")
                     }
                     Text(
-                        "Only the returned Dashboard session cookie is encrypted with Android Keystore. Your password is never saved or restored as UI state.",
+                        "Only the returned Dashboard session cookies are encrypted with Android Keystore. Your password is never saved or restored as UI state.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

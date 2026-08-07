@@ -20,7 +20,7 @@ class HermesRestClientSessionCookieTest {
             server.start()
             val client = HermesRestClient(OkHttpClient(), Json { ignoreUnknownKeys = true })
 
-            client.status(config(server), DashboardSessionCookie("hermes_session_at", "session-value"))
+            client.status(config(server), DashboardSessionCredential("hermes_session_at", "session-value"))
 
             val request = server.takeRequest()
             assertEquals("hermes_session_at=session-value", request.getHeader("Cookie"))
@@ -39,7 +39,7 @@ class HermesRestClientSessionCookieTest {
             )
             server.start()
             val original = checkNotNull(
-                DashboardSessionCookie.fromSetCookieHeaders(
+                DashboardSessionCredential.fromSetCookieHeaders(
                     listOf(
                         "hermes_session_at=access-1",
                         "hermes_session_rt=refresh-1",
@@ -68,9 +68,9 @@ class HermesRestClientSessionCookieTest {
     )
 }
 
-private class RecordingCredentialStore(initial: DashboardSessionCookie) : SessionCredentialStore {
-    var saved: DashboardSessionCookie? = initial
-    override fun put(backendId: String, cookie: DashboardSessionCookie) { saved = cookie }
-    override fun get(backendId: String): DashboardSessionCookie? = saved
+private class RecordingCredentialStore(initial: DashboardSessionCredential) : SessionCredentialStore {
+    var saved: DashboardSessionCredential? = initial
+    override fun put(backendId: String, cookie: DashboardSessionCredential) { saved = cookie }
+    override fun get(backendId: String): DashboardSessionCredential? = saved
     override fun remove(backendId: String) { saved = null }
 }

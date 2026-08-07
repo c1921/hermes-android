@@ -3,7 +3,7 @@ package com.nousresearch.hermes.protocol
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.network.DashboardAuthClient
-import com.nousresearch.hermes.network.DashboardSessionCookie
+import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.TransportPolicy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -50,7 +50,7 @@ class OkHttpHermesGatewayClient @Inject constructor(
         connect(gatewayUrl(config, "token", token))
     }
 
-    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCookie) {
+    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCredential) {
         require(config.authMode == AuthMode.DASHBOARD_SESSION) { "Dashboard session credentials require dashboard authentication" }
         connect(gatewayUrl(config, "ticket", authClient.mintWebSocketTicket(config, cookie)))
     }

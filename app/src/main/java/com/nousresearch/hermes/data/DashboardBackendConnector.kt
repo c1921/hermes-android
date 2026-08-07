@@ -1,7 +1,7 @@
 package com.nousresearch.hermes.data
 
 import com.nousresearch.hermes.network.DashboardAuthClient
-import com.nousresearch.hermes.network.DashboardSessionCookie
+import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.HermesHttpException
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.HermesGatewayClient
@@ -11,8 +11,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 
 interface SessionCredentialStore {
-    fun put(backendId: String, cookie: DashboardSessionCookie)
-    fun get(backendId: String): DashboardSessionCookie?
+    fun put(backendId: String, cookie: DashboardSessionCredential)
+    fun get(backendId: String): DashboardSessionCredential?
     fun remove(backendId: String)
 }
 
@@ -42,7 +42,7 @@ class DashboardBackendConnector @Inject constructor(
         return status
     }
 
-    suspend fun validateSaved(config: BackendConfig, cookie: DashboardSessionCookie): StatusResponse {
+    suspend fun validateSaved(config: BackendConfig, cookie: DashboardSessionCredential): StatusResponse {
         if (config.authMode != AuthMode.DASHBOARD_SESSION) {
             throw ReconnectRequiredException("Legacy token-only backend records must reconnect with dashboard credentials.")
         }
@@ -55,7 +55,7 @@ class DashboardBackendConnector @Inject constructor(
         }
     }
 
-    private suspend fun validate(config: BackendConfig, cookie: DashboardSessionCookie): StatusResponse {
+    private suspend fun validate(config: BackendConfig, cookie: DashboardSessionCredential): StatusResponse {
         val status = restClient.status(config, cookie)
         require(status.status == "ok" || status.status == "ready" || status.hermesVersion != null || status.version != null) {
             "The dashboard answered but did not identify a ready Hermes backend"

@@ -20,6 +20,7 @@ parity specification.
 The current upstream Desktop source was checked at Hermes Agent commit
 [`f15a38ee73631b3cd5f7d30765c37d5f0245d403`](https://github.com/NousResearch/hermes-agent/commit/f15a38ee73631b3cd5f7d30765c37d5f0245d403), dated 2026-08-07. The Android
 checkout was `dev` at [`f562904da792e1d5706d5dcede1cb9b6870a64ae`](https://github.com/luinbytes/hermes-android/commit/f562904da792e1d5706d5dcede1cb9b6870a64ae).
+This auth path's oldest verified Hermes Agent version is `0.20.0`; Hermes Desktop remains `0.17.0` at that source pin.
 The older [`desktop-parity-matrix.md`](./desktop-parity-matrix.md) is pinned to
 upstream `5122ddd` (2026-07-17), so its “implemented” password-auth row is not
 evidence against today’s Desktop contract.
@@ -43,6 +44,12 @@ evidence against today’s Desktop contract.
 | P1 | Android’s `AuthMode.OAUTH` is an enum value, but the shipped onboarding path only accepts `DASHBOARD_SESSION`; there is no Android native browser/loopback/PKCE implementation. | Current Desktop supports `native_pkce` where advertised and persists/refreshes bearer tokens for that flow. This is the largest user-visible Desktop auth feature absent from Android, although issue #1 explicitly marked OAuth out of scope. | Desktop flow: [`native-oauth.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth.ts#L71-L129), [`native-oauth-login.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth-login.ts#L69-L77). Android gate: [`DashboardBackendConnector.kt`](../../app/src/main/java/com/nousresearch/hermes/data/DashboardBackendConnector.kt#L26-L32). |
 
 The actionable conclusion is therefore: issue #2’s narrow connect-and-save slice is largely implemented, including the correct current ticket transport, but the implementation is not 1:1 with today’s Desktop. The first development correction should be a session-cookie bundle with refresh behavior (while retaining the current ticket-only WS upgrade), followed by provider/capability discovery. Native PKCE is a separate parity ticket because the original issue explicitly excludes OAuth.
+
+## Development result on `dev`
+
+The current `dev` implementation applies the report-related correction in this repository. Android now discovers the public provider catalogue instead of assuming `basic`, accepts a sole advertised password provider, retains the bounded access, rotating-refresh, and provider-routing cookie bundle, merges successful REST and WebSocket-ticket cookie rotations back into encrypted storage, and keeps the WebSocket upgrade ticket-only. The connector and shared REST seams have fake-Dashboard coverage for the complete login → refresh → ticket → WebSocket → save path.
+
+This does not make the entire app 1:1 with every Desktop authentication mode. A native selector is still required when a Dashboard advertises multiple password providers, and Desktop's system-browser native-PKCE backend login remains separate work. Those are not part of issue #2's password connect-and-save acceptance criteria.
 
 ## Red-capable test seam
 
@@ -69,4 +76,3 @@ For the later native-PKCE parity ticket, use a separate fake capability seam:
 `auth_flows=["native_pkce"]`, state/PKCE challenge verification, loopback code
 exchange, token refresh, and token-authenticated REST/ticket calls. Do not mix
 that flow into the password-cookie ticket above.
-
