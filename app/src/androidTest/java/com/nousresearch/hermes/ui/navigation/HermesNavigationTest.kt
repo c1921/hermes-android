@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import org.junit.Rule
 import org.junit.Test
 
@@ -111,5 +112,30 @@ class HermesNavigationTest {
 
         composeRule.onNodeWithText("Back from files").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Open files").assertIsDisplayed()
+    }
+
+    @Test
+    fun durableConversationIdentitySurvivesSavedStateRecreation() {
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent {
+            val controller = rememberNavController()
+            val navigator = remember(controller) { HermesNavigator(controller) }
+            NavHost(controller, startDestination = HermesRoute.SessionAtlas("backend-intended", "research")) {
+                composable<HermesRoute.SessionAtlas> {
+                    Button(onClick = {
+                        navigator.openConversation("backend-intended", "research", "stored-session")
+                    }) { Text("Restore conversation") }
+                }
+                composable<HermesRoute.Conversation> { entry ->
+                    val route = entry.toRoute<HermesRoute.Conversation>()
+                    Text("${route.backendId}/${route.profileId}/${route.sessionId}")
+                }
+            }
+        }
+        composeRule.onNodeWithText("Restore conversation").performClick()
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText("backend-intended/research/stored-session").assertIsDisplayed()
     }
 }

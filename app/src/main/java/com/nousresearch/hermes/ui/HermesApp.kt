@@ -170,6 +170,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.SessionRestorationStatus
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
@@ -1198,7 +1199,28 @@ private fun HermesWorkspace(
             }
         }
 
-        if (!authoritativeReady || resolution == null || resolution.route != route || !resolution.mutationsEnabled) {
+        val restorationNeedsAtlas = state.restoration.status in setOf(
+            SessionRestorationStatus.RECOVERY_REQUIRED,
+            SessionRestorationStatus.SESSION_UNAVAILABLE,
+            SessionRestorationStatus.PROFILE_MISMATCH,
+        )
+        LaunchedEffect(route, restorationNeedsAtlas, state.restoration.explanation) {
+            if (restorationNeedsAtlas && route !is HermesRoute.SessionAtlas) {
+                onRecovery(state.restoration.explanation)
+                navigator.replace(
+                    HermesRoute.SessionAtlas(
+                        backendId = backendId,
+                        profileId = state.restoration.target?.profile ?: route.profileIdOr(state.currentProfile),
+                    ),
+                )
+            }
+        }
+
+        val restorationInProgress = state.restoration.status == SessionRestorationStatus.AUTHENTICATING ||
+            state.restoration.status == SessionRestorationStatus.REHYDRATING
+        val atlasRecoveryReady = route is HermesRoute.SessionAtlas && restorationNeedsAtlas
+        val restorationGateClosed = !state.restoration.mutationsEnabled && !atlasRecoveryReady
+        if (!authoritativeReady || restorationInProgress || restorationGateClosed || resolution == null || resolution.route != route || !resolution.mutationsEnabled) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         } else {
             when (route) {

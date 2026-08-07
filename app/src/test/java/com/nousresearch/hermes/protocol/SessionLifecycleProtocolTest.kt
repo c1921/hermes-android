@@ -23,11 +23,14 @@ class SessionLifecycleProtocolTest {
     @Test
     fun `decodes branch identity returned by Hermes 0 18 2`() {
         val result = json.decodeFromString<SessionBranchResult>(
-            """{"session_id":"live-branch","title":"Investigation (branch)","parent":"stored-parent"}""",
+            """{"session_id":"live-branch","stored_session_id":"stored-branch","title":"Investigation (branch)","parent":"stored-parent","messages":[{"role":"user","content":"Investigate"}],"info":{"stored_session_id":"stored-branch","model":"hermes-4"}}""",
         )
 
         assertEquals("live-branch", result.runtimeSessionId)
+        assertEquals("stored-branch", result.durableSessionId)
         assertEquals("stored-parent", result.parent)
+        assertEquals("stored-branch", result.info.storedSessionId)
+        assertEquals(1, result.messages.size)
     }
 
     @Test

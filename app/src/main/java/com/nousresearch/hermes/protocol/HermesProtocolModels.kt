@@ -456,8 +456,11 @@ data class SessionTitleResult(
 @Serializable
 data class SessionBranchResult(
     @SerialName("session_id") val runtimeSessionId: String,
+    @SerialName("stored_session_id") val durableSessionId: String? = null,
     val title: String,
     val parent: String,
+    val messages: List<ProtocolMessage> = emptyList(),
+    val info: SessionRuntimeInfo = SessionRuntimeInfo(),
 )
 
 @Serializable

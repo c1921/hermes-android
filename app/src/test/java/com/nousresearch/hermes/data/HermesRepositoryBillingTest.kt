@@ -12,6 +12,7 @@ import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.StoredSession
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -239,6 +240,119 @@ class HermesRepositoryBillingTest {
 
             assertEquals("session-b", repository.state.value.activeStoredSession?.durableId)
             assertEquals("live-b", repository.state.value.runtimeSessionId)
+            assertEquals("session-b", registry.sessionTarget(backend.id)?.sessionId)
+        }
+    }
+
+    @Test
+    fun `session preflight failure leaves restoration in explicit authentication recovery`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            credentials.remove(backend.id)
+
+            repository.openSession(StoredSession(sessionId = "stored-session"))
+
+            assertEquals(SessionRestorationStatus.AUTHENTICATION_REQUIRED, repository.state.value.restoration.status)
+            assertTrue(repository.state.value.error.orEmpty().contains("Reconnect", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun `branch becomes immediately durable and restorable from authoritative response`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-parent","stored_session_id":"stored-parent","messages":[],"info":{"stored_session_id":"stored-parent"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            repository.newSession()
+            gateway.enqueue(
+                "session.branch",
+                json.parseToJsonElement(
+                    """{"session_id":"live-branch","stored_session_id":"stored-branch","title":"Branch","parent":"stored-parent","messages":[{"role":"user","text":"Parent message"}],"info":{"stored_session_id":"stored-branch"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            repository.branchActive()
+
+            assertEquals(SessionRestorationStatus.READY, repository.state.value.restoration.status)
+            assertEquals("stored-branch", repository.state.value.activeStoredSession?.durableId)
+            assertEquals("stored-branch", registry.sessionTarget(backend.id)?.sessionId)
+        }
+    }
+
+    @Test
+    fun `fresh repository reauthenticates and restores the persisted durable target`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody(
+                        """{"sessions":[{"session_id":"stored-session","profile":"research","title":"Restored"}]}""",
+                    )
+                    "/api/sessions/stored-session/messages" -> MockResponse().setBody(
+                        """{"session_id":"stored-session","messages":[{"role":"user","text":"Persisted question"}]}""",
+                    )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            registry.saveSessionTarget(SessionTarget(backend.id, "research", "stored-session"))
+            credentials.put(backend.id, SESSION_COOKIE)
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-restored","session_key":"stored-session","messages":[{"role":"user","text":"Persisted question"}],"info":{"stored_session_id":"stored-session"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            val restored = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+
+            withTimeout(5_000L) {
+                restored.state.first {
+                    it.restoration.status == SessionRestorationStatus.READY &&
+                        it.runtimeSessionId == "live-restored"
+                }
+            }
+            assertEquals("stored-session", restored.state.value.activeStoredSession?.durableId)
+            assertEquals("research", restored.state.value.activeStoredSession?.profile)
         }
     }
 
@@ -347,7 +461,7 @@ class HermesRepositoryBillingTest {
     }
 
     private fun backend(server: MockWebServer) = BackendConfig(
-        id = "personal",
+        id = "personal-${BACKEND_IDS.incrementAndGet()}",
         label = "Personal",
         baseUrl = server.url("/").toString().replace("localhost", "127.0.0.1").trimEnd('/'),
         authMode = AuthMode.DASHBOARD_SESSION,
@@ -367,6 +481,7 @@ class HermesRepositoryBillingTest {
     }
 
     private companion object {
+        val BACKEND_IDS = AtomicInteger()
         val SESSION_COOKIE = DashboardSessionCredential("hermes_session_at", "session-value")
     }
 }

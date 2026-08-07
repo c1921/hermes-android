@@ -59,8 +59,27 @@ class HermesRouteTest {
             authoritativeSessions = emptySet(),
         )
 
-        assertEquals(HermesRoute.BackendPicker(), result.route)
+        assertEquals(
+            HermesRoute.BackendPicker(returnBackendId = "backend-1", profileId = "default"),
+            result.route,
+        )
         assertTrue(result.explanation.orEmpty().contains("Reconnect"))
+        assertFalse(result.mutationsEnabled)
+    }
+
+    @Test
+    fun `authentication recovery keeps the intended backend and profile`() {
+        val result = resolveRestoredRoute(
+            route = HermesRoute.Conversation("backend-intended", "research", "stored-session"),
+            availableBackendIds = setOf("backend-intended", "backend-current"),
+            authenticatedBackendId = "backend-current",
+            authoritativeSessions = emptySet(),
+        )
+
+        assertEquals(
+            HermesRoute.BackendPicker(returnBackendId = "backend-intended", profileId = "research"),
+            result.route,
+        )
         assertFalse(result.mutationsEnabled)
     }
 

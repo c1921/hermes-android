@@ -106,7 +106,10 @@ fun resolveRestoredRoute(
     }
     if (authenticatedBackendId != backendId) {
         return RouteResolution(
-            route = HermesRoute.BackendPicker(),
+            route = HermesRoute.BackendPicker(
+                returnBackendId = backendId,
+                profileId = route.profileIdOrNull(),
+            ),
             explanation = "Reconnect to this backend before continuing.",
         )
     }
@@ -128,6 +131,15 @@ fun HermesRoute.backendIdOrNull(): String? = when (this) {
     is HermesRoute.Conversation -> backendId
     is HermesRoute.Files -> backendId
     is HermesRoute.Management -> backendId
+}
+
+private fun HermesRoute.profileIdOrNull(): String? = when (this) {
+    HermesRoute.Onboarding -> null
+    is HermesRoute.BackendPicker -> profileId
+    is HermesRoute.SessionAtlas -> profileId
+    is HermesRoute.Conversation -> profileId
+    is HermesRoute.Files -> profileId
+    is HermesRoute.Management -> profileId
 }
 
 fun conversationMutationsEnabled(
