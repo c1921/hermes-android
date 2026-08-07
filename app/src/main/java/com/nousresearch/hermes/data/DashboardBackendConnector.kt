@@ -2,7 +2,6 @@ package com.nousresearch.hermes.data
 
 import com.nousresearch.hermes.network.DashboardAuthClient
 import com.nousresearch.hermes.network.DashboardSessionCredential
-import com.nousresearch.hermes.network.HermesHttpException
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.StatusResponse
@@ -50,8 +49,7 @@ class DashboardBackendConnector @Inject constructor(
             validate(config, cookie).also { credentials.put(config.id, cookie) }
         } catch (error: Throwable) {
             if (error is CancellationException) throw error
-            if (error is HermesHttpException && error.statusCode != 401 && error.statusCode != 403) throw error
-            throw ReconnectRequiredException("Dashboard session expired or was rejected; reconnect is required.", error)
+            throw ReconnectRequiredException("Dashboard validation failed; reconnect is required.", error)
         }
     }
 

@@ -106,6 +106,45 @@ class DashboardBackendConnectorTest {
     }
 
     @Test
+    fun `saved dashboard server failure becomes reconnect required`() = runBlocking {
+        FakeDashboard(statusCode = 503).use { dashboard ->
+            dashboard.start()
+            val connector = connector(dashboard, RecordingSessionCredentialStore(), RecordingBackendSaver())
+            val credential = requireNotNull(
+                DashboardSessionCredential.fromCookieHeader(
+                    "hermes_session_at=expired-access; hermes_session_rt=refresh-value; " +
+                        "hermes_session_provider=basic",
+                ),
+            )
+
+            val failure = runCatching {
+                connector.validateSaved(config(dashboard), credential)
+            }.exceptionOrNull()
+
+            assertTrue(failure is ReconnectRequiredException)
+            assertTrue(failure?.message.orEmpty().contains("reconnect", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun `malformed websocket ticket does not save backend or cookie`() = runBlocking {
+        FakeDashboard(ticketBody = """{"ttl_seconds":30}""").use { dashboard ->
+            dashboard.start()
+            val credentials = RecordingSessionCredentialStore()
+            val backends = RecordingBackendSaver()
+
+            val failure = runCatching {
+                connector(dashboard, credentials, backends).loginValidateAndSave(config(dashboard), "admin", "password")
+            }.exceptionOrNull()
+
+            assertTrue(failure != null)
+            assertNull(credentials.saved)
+            assertNull(backends.saved)
+            assertNull(dashboard.webSocketTicket)
+        }
+    }
+
+    @Test
     fun `legacy token backend requires reconnect and is never reinterpreted`() = runBlocking {
         FakeDashboard().use { dashboard ->
             dashboard.start()
@@ -160,6 +199,7 @@ private class RecordingBackendSaver : BackendSaver {
 private class FakeDashboard(
     private val statusCode: Int = 200,
     private val webSocketAccepted: Boolean = true,
+    private val ticketBody: String = """{"ticket":"single-use-ticket","ttl_seconds":30}""",
 ) : AutoCloseable {
     private val server = MockWebServer()
     var statusCookie: String? = null
@@ -197,7 +237,7 @@ private class FakeDashboard(
                 }
                 "/api/auth/ws-ticket" -> {
                     ticketCookie = request.getHeader("Cookie")
-                    MockResponse().setBody("""{"ticket":"single-use-ticket","ttl_seconds":30}""")
+                    MockResponse().setBody(ticketBody)
                 }
                 "/api/ws" -> {
                     webSocketTicket = request.requestUrl?.queryParameter("ticket")
