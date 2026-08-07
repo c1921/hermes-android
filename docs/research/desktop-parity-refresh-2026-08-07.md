@@ -43,7 +43,7 @@ evidence against today’s Desktop contract.
 | P1 | Android has no provider discovery and no capability-driven auth selection. | Desktop probes status and uses advertised password providers/auth flows; Android cannot connect to a deployment whose password provider is not named `basic`, nor choose native OAuth. | Desktop provider/capability handling: [`gateway-settings.tsx`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/src/app/settings/gateway-settings.tsx#L211-L371). Android hard-code: [`DashboardAuthClient.kt`](../../app/src/main/java/com/nousresearch/hermes/network/DashboardAuthClient.kt#L49-L60). |
 | P1 | Android’s `AuthMode.OAUTH` is an enum value, but the shipped onboarding path only accepts `DASHBOARD_SESSION`; there is no Android native browser/loopback/PKCE implementation. | Current Desktop supports `native_pkce` where advertised and persists/refreshes bearer tokens for that flow. This is the largest user-visible Desktop auth feature absent from Android, although issue #1 explicitly marked OAuth out of scope. | Desktop flow: [`native-oauth.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth.ts#L71-L129), [`native-oauth-login.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth-login.ts#L69-L77). Android gate: [`DashboardBackendConnector.kt`](../../app/src/main/java/com/nousresearch/hermes/data/DashboardBackendConnector.kt#L26-L32). |
 
-The actionable conclusion is therefore: issue #2’s narrow connect-and-save slice is largely implemented, including the correct current ticket transport, but the implementation is not 1:1 with today’s Desktop. The first development correction should be a session-cookie bundle with refresh behavior (while retaining the current ticket-only WS upgrade), followed by provider/capability discovery. Native PKCE is a separate parity ticket because the original issue explicitly excludes OAuth.
+The audit found two report-level corrections: retain the renewable cookie bundle while keeping the ticket-only WebSocket upgrade, and discover the advertised password provider instead of assuming `basic`. The `dev` implementation now includes both corrections. Native PKCE remains a separate parity ticket because issue #1 excludes OAuth.
 
 ## Development result on `dev`
 
@@ -51,28 +51,10 @@ The current `dev` implementation applies the report-related correction in this r
 
 This does not make the entire app 1:1 with every Desktop authentication mode. A native selector is still required when a Dashboard advertises multiple password providers, and Desktop's system-browser native-PKCE backend login remains separate work. Those are not part of issue #2's password connect-and-save acceptance criteria.
 
-## Red-capable test seam
+## Verification result
 
-Extend the existing public `DashboardBackendConnector.loginValidateAndSave` seam
-and its `FakeDashboard` rather than testing UI details. Make the fake match the
-current Desktop/server contract:
+The `DashboardBackendConnector.loginValidateAndSave` fake-Dashboard seam now matches the current Desktop/server contract. It proves provider discovery, an expired access cookie with a valid refresh cookie, exact cookie-bundle reuse, access and refresh rotation, fresh ticket minting, and a ticket-only WebSocket upgrade. Negative coverage rejects invalid login, malformed cookies and tickets, failed REST and WebSocket validation, legacy token records, and expired saved sessions without persisting bad state.
 
-1. Return both access and refresh cookies from password login, with a deliberately
-   short access lifetime; first run the test against the current one-cookie
-   implementation so it fails red after access expiry.
-2. Assert the provider and credentials on login, then assert the exact cookie
-   bundle on REST status and on `POST /api/auth/ws-ticket`.
-3. After access expiry, have the fake accept the refresh cookie and emit a new
-   access cookie. Assert Android updates encrypted session state without asking
-   for the password again and that the subsequent WS ticket is fresh.
-4. Assert the WebSocket upgrade contains the single-use `ticket` query and no
-   Cookie header, matching Desktop; keep missing/malformed-cookie, wrong-login,
-   status-failure, ticket-failure, and WS-failure cases non-persisting.
-5. Keep the existing password-redaction and legacy-token reconnect assertions;
-   add unknown-provider and provider-capability fixtures before removing the
-   Android `basic` hard-code.
+The CI artifact for `dev` commit `015b0a1` passed unit tests, Android lint, debug APK/AAB builds, signing, and signature verification. A headless Android 16 Google Play emulator then completed the full onboarding flow against a bounded fake Dashboard. The server observed the expected provider and login fields, exact rotated cookies on REST and ticket requests, and no Cookie header on each WebSocket upgrade. Force-stop and relaunch restored the encrypted renewable session without another login. Resetting the fake server invalidated the saved session, and Android displayed the reconnect-required backend screen without crashing.
 
-For the later native-PKCE parity ticket, use a separate fake capability seam:
-`auth_flows=["native_pkce"]`, state/PKCE challenge verification, loopback code
-exchange, token refresh, and token-authenticated REST/ticket calls. Do not mix
-that flow into the password-cookie ticket above.
+Native PKCE requires its own capability seam with state and PKCE challenge verification, loopback code exchange, token refresh, and token-authenticated REST and ticket calls. A multiple-password-provider implementation also needs a native provider selector. Issue #1 excludes both flows.

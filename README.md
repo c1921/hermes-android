@@ -29,9 +29,9 @@ The screenshots were captured on a Samsung SM-S906E running Android 16 in dark m
 
 ## Project status
 
-Last verified: 19 July 2026.
+Last verified: 7 August 2026.
 
-The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly locally with JDK 17. Pushes to `dev` publish artifacts under one stable debug certificate. Successful pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly. Pushes to `dev` publish artifacts under one stable debug certificate. Successful pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The 7 August CI artifact completed provider discovery, password login, access/refresh/provider cookie rotation, ticket-only WebSocket validation, encrypted session restoration after process death, and expired-session recovery on a headless Android 16 Google Play emulator. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 See [Android signing and branch flow](docs/release-signing.md) for the public certificate fingerprints, artifact names, and promotion contract.
 
