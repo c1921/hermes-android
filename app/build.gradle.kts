@@ -282,8 +282,8 @@ android {
 }
 
 androidComponents {
-    onVariants(selector().withName("nonMinifiedRelease")) {
-        sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
+    onVariants(selector().withName("nonMinifiedRelease")) { variant ->
+        variant.sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
     }
 }
 
