@@ -351,6 +351,9 @@ private data class ManagementActions(
 fun HermesApp(
     secureScreen: Boolean = false,
     onSecureScreenChange: (Boolean) -> Unit = {},
+    biometricReentry: Boolean = false,
+    biometricAvailable: Boolean = false,
+    onBiometricReentryChange: (Boolean) -> Unit = {},
     skin: HermesSkin = HermesSkin.NOUS,
     onSkinChange: (HermesSkin) -> Unit = {},
     entryDelivery: HermesEntryDelivery? = null,
@@ -480,7 +483,7 @@ fun HermesApp(
     val appNavController = rememberNavController()
     val navigator = remember(appNavController) { HermesNavigator(appNavController) }
     val currentEntry by appNavController.currentBackStackEntryAsState()
-    var recoveryNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var recoveryNotice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(
         entryDelivery?.request?.id,
         entryDelivery?.attempt,
@@ -688,6 +691,9 @@ fun HermesApp(
             onForgetBackend = viewModel::forgetBackend,
             secureScreen = secureScreen,
             onSecureScreenChange = onSecureScreenChange,
+            biometricReentry = biometricReentry,
+            biometricAvailable = biometricAvailable,
+            onBiometricReentryChange = onBiometricReentryChange,
             skin = skin,
             onSkinChange = onSkinChange,
         )
@@ -742,6 +748,9 @@ fun HermesApp(
                         AppSettingsScreen(
                             secureScreen = secureScreen,
                             onSecureScreenChange = onSecureScreenChange,
+                            biometricReentry = biometricReentry,
+                            biometricAvailable = biometricAvailable,
+                            onBiometricReentryChange = onBiometricReentryChange,
                             skin = skin,
                             onSkinChange = onSkinChange,
                             onBack = { appNavController.popBackStack() },
@@ -793,9 +802,9 @@ internal fun OnboardingScreen(
     onConnect: (String, String, String, String, Boolean, String) -> Unit,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
-    var label by rememberSaveable { mutableStateOf("My Hermes") }
-    var url by rememberSaveable { mutableStateOf("") }
-    var username by rememberSaveable { mutableStateOf("") }
+    var label by remember { mutableStateOf("My Hermes") }
+    var url by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var privateHttp by rememberSaveable { mutableStateOf(false) }
     var passwordProviders by remember { mutableStateOf(emptyList<DashboardAuthProvider>()) }
@@ -1067,6 +1076,9 @@ private fun HermesWorkspace(
     onForgetBackend: (String) -> Unit,
     secureScreen: Boolean,
     onSecureScreenChange: (Boolean) -> Unit,
+    biometricReentry: Boolean,
+    biometricAvailable: Boolean,
+    onBiometricReentryChange: (Boolean) -> Unit,
     skin: HermesSkin,
     onSkinChange: (HermesSkin) -> Unit,
 ) {
@@ -1094,10 +1106,10 @@ private fun HermesWorkspace(
         val backendId = requireNotNull(state.backend).id
         val profileId = route.profileIdOr(state.currentProfile)
         val supportingSessionId = state.activeStoredSession?.durableId ?: state.runtimeSessionId.orEmpty()
-        var supportingToolId by rememberSaveable(backendId, profileId, supportingSessionId) {
+        var supportingToolId by remember(backendId, profileId, supportingSessionId) {
             mutableStateOf<String?>(null)
         }
-        var expandedToolIds by rememberSaveable(backendId, profileId, supportingSessionId) {
+        var expandedToolIds by remember(backendId, profileId, supportingSessionId) {
             mutableStateOf(emptyList<String>())
         }
         val timelineTools = state.timeline.items.filterIsInstance<TimelineItem.Tool>()
@@ -1107,7 +1119,7 @@ private fun HermesWorkspace(
             expandedToolIds = expandedToolIds.filter(availableToolIds::contains)
             if (supportingToolId != null && supportingToolId !in availableToolIds) supportingToolId = null
         }
-        var pendingNewConversationFromId by rememberSaveable { mutableStateOf<String?>(null) }
+        var pendingNewConversationFromId by remember { mutableStateOf<String?>(null) }
         val openStoredSession: (StoredSession) -> Unit = { session ->
             pendingNewConversationFromId = null
             onRecovery(null)
@@ -1316,6 +1328,9 @@ private fun HermesWorkspace(
                     WorkspaceContent.APP_SETTINGS -> AppSettingsScreen(
                         secureScreen = secureScreen,
                         onSecureScreenChange = onSecureScreenChange,
+                        biometricReentry = biometricReentry,
+                        biometricAvailable = biometricAvailable,
+                        onBiometricReentryChange = onBiometricReentryChange,
                         skin = skin,
                         onSkinChange = onSkinChange,
                         onBack = { navigator.back(backendId, profileId) },
@@ -1806,7 +1821,7 @@ private fun SessionRail(
     compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<StoredSession?>(null) }
     var confirmNewSession by rememberSaveable { mutableStateOf(false) }
     val visibleSessions = state.sessions.filter { session ->
@@ -2389,7 +2404,7 @@ internal fun MessageBlock(
     val user = message.role == MessageRole.USER
     val context = LocalContext.current
     var copied by rememberSaveable(message.id) { mutableStateOf(false) }
-    var actionError by rememberSaveable(message.id) { mutableStateOf<String?>(null) }
+    var actionError by remember(message.id) { mutableStateOf<String?>(null) }
     LaunchedEffect(copied) {
         if (copied) {
             delay(1_500)
@@ -2766,15 +2781,15 @@ private fun Composer(
     compactLayout: Boolean,
     adaptiveFocusState: AdaptiveFocusState,
 ) {
-    var pendingDestructiveSlash by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingDestructiveSlash by remember { mutableStateOf<String?>(null) }
     var microphoneDenied by rememberSaveable { mutableStateOf(false) }
     var capturedCameraUri by remember { mutableStateOf<String?>(null) }
-    var cameraError by rememberSaveable { mutableStateOf<String?>(null) }
+    var cameraError by remember { mutableStateOf<String?>(null) }
     var historyMenuOpen by rememberSaveable(historySessionId) { mutableStateOf(false) }
     var historyCursor by rememberSaveable(historySessionId) { mutableIntStateOf(-1) }
-    var historyDraftSnapshot by rememberSaveable(historySessionId) { mutableStateOf("") }
-    var queuedEditId by rememberSaveable(historySessionId) { mutableStateOf<String?>(null) }
-    var queuedEditText by rememberSaveable(historySessionId) { mutableStateOf("") }
+    var historyDraftSnapshot by remember(historySessionId) { mutableStateOf("") }
+    var queuedEditId by remember(historySessionId) { mutableStateOf<String?>(null) }
+    var queuedEditText by remember(historySessionId) { mutableStateOf("") }
     val focus = LocalFocusManager.current
     val softwareKeyboard = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
@@ -3557,7 +3572,7 @@ private fun ApprovalDialog(command: String, description: String?, choices: List<
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ClarificationDialog(question: String, choices: List<String>, onAnswer: (String) -> Unit) {
-    var answer by rememberSaveable { mutableStateOf("") }
+    var answer by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = { },
         title = { Text("HERMES NEEDS INPUT") },

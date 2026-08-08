@@ -53,8 +53,8 @@ internal fun ServerConfigScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<ServerConfigField?>(null) }
 
     LaunchedEffect(state.activeProfile) {

@@ -29,6 +29,9 @@ import com.nousresearch.hermes.ui.theme.HermesSkin
 internal fun AppSettingsScreen(
     secureScreen: Boolean,
     onSecureScreenChange: (Boolean) -> Unit,
+    biometricReentry: Boolean,
+    biometricAvailable: Boolean,
+    onBiometricReentryChange: (Boolean) -> Unit,
     skin: HermesSkin,
     onSkinChange: (HermesSkin) -> Unit,
     onBack: (() -> Unit)?,
@@ -77,6 +80,32 @@ internal fun AppSettingsScreen(
                             checked = secureScreen,
                             onCheckedChange = onSecureScreenChange,
                             modifier = Modifier.semantics { contentDescription = "Secure screen" },
+                        )
+                    }
+                }
+            }
+            item {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("BIOMETRIC RE-ENTRY", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (biometricAvailable) {
+                                    "Require biometrics or the device credential after Hermes stays in the background for five minutes."
+                                } else {
+                                    "Set a device screen lock before enabling biometric re-entry."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = biometricReentry,
+                            onCheckedChange = onBiometricReentryChange,
+                            enabled = biometricAvailable,
+                            modifier = Modifier.semantics { contentDescription = "Biometric re-entry" },
                         )
                     }
                 }

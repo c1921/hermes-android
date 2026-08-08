@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,7 +69,7 @@ internal fun BillingScreen(
     val accountLoggedIn = billing?.loggedIn == true && subscription?.loggedIn != false
     val summaryBilling = billing?.takeIf { it.ok && accountLoggedIn }
     val portalUrl = state.billingPortalUrl ?: billing?.portalUrl ?: subscription?.portalUrl
-    var pendingCharge by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCharge by remember { mutableStateOf<String?>(null) }
 
     Column(modifier.fillMaxSize()) {
         Row(
@@ -294,7 +295,7 @@ private fun SubscriptionCard(state: HermesState, portalUrl: String?, onOpenUrl: 
 
 @Composable
 private fun BuyCreditsCard(billing: BillingStateResponse, busy: Boolean, onSelectAmount: (String) -> Unit) {
-    var customAmount by rememberSaveable(billing.minUsd) { mutableStateOf("") }
+    var customAmount by remember(billing.minUsd) { mutableStateOf("") }
     val enabled = billing.card != null && billing.isAdmin && billing.canCharge && billing.cliBillingEnabled && !busy
     val validCustomAmount = runCatching {
         validateBillingAmount(customAmount, billing.minUsd, billing.maxUsd)
@@ -376,10 +377,10 @@ private fun AutoReloadCard(
     }
     var editing by rememberSaveable { mutableStateOf(false) }
     var confirmDisable by rememberSaveable { mutableStateOf(false) }
-    var threshold by rememberSaveable(auto.thresholdUsd, auto.thresholdDisplay) {
+    var threshold by remember(auto.thresholdUsd, auto.thresholdDisplay) {
         mutableStateOf(billingWireAmount(auto.thresholdUsd, auto.thresholdDisplay))
     }
-    var reloadTo by rememberSaveable(auto.reloadToUsd, auto.reloadToDisplay) {
+    var reloadTo by remember(auto.reloadToUsd, auto.reloadToDisplay) {
         mutableStateOf(billingWireAmount(auto.reloadToUsd, auto.reloadToDisplay))
     }
     val validThreshold = runCatching { validateBillingAmount(threshold, billing.minUsd, billing.maxUsd) }.getOrNull()

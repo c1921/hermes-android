@@ -45,7 +45,7 @@ integration, full device accessibility, and release proof remain incomplete.
 | MCP/toolsets | Catalog review/install/test/toggle/remove/reload and toolset toggles exist | Custom edit, OAuth, per-tool filters, and richer toolset setup remain client work; revision-safe patching lacks a server contract |
 | Messaging/webhooks/cron | Messaging and Cron CRUD/run history exist | Pairing, delivery targets, and blueprints remain. Webhook HTTP routes do not accept a profile; Desktop scopes them by selecting a profile-specific child process inside Electron, which Android cannot reproduce safely. Requested webhook edit/test routes also do not exist upstream |
 | Memory/maintenance | Profile-scoped Starmap graph/search/node detail/edit/removal, diagnostics, bounded redacted host logs, read-only update status, and exact-receipt host backup export exist | Memory/Curator routes still target only the serving process rather than an explicit remote profile; update apply and backup restore remain intentionally absent |
-| Android-native security/media | Secure-screen and voice playback exist | Biometric re-entry, MediaSession controls, and purposeful haptics remain client work and need physical-device proof |
+| Android-native security/media | Secure-screen, opt-in biometric/device-credential re-entry, and voice playback exist in source | Biometric enrollment/lockout/process proof, MediaSession controls, and purposeful haptics remain device/client work |
 | Release quality | JVM/lint/build gates are available | TalkBack/switch/keyboard/foldable tests, benchmarks, battery/performance, reproducibility, provenance, and owner device acceptance remain |
 
 ## Work completed during this audit
@@ -69,6 +69,11 @@ integration, full device accessibility, and release proof remain incomplete.
   progress, indeterminate one-frame upload, multi-document selection, and
   independent retry/cancel/remove. Ready handles remain foreground-only and the
   durable prompt queue remains text-only until Hermes owns a durable descriptor.
+- Added opt-in device-local biometric re-entry that withholds Hermes composition
+  on a fresh process and after five background minutes, keeps configuration
+  changes unlocked, and exposes an Android device-credential recovery path on
+  every supported API. No biometric material or protected user-entered content
+  is stored in Android saved state by the app.
 
 The practical conclusion is not “Android is missing most of Desktop.” The
 foreground client is broad and functional. The remaining distance is

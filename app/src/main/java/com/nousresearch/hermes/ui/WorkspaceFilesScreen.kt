@@ -94,7 +94,7 @@ internal fun WorkspaceFilesScreen(
     viewModel: WorkspaceFilesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var pathInput by rememberSaveable { mutableStateOf(initialPath.orEmpty()) }
+    var pathInput by remember { mutableStateOf(initialPath.orEmpty()) }
     var pendingDownload by remember { mutableStateOf<ManagedFileEntry?>(null) }
     var externalActionBusy by remember { mutableStateOf(false) }
     var externalActionError by remember { mutableStateOf<String?>(null) }

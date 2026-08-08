@@ -42,12 +42,20 @@ class PrivacyPreferences internal constructor(
         .map { it[SECURE_SCREEN] ?: false }
         .catch { emit(true) }
 
+    val biometricReentry: Flow<Boolean> = store.data
+        .map { it[BIOMETRIC_REENTRY] ?: false }
+        .catch { emit(true) }
+
     val skin: Flow<HermesSkin> = store.data
         .map { HermesSkin.fromId(it[SKIN]) }
         .catch { emit(HermesSkin.NOUS) }
 
     suspend fun setSecureScreen(enabled: Boolean) {
         store.edit { it[SECURE_SCREEN] = enabled }
+    }
+
+    suspend fun setBiometricReentry(enabled: Boolean) {
+        store.edit { it[BIOMETRIC_REENTRY] = enabled }
     }
 
     suspend fun setSkin(skin: HermesSkin) {
@@ -79,6 +87,7 @@ class PrivacyPreferences internal constructor(
 
     private companion object {
         val SECURE_SCREEN = booleanPreferencesKey("secure_screen")
+        val BIOMETRIC_REENTRY = booleanPreferencesKey("biometric_reentry")
         val SKIN = stringPreferencesKey("skin")
     }
 }

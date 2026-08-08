@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -84,7 +85,7 @@ internal fun DiagnosticsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var exportInProgress by rememberSaveable { mutableStateOf(false) }
-    var exportNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var exportNotice by remember { mutableStateOf<String?>(null) }
     var confirmBackup by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.backend?.id) { if (state.backend != null) onRefreshHost(false) }
     val createBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->

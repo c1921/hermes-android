@@ -84,8 +84,8 @@ internal fun BackendsScreen(
     modifier: Modifier = Modifier,
 ) {
     var adding by rememberSaveable { mutableStateOf(false) }
-    var reconnectId by rememberSaveable { mutableStateOf<String?>(null) }
-    var forgetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var reconnectId by remember { mutableStateOf<String?>(null) }
+    var forgetId by remember { mutableStateOf<String?>(null) }
     val forgetBackend = state.savedBackends.firstOrNull { it.id == forgetId }
     Column(modifier.fillMaxSize()) {
         ManagementHeader("BACKENDS", "Saved Hermes installations", state.loading, null, onBack)
@@ -189,9 +189,9 @@ private fun BackendConnectionDialog(
     onDismiss: () -> Unit,
     onConnect: (String, String, String, String, Boolean, String) -> Unit,
 ) {
-    var label by rememberSaveable(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
-    var url by rememberSaveable(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
-    var username by rememberSaveable { mutableStateOf("") }
+    var label by remember(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
+    var url by remember(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
+    var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var allowPrivate by rememberSaveable(initial?.id) { mutableStateOf(initial?.allowInsecurePrivateNetwork == true) }
     var passwordProviders by remember { mutableStateOf(emptyList<DashboardAuthProvider>()) }
@@ -330,9 +330,9 @@ internal fun SkillsScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     var view by rememberSaveable { mutableStateOf(CapabilityView.SKILLS) }
-    var uninstallName by rememberSaveable { mutableStateOf<String?>(null) }
+    var uninstallName by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { onRefresh() }
     val visible = state.skills.filter {
         query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || it.category.orEmpty().contains(query, true)
@@ -520,10 +520,10 @@ internal fun CronScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var editorJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editorJobId by remember { mutableStateOf<String?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
-    var deleteJobId by rememberSaveable { mutableStateOf<String?>(null) }
-    var expandedJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteJobId by remember { mutableStateOf<String?>(null) }
+    var expandedJobId by remember { mutableStateOf<String?>(null) }
     val editorJob = state.cronJobs.firstOrNull { it.id == editorJobId }
     val deleteJob = state.cronJobs.firstOrNull { it.id == deleteJobId }
     LaunchedEffect(Unit) { onRefresh() }
@@ -628,20 +628,20 @@ internal fun ProfilesScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var creating by rememberSaveable { mutableStateOf(false) }
-    var renameProfileName by rememberSaveable { mutableStateOf<String?>(null) }
-    var deleteProfileName by rememberSaveable { mutableStateOf<String?>(null) }
-    var identityName by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameProfileName by remember { mutableStateOf<String?>(null) }
+    var deleteProfileName by remember { mutableStateOf<String?>(null) }
+    var identityName by remember { mutableStateOf<String?>(null) }
     var identityLoaded by rememberSaveable { mutableStateOf(false) }
     var identityLoading by remember { mutableStateOf(false) }
-    var originalSoul by rememberSaveable { mutableStateOf("") }
-    var soulDraft by rememberSaveable { mutableStateOf("") }
-    var setupCommand by rememberSaveable { mutableStateOf("") }
-    var originalProvider by rememberSaveable { mutableStateOf("") }
-    var providerDraft by rememberSaveable { mutableStateOf("") }
-    var originalModel by rememberSaveable { mutableStateOf("") }
-    var modelDraft by rememberSaveable { mutableStateOf("") }
-    var identityError by rememberSaveable { mutableStateOf<String?>(null) }
-    var identityNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var originalSoul by remember { mutableStateOf("") }
+    var soulDraft by remember { mutableStateOf("") }
+    var setupCommand by remember { mutableStateOf("") }
+    var originalProvider by remember { mutableStateOf("") }
+    var providerDraft by remember { mutableStateOf("") }
+    var originalModel by remember { mutableStateOf("") }
+    var modelDraft by remember { mutableStateOf("") }
+    var identityError by remember { mutableStateOf<String?>(null) }
+    var identityNotice by remember { mutableStateOf<String?>(null) }
     var confirmDiscardIdentity by rememberSaveable { mutableStateOf(false) }
     val renameProfile = state.profiles.firstOrNull { it.name == renameProfileName }
     val deleteProfile = state.profiles.firstOrNull { it.name == deleteProfileName }
@@ -956,8 +956,8 @@ private fun ProfileCreateDialog(
     onDismiss: () -> Unit,
     onCreate: (String, String, Boolean, Boolean) -> Unit,
 ) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var cloneFrom by rememberSaveable { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var cloneFrom by remember { mutableStateOf("") }
     var cloneAll by rememberSaveable { mutableStateOf(false) }
     var noSkills by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
@@ -1002,7 +1002,7 @@ private fun ProfileRenameDialog(
     onDismiss: () -> Unit,
     onRename: (String) -> Unit,
 ) {
-    var name by rememberSaveable(profile.name) { mutableStateOf(profile.name) }
+    var name by remember(profile.name) { mutableStateOf(profile.name) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("RENAME PROFILE") },
@@ -1206,12 +1206,12 @@ private fun CronEditorDialog(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String) -> Unit,
 ) {
-    var name by rememberSaveable(job?.id) { mutableStateOf(job?.name.orEmpty()) }
-    var prompt by rememberSaveable(job?.id) { mutableStateOf(job?.prompt.orEmpty()) }
-    var schedule by rememberSaveable(job?.id) {
+    var name by remember(job?.id) { mutableStateOf(job?.name.orEmpty()) }
+    var prompt by remember(job?.id) { mutableStateOf(job?.prompt.orEmpty()) }
+    var schedule by remember(job?.id) {
         mutableStateOf(job?.schedule?.expr ?: job?.scheduleDisplay.orEmpty())
     }
-    var deliver by rememberSaveable(job?.id) { mutableStateOf(job?.deliver.orEmpty()) }
+    var deliver by remember(job?.id) { mutableStateOf(job?.deliver.orEmpty()) }
     val valid = prompt.isNotBlank() && schedule.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,

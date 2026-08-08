@@ -74,8 +74,8 @@ internal fun MessagingScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var query by rememberSaveable { mutableStateOf("") }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { onRefresh() }
     val selected = state.messagingPlatforms.firstOrNull { it.id == selectedId }
 

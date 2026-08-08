@@ -50,8 +50,8 @@ internal fun StarmapScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable(profile) { mutableStateOf("") }
-    var deleteNodeId by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by remember(profile) { mutableStateOf("") }
+    var deleteNodeId by remember { mutableStateOf<String?>(null) }
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(profile) { onRefresh(profile) }
 

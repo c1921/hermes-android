@@ -10,6 +10,7 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import org.junit.Rule
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsSeparationTest {
@@ -23,6 +24,9 @@ class SettingsSeparationTest {
                 AppSettingsScreen(
                     secureScreen = true,
                     onSecureScreenChange = {},
+                    biometricReentry = true,
+                    biometricAvailable = true,
+                    onBiometricReentryChange = {},
                     skin = HermesSkin.NOUS,
                     onSkinChange = {},
                     onBack = null,
@@ -34,6 +38,30 @@ class SettingsSeparationTest {
         compose.onNodeWithText("APPEARANCE").assertExists()
         compose.onNode(hasScrollAction()).performScrollToIndex(1)
         compose.onNodeWithText("SECURE SCREEN").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.onNodeWithText("BIOMETRIC RE-ENTRY").assertExists()
+    }
+
+    @Test
+    fun biometricGateExposesErrorAndExplicitRetry() {
+        var retried = false
+        var usedCredential = false
+        compose.setContent {
+            HermesTheme {
+                BiometricLockScreen(
+                    error = "Authentication cancelled.",
+                    onUnlock = { retried = true },
+                    onUseDeviceCredential = { usedCredential = true },
+                )
+            }
+        }
+
+        compose.onNodeWithText("HERMES LOCKED").assertExists()
+        compose.onNodeWithText("Authentication cancelled.").assertExists()
+        compose.onNodeWithText("UNLOCK").performClick()
+        assertTrue(retried)
+        compose.onNodeWithText("USE DEVICE CREDENTIAL").performClick()
+        assertTrue(usedCredential)
     }
 
     @Test
