@@ -1,5 +1,10 @@
 package com.nousresearch.hermes.ui
 
+import android.Manifest
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,16 +18,29 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.nousresearch.hermes.platform.HermesNotificationPermission
+import com.nousresearch.hermes.platform.hermesNotificationPermission
+import com.nousresearch.hermes.platform.markHermesNotificationPermissionRequested
 import com.nousresearch.hermes.ui.theme.HermesSkin
 
 @Composable
@@ -37,6 +55,21 @@ internal fun AppSettingsScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    var notificationPermission by remember { mutableStateOf(hermesNotificationPermission(context)) }
+    val requestNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationPermission = hermesNotificationPermission(context)
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationPermission = hermesNotificationPermission(context)
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
@@ -107,6 +140,52 @@ internal fun AppSettingsScreen(
                             enabled = biometricAvailable,
                             modifier = Modifier.semantics { contentDescription = "Biometric re-entry" },
                         )
+                    }
+                }
+            }
+            item {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "NOTIFICATIONS",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                        Text(
+                            if (notificationPermission == HermesNotificationPermission.GRANTED) "Allowed" else "Not allowed",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "Allow completion, action-required, automation failure and cron result alerts. Message content stays private.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (notificationPermission != HermesNotificationPermission.GRANTED) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (notificationPermission == HermesNotificationPermission.REQUEST) {
+                                        markHermesNotificationPermissionRequested(context)
+                                        requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        context.startActivity(
+                                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    if (notificationPermission == HermesNotificationPermission.REQUEST) {
+                                        "ALLOW NOTIFICATIONS"
+                                    } else {
+                                        "OPEN NOTIFICATION SETTINGS"
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }

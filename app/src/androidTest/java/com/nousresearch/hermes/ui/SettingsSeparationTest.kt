@@ -40,6 +40,9 @@ class SettingsSeparationTest {
         compose.onNodeWithText("SECURE SCREEN").assertExists()
         compose.onNode(hasScrollAction()).performScrollToIndex(2)
         compose.onNodeWithText("BIOMETRIC RE-ENTRY").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(3)
+        compose.onNodeWithText("NOTIFICATIONS").assertExists()
+        compose.onNodeWithText("Message content stays private.", substring = true).assertExists()
     }
 
     @Test

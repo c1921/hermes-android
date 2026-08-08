@@ -38,7 +38,7 @@ integration, full device accessibility, and release proof remain incomplete.
 | Area | Current state | What actually blocks parity |
 | --- | --- | --- |
 | Dashboard OAuth | Password auth is complete; Android native OAuth is absent | Current `native_pkce` contract permits loopback redirects only and has no Android callback/revoke contract |
-| Notifications | Exact destination parsing exists | No server/device push registration and private delivery contract; #20 owns producers and actions |
+| Notifications | Exact destination parsing, contextual Android 13 permission UX, four private channels, redacted local rendering, and typed destination taps exist | No server/device push registration or advertised private delivery contract; #20 still blocks background producers and token-bound actions |
 | Reconnect | Authoritative resume/projection is tested | No ordered replay cursor, mutation receipt, or multi-client barrier contract |
 | Rich conversation | Typed parts, artifacts, Markdown, tool disclosure, and respectful near-end streaming follow exist | Specialised safe reference/media actions and device/a11y proof remain |
 | Profiles | CRUD/default/start plus bounded SOUL editing, setup-command copy, and explicit provider/model assignment exist in the current patch | Profile import/export exchanges backend filesystem paths, not bounded archive bytes suitable for Android SAF |
@@ -74,6 +74,11 @@ integration, full device accessibility, and release proof remain incomplete.
   changes unlocked, and exposes an Android device-credential recovery path on
   every supported API. No biometric material or protected user-entered content
   is stored in Android saved state by the app.
+- Added contextual Android notification permission/settings recovery, four
+  private redacted product channels, and a typed local renderer that can only
+  route through validated Hermes destinations. Background delivery and inline
+  actions remain absent until Hermes advertises device registration and
+  short-lived action-token contracts.
 
 The practical conclusion is not “Android is missing most of Desktop.” The
 foreground client is broad and functional. The remaining distance is
