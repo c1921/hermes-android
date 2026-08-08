@@ -245,7 +245,10 @@ android {
     }
 
     sourceSets {
-        maybeCreate("nonMinifiedRelease")
+        maybeCreate("nonMinifiedRelease").apply {
+            java.srcDir("src/nonMinifiedRelease/java")
+            manifest.srcFile("src/nonMinifiedRelease/AndroidManifest.xml")
+        }
     }
 
     compileOptions {

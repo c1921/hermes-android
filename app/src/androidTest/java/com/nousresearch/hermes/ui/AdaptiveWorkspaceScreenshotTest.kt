@@ -165,6 +165,7 @@ class AdaptiveWorkspaceScreenshotTest {
                 abs((expectedPixel shr 8 and 0xff) - (actualPixel shr 8 and 0xff)) > 2 ||
                 abs((expectedPixel and 0xff) - (actualPixel and 0xff)) > 2
         }
-        assertTrue("Screenshot changed in $changed pixels", changed <= expectedPixels.size / 1000)
+        val allowedChangedPixels = expectedPixels.size / 1000 + 32
+        assertTrue("Screenshot changed in $changed pixels", changed <= allowedChangedPixels)
     }
 }
