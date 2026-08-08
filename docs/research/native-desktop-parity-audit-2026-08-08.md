@@ -83,7 +83,7 @@ integration, full device accessibility, and release proof remain incomplete.
   single-use ticket authentication, bounded mono int16 PCM assembly, AudioTrack
   streaming, MediaSession controls, cancellation, and pre-audio buffered-speech
   fallback without replaying a partially spoken reply.
-- Added a credential-free benchmark-release fixture with 500 mixed
+- Added a credential-free benchmark-only fixture with 500 mixed
   messages, continuous streaming, core-surface journeys, API 28/36 managed
   device CI, Baseline Profile generation, SBOM/provenance retention, and
   deterministic unsigned APK/AAB payload comparison.

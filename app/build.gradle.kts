@@ -244,13 +244,6 @@ android {
         }
     }
 
-    sourceSets {
-        getByName("nonMinifiedRelease") {
-            java.srcDir("src/benchmarkRelease/java")
-            manifest.srcFile("src/benchmarkRelease/AndroidManifest.xml")
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

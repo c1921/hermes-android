@@ -13,8 +13,11 @@ app reports full display) for cold startup and `FrameTimingMetric` for cold and
 warm startup.
 `HermesSurfaceJourneyBenchmark` provides named Atlas/chat, continuous-stream
 transcript scroll, composer, Files/Artifacts, and Manage frame journeys. The
-benchmark-release-only fixture activity renders the production Compose
+benchmark-only fixture activity renders the production Compose
 surfaces with deterministic local data and no credentials or network access.
+The fixture is present in the `benchmarkRelease` and `nonMinifiedRelease`
+source sets because the macrobenchmark and Baseline Profile tasks use distinct
+AGP variants; neither source set is part of the production `release` variant.
 
 `BaselineProfileGenerator` exercises startup and the primary fixture surfaces
 through the AndroidX Baseline Profile plugin. The generated profile is wired
@@ -25,7 +28,7 @@ into release builds and retained with benchmark evidence.
 `DeterministicFixtures` produces 500 mixed user/assistant/tool/error messages
 and a 120-chunk continuous stream at a fixed 25 ms interval. The data contains
 no credentials or production content, is stable across runs, and feeds the
-benchmark-release-only fixture built from the production timeline and renderer surfaces.
+benchmark-only fixture built from the production timeline and renderer surfaces.
 
 ## Raw evidence format and gate
 
