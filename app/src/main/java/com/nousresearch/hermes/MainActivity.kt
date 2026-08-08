@@ -20,7 +20,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nousresearch.hermes.data.PrivacyPreferences
@@ -43,7 +45,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     @Inject lateinit var privacyPreferences: PrivacyPreferences
     @Inject lateinit var entryRequestStore: HermesEntryRequestStore
-    private var workspaceReady = false
+    private var workspaceReady by mutableStateOf(false)
     private val privacyGate: PrivacyGateViewModel by viewModels()
     private var biometricPromptActive = false
     private var biometricCancellation: CancellationSignal? = null

@@ -39,6 +39,7 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -158,13 +159,12 @@ class AdaptiveWorkspaceScreenshotTest {
     }
 
     private fun assertScreenshotsMatch(expected: Bitmap, actual: Bitmap) {
-        val width = minOf(expected.width, actual.width)
-        val height = minOf(expected.height, actual.height)
-        require(width > 0 && height > 0) { "Screenshot viewport is empty" }
-        val expectedPixels = IntArray(width * height)
-        val actualPixels = IntArray(width * height)
-        expected.getPixels(expectedPixels, 0, width, 0, 0, width, height)
-        actual.getPixels(actualPixels, 0, width, 0, 0, width, height)
+        assertEquals("Screenshot width changed", expected.width, actual.width)
+        assertEquals("Screenshot height changed", expected.height, actual.height)
+        val expectedPixels = IntArray(expected.width * expected.height)
+        val actualPixels = IntArray(expected.width * expected.height)
+        expected.getPixels(expectedPixels, 0, expected.width, 0, 0, expected.width, expected.height)
+        actual.getPixels(actualPixels, 0, expected.width, 0, 0, expected.width, expected.height)
         val changed = expectedPixels.indices.count { index ->
             val expectedPixel = expectedPixels[index]
             val actualPixel = actualPixels[index]
@@ -172,14 +172,7 @@ class AdaptiveWorkspaceScreenshotTest {
                 abs((expectedPixel shr 8 and 0xff) - (actualPixel shr 8 and 0xff)) > 2 ||
                 abs((expectedPixel and 0xff) - (actualPixel and 0xff)) > 2
         }
-        // Managed Pixel devices clamp the expanded/fold design widths to their
-        // physical viewport; keep those mode checks meaningful without treating
-        // the clamped edge as a product regression.
-        val allowedChangedPixels = if (expected.width == actual.width && expected.height == actual.height) {
-            expectedPixels.size / 1000 + 32
-        } else {
-            expectedPixels.size / 20 + 32
-        }
+        val allowedChangedPixels = expectedPixels.size / 1000 + 32
         assertTrue("Screenshot changed in $changed pixels", changed <= allowedChangedPixels)
     }
 }

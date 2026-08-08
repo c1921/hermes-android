@@ -117,9 +117,9 @@ jobs:
       - name: Run benchmark journeys and generate Baseline Profile
         run: |
           ./gradlew --no-daemon --no-parallel --max-workers=1 \
-            :benchmark:pixel6Api36BenchmarkReleaseAndroidTest
-          ./gradlew --no-daemon --no-parallel --max-workers=1 \
             :app:generateBaselineProfile
+          ./gradlew --no-daemon --no-parallel --max-workers=1 \
+            :benchmark:pixel6Api36BenchmarkReleaseAndroidTest
       - name: Enforce accepted API 36 benchmark baseline
         run: ./scripts/check-benchmark-regression.sh benchmark/build/outputs benchmark/accepted-baseline.json
       - uses: actions/upload-artifact@v4
@@ -154,7 +154,7 @@ jobs:
         run: |
           ./gradlew --no-daemon --no-parallel --max-workers=1 \
             :app:pixel2Api28DebugAndroidTest \
-            :app:pixel6Api36DebugAndroidTest
+            :app:pixelTabletApi36DebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

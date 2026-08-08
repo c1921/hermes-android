@@ -264,8 +264,8 @@ android {
                     apiLevel = 28
                     systemImageSource = "google"
                 }
-                create<com.android.build.api.dsl.ManagedVirtualDevice>("pixel6Api36") {
-                    device = "Pixel 6"
+                create<com.android.build.api.dsl.ManagedVirtualDevice>("pixelTabletApi36") {
+                    device = "Pixel Tablet"
                     apiLevel = 36
                     systemImageSource = "google"
                 }
