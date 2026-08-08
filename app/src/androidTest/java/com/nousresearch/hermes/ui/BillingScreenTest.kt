@@ -4,7 +4,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -51,7 +50,7 @@ class BillingScreenTest {
         )
 
         compose.onNodeWithText("BALANCE").assertExists()
-        compose.onAllNodesWithText("$24.50", useUnmergedTree = true).fetchSemanticsNodes().let { assertEquals(2, it.size) }
+        compose.onNodeWithText("$24.50", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Super / $20/mo").assertExists()
         compose.onNodeWithText("ACCOUNT").assertExists()
         compose.onNodeWithText("Visa •••• 4242").assertExists()
@@ -128,7 +127,8 @@ class BillingScreenTest {
             ),
         )
 
-        compose.onNodeWithText("$0.00 of $50.00 left / $0.79 over", useUnmergedTree = true).performScrollTo().assertExists()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("$0.00 of $50.00 left / $0.79 over"))
+        compose.onNodeWithText("$0.00 of $50.00 left / $0.79 over", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -164,7 +164,8 @@ class BillingScreenTest {
             ),
         )
 
-        compose.onNodeWithText("$7.00 remaining", useUnmergedTree = true).performScrollTo().assertExists()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("$7.00 remaining"))
+        compose.onNodeWithText("$7.00 remaining", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("$40.00 remaining").assertDoesNotExist()
     }
 

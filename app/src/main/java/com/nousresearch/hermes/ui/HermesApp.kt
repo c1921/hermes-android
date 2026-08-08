@@ -2369,7 +2369,7 @@ internal fun Timeline(
                 }
             }
         } else if (followLatest && items.isNotEmpty()) {
-            listState.animateScrollToItem(items.lastIndex)
+            listState.scrollToItem(items.lastIndex)
         }
     }
     Box(Modifier.fillMaxSize()) {

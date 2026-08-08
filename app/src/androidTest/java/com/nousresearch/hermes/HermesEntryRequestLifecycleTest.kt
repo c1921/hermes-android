@@ -26,7 +26,7 @@ class HermesEntryRequestLifecycleTest {
             .setType("text/plain")
             .putExtra(Intent.EXTRA_TEXT, "private draft")
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> activity.startActivity(intent) }
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             assertEquals(1, store.deliveries.value.size)
@@ -50,7 +50,7 @@ class HermesEntryRequestLifecycleTest {
             MainActivity::class.java,
         ).putExtra("approval_token", "must-not-survive")
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> activity.startActivity(malicious) }
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             assertTrue(store.deliveries.value.isEmpty())
