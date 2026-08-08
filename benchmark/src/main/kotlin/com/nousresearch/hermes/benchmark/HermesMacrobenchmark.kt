@@ -82,7 +82,7 @@ class HermesSurfaceJourneyBenchmark {
 
     @Test
     fun composerJourney() = measureSurface("Chats") {
-        val composer = requireNotNull(wait(Until.findObject(By.textContains("Message Hermes")), 5_000L)) {
+        val composer = requireNotNull(wait(Until.findObject(By.desc("benchmark-composer")), 5_000L)) {
             "Benchmark composer field not found"
         }
         val expectedText = "Deterministic benchmark composer input"

@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -100,13 +101,14 @@ private fun BenchmarkFixture(resetKey: Long) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            FixtureSurface.entries.forEach { candidate ->
-                TextButton(onClick = { surface = candidate }) {
-                    Text(candidate.label)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+            FixtureSurface.entries.toList().chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    row.forEach { candidate ->
+                        TextButton(onClick = { surface = candidate }) {
+                            Text(candidate.label)
+                        }
+                    }
                 }
             }
         }
@@ -160,7 +162,7 @@ private fun FixtureChats(streamText: String) {
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it.take(MAX_COMPOSER_CHARACTERS) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "benchmark-composer" },
                 label = { Text("Message Hermes") },
                 singleLine = true,
             )
