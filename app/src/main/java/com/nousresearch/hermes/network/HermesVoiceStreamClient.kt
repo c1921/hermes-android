@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -85,6 +86,7 @@ class HermesVoiceStreamClient @Inject constructor(
             session
         } catch (error: Throwable) {
             session.abort()
+            if (error is CancellationException) throw error
             if (error is VoiceStreamException) throw error
             throw VoiceStreamException(VoiceStreamFailure.CONNECTION)
         }

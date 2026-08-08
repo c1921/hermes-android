@@ -24,7 +24,7 @@ manifest() {
   unzip -qq "$archive" -d "$unpacked"
   (
     cd "$unpacked"
-    find . -type f ! -path './META-INF/*' -print0 \
+    find . -type f ! -path './META-INF/*.SF' ! -path './META-INF/*.RSA' ! -path './META-INF/*.DSA' ! -path './META-INF/MANIFEST.MF' -print0 \
       | LC_ALL=C sort -z \
       | xargs -0 shasum -a 256
   ) > "$output"
