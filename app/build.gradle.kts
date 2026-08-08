@@ -11,6 +11,10 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 fun signingProperty(name: String): String? =
     providers.gradleProperty(name).orNull
         ?: providers.environmentVariable(name).orNull
@@ -82,10 +86,13 @@ val buildIdentity = listOf(
     environmentOrFallback("GITHUB_WORKFLOW", "working-tree"),
     environmentOrFallback("GITHUB_REF_NAME", "working-tree"),
 ).joinToString("/")
+val dependencyLockPath = "app/gradle.lockfile"
 val toolchainDigest = "sha256:" + sha256Digest(
     "gradle/libs.versions.toml",
     "gradle/wrapper/gradle-wrapper.properties",
-    "gradle.lockfile",
+    dependencyLockPath,
+    "settings-gradle.lockfile",
+    "settings.gradle.kts",
     "build.gradle.kts",
     "app/build.gradle.kts",
 )
@@ -104,6 +111,9 @@ val configuredReleaseFingerprint = signingFingerprint(releaseKeystorePath, relea
 val provenanceChannel = providers.gradleProperty("hermes.provenance.channel").orElse("debug").get()
 require(provenanceChannel == "debug" || provenanceChannel == "release") {
     "hermes.provenance.channel must be debug or release."
+}
+require(provenanceChannel != "release" || rootProject.file(dependencyLockPath).isFile) {
+    "Release provenance requires the committed app/gradle.lockfile."
 }
 val provenanceOutput = layout.buildDirectory.file("generated/provenance/hermes-android-$provenanceChannel.properties")
 val provenancePackageName = if (provenanceChannel == "release") {

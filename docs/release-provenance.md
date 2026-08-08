@@ -21,6 +21,13 @@ The metadata includes:
   certificate fingerprint when a configured keystore is available; and
 - the generated author `luinbytes`.
 
+All app configurations use Gradle dependency locking. Resolve intentional
+dependency updates with `./gradlew :app:dependencies --write-locks`, review and
+commit [`app/gradle.lockfile`](../app/gradle.lockfile) and the generated settings
+lock, then run the normal test, lint, and release gates. Release provenance
+fails closed when the app lockfile is missing; both locks and the settings files
+are included in the toolchain digest.
+
 Local builds use explicit `unknown`, `local`, or `unsigned` fallbacks when CI,
 Git, or signing inputs are unavailable. These values are tested as fallbacks;
 they are never presented as verified release metadata.
