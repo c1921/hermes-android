@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
             val workspaceReady = hermesState.backend == null ||
                 (!hermesState.loading && !hermesState.backendTransitionInProgress)
             ReportDrawnWhen {
-                biometricReentry != null && (locked || biometricReentry != true || workspaceReady)
+                biometricReentry != null && (locked || workspaceReady)
             }
             when {
                 biometricReentry == null -> HermesTheme(skin) { }
