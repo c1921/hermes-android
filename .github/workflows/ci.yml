@@ -109,7 +109,7 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@v3
       - name: Install API 36 benchmark image
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;aosp;x86_64"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;x86_64"
       - name: Enable KVM
         run: sudo chmod 666 /dev/kvm
       - name: Run benchmark journeys and generate Baseline Profile
@@ -141,7 +141,7 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@v3
       - name: Install managed-device images
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-28;aosp;x86_64" "system-images;android-36;aosp;x86_64"
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-28;google_apis;x86_64" "system-images;android-36;google_apis;x86_64"
       - name: Enable KVM
         run: sudo chmod 666 /dev/kvm
       - name: Run Android app matrix
