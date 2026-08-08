@@ -162,7 +162,7 @@ internal fun <T : Any> rememberAdaptiveWorkspacePanes(
     return remember(destinations, stateHolder) {
         destinations.associateWith { destination ->
             @Composable { compact: Boolean ->
-                stateHolder.SaveableStateProvider(destination) {
+                stateHolder.SaveableStateProvider(saveableWorkspaceStateKey(destination)) {
                     Row(currentModifier.value(destination, compact)) {
                         currentContent.value.invoke(this, destination, compact)
                     }
@@ -170,6 +170,12 @@ internal fun <T : Any> rememberAdaptiveWorkspacePanes(
             }
         }
     }
+}
+
+private fun saveableWorkspaceStateKey(destination: Any): String {
+    val type = destination::class.qualifiedName.orEmpty()
+    val value = destination.toString()
+    return "${type.length}:$type${value.length}:$value"
 }
 
 @Composable

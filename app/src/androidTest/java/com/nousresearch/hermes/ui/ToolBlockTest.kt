@@ -1,8 +1,10 @@
 package com.nousresearch.hermes.ui
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,9 +68,9 @@ class ToolBlockTest {
         }
 
         compose.onNodeWithContentDescription("Tool usage, Terminal, Terminal completed").performClick()
-        compose.onNodeWithText("support transcript", substring = true).assertExists()
+        compose.onAllNodesWithText("support transcript", substring = true).assertCountEquals(2)
         compose.onNodeWithContentDescription("Close tool transcript").performClick()
         compose.onNodeWithContentDescription("Tool usage, Terminal, Terminal completed").assertExists()
-        compose.onNodeWithText("support transcript", substring = true).assertDoesNotExist()
+        compose.onAllNodesWithText("support transcript", substring = true).assertCountEquals(0)
     }
 }

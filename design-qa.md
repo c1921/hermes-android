@@ -99,8 +99,8 @@ nested card hierarchies.
 
 Issue #17's production shell components were exercised on an isolated Android
 16 / API 36 emulator at
-320×640 and 1280×800 pixels at 160 dpi, with 130% text, forced RTL, and
-animations disabled. The device was restored to 320×640 after the matrix.
+360×800, 1280×800, and 1200×800 pixels at 160 dpi, with 130% text, forced RTL,
+and animations disabled. The task-owned emulator was stopped after the matrix.
 This evidence does not substitute for a live authenticated backend session on
 a physical foldable or tablet.
 
@@ -122,7 +122,17 @@ a physical foldable or tablet.
   restoration. It verifies the typed backend/profile/session route, draft,
   focus, and supporting-pane visibility: 1/1 passed.
 - `AdaptiveWorkspaceLayoutTest` verifies compact, medium, expanded, large, and
-  both hinge-safe partition and single-region fallback policy: 4/4 passed.
+  hinge-safe partition and physical-region fallback policy in both LTR and RTL,
+  including crossing hinges and scoped tool identity: 6/6 passed.
+- `ToolBlockTest` verifies collapsed-by-default disclosure, the beautified
+  transcript, synchronized inline/supporting-pane state, and close behavior:
+  2/2 passed.
+- `AdaptiveWorkspaceScreenshotTest` compares packaged deterministic goldens for
+  compact, expanded supporting-pane, and RTL book-fold layouts: 3/3 passed.
+  Fresh evidence is stored in `docs/design/evidence/issue17-shell-*-api36.png`.
+- The final focused batch (`AdaptiveWorkspaceStateTest`, `ToolBlockTest`,
+  `AppSettingsDeepLinkTest`, `HermesNavigationTest`, and
+  `SettingsSeparationTest`) passed 12/12 after the final saved-state fix.
 
 - [x] Exact live-site palette tokens
 - [x] Real first-party hero and badge assets
