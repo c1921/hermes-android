@@ -9,8 +9,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.put
 
 enum class TimelineIdentityKind { SERVER, GENERATED_FALLBACK }
 
@@ -799,22 +801,24 @@ private fun upsertBlockingPart(
 
 private fun historyMessageParts(index: Int, message: ProtocolMessage): List<TimelineItem> {
     val messageId = message.id?.takeIf(String::isNotBlank)
+        ?: message.toolCallId?.takeIf(String::isNotBlank)
     val baseId = messageId ?: "history:$index:${message.role}"
     val role = message.role.toMessageRole()
     val baseIdentity = messageId?.let {
         TimelineIdentity.server(it, source = "history")
     } ?: TimelineIdentity.fallback(baseId, source = "history")
     if (message.role.equals("tool", ignoreCase = true)) {
+        val content = message.content as? JsonObject
+        val toolName = message.toolName.orEmpty()
+            .ifBlank { content?.text("name").orEmpty() }
+            .ifBlank { content?.text("tool_name").orEmpty() }
+            .ifBlank { "tool" }
         return listOf(
             TimelineItem.Tool(
                 id = baseId,
-                name = (message.content as? JsonObject)?.text("name")
-                    ?.ifBlank { (message.content as? JsonObject)?.text("tool_name") }
-                    ?.ifBlank { "tool" }
-                    ?.take(MAX_TIMELINE_LABEL_CHARACTERS)
-                    ?: "tool",
+                name = toolName.take(MAX_TIMELINE_LABEL_CHARACTERS),
                 state = ToolState.COMPLETE,
-                summary = (message.content as? JsonObject)?.text("summary")?.ifBlank { null }
+                summary = content?.text("summary")?.ifBlank { null }
                     ?.take(MAX_TIMELINE_SUMMARY_CHARACTERS),
                 detail = toolHistoryDetail(message.content, message.text),
                 identity = baseIdentity,
@@ -846,18 +850,6 @@ private fun historyMessageParts(index: Int, message: ProtocolMessage): List<Time
                             id = id,
                             label = part.text("label").ifBlank { "Reference" }.take(MAX_TIMELINE_LABEL_CHARACTERS),
                             text = part.text("text").take(MAX_TIMELINE_SUMMARY_CHARACTERS),
-                            identity = identity,
-                        ),
-                    )
-                    "artifact", "file", "image", "image_url", "media" -> add(
-                        TimelineItem.Artifact(
-                            id = id,
-                            label = part.text("label").ifBlank { part.text("name") }.ifBlank { "Artifact" }
-                                .take(MAX_TIMELINE_LABEL_CHARACTERS),
-                            mimeType = part.text("mime_type").ifBlank { part.text("mime") }.ifBlank { null },
-                            reference = part.text("artifact_id").ifBlank { part.text("url") }.ifBlank { null }
-                                ?.take(MAX_TIMELINE_REFERENCE_CHARACTERS),
-                            description = part.text("description").ifBlank { null }?.take(MAX_TIMELINE_SUMMARY_CHARACTERS),
                             identity = identity,
                         ),
                     )
@@ -893,14 +885,26 @@ private fun historyToolPart(
     part: JsonObject,
     identity: TimelineIdentity,
 ): TimelineItem.Tool {
-    val name = part.text("name").ifBlank { part.text("tool_name") }.ifBlank { "tool" }
-    val detail = part["arguments"] ?: part["args"] ?: part["input"] ?: part["result"]
-    val serverId = part.text("tool_id").ifBlank { part.text("id") }.takeIf(String::isNotBlank)
+    val name = part.text("toolName").ifBlank { part.text("name") }.ifBlank { part.text("tool_name") }.ifBlank { "tool" }
+    val arguments = part["args"] ?: part["arguments"] ?: part["input"] ?: part["argsText"]
+    val result = part["result"] ?: part["resultText"]
+    val detail = when {
+        arguments != null && result != null -> buildJsonObject {
+            put("arguments", arguments)
+            put("result", result)
+        }
+        result != null -> result
+        else -> arguments
+    }
+    val serverId = part.text("toolCallId")
+        .ifBlank { part.text("tool_id") }
+        .ifBlank { part.text("id") }
+        .takeIf(String::isNotBlank)
     val itemId = serverId ?: id
     return TimelineItem.Tool(
         id = itemId,
         name = name.take(MAX_TIMELINE_LABEL_CHARACTERS),
-        state = if (part.boolean("failed")) ToolState.FAILED else ToolState.COMPLETE,
+        state = if (part.boolean("failed") || part.boolean("isError")) ToolState.FAILED else ToolState.COMPLETE,
         summary = part.text("summary").ifBlank { null }?.take(MAX_TIMELINE_SUMMARY_CHARACTERS),
         detail = when (detail) {
             is JsonPrimitive -> detail.contentOrNull

@@ -31,4 +31,15 @@ class ProtocolMessageSerializationTest {
             json.decodeFromString(ProtocolMessage.serializer(), """{"id":true,"role":"assistant"}""")
         }
     }
+
+    @Test
+    fun `session history keeps shipped durable tool pairing fields`() {
+        val message = json.decodeFromString(
+            ProtocolMessage.serializer(),
+            """{"role":"tool","tool_call_id":"img-1","tool_name":"image_generate","content":"{}"}""",
+        )
+
+        assertEquals("img-1", message.toolCallId)
+        assertEquals("image_generate", message.toolName)
+    }
 }

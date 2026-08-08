@@ -225,6 +225,7 @@ enum class CurrentHermesFeature {
     SESSION_REHYDRATION,
     FOREGROUND_PROMPTS,
     BOUNDED_FOREGROUND_ATTACHMENTS,
+    MANAGED_FILES,
     MCP_CATALOG,
     LEGACY_ROLLBACK,
 }
@@ -247,6 +248,13 @@ private object CurrentHermesCompatibility {
                     CurrentHermesFeature.SESSION_REHYDRATION -> setOf("session.resume", "session.history")
                     CurrentHermesFeature.FOREGROUND_PROMPTS -> setOf("prompt.submit", "approval.response", "clarification.response")
                     CurrentHermesFeature.BOUNDED_FOREGROUND_ATTACHMENTS -> setOf("file.attach", "image.attach_bytes", "pdf.attach")
+                    CurrentHermesFeature.MANAGED_FILES -> setOf(
+                        "/api/files",
+                        "/api/files/read",
+                        "/api/files/download",
+                        "/api/fs/read-text",
+                        "/api/fs/read-data-url",
+                    )
                     CurrentHermesFeature.MCP_CATALOG -> setOf("/api/mcp/servers", "/api/mcp/catalog")
                     CurrentHermesFeature.LEGACY_ROLLBACK -> setOf("rollback.list", "rollback.diff", "rollback.restore")
                 },
@@ -255,6 +263,7 @@ private object CurrentHermesCompatibility {
                     CurrentHermesFeature.SESSION_REHYDRATION -> "Restore authoritative history without claiming exact replay."
                     CurrentHermesFeature.FOREGROUND_PROMPTS -> "Keep blocking prompts visible while the app is foregrounded."
                     CurrentHermesFeature.BOUNDED_FOREGROUND_ATTACHMENTS -> "Keep bounded foreground file and image attachments."
+                    CurrentHermesFeature.MANAGED_FILES -> "Use authenticated managed-file reads without claiming a canonical artifact inventory."
                     CurrentHermesFeature.MCP_CATALOG -> "Keep reviewed MCP catalog operations only."
                     CurrentHermesFeature.LEGACY_ROLLBACK -> "Recheck the diff and confirm immediately before restore."
                 },

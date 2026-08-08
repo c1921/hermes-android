@@ -102,6 +102,16 @@ class CapabilityRegistryTest {
 
         assertTrue(registry.compatibilityAdapter(CurrentHermesFeature.SESSION_REHYDRATION).supported)
         assertTrue(registry.compatibilityAdapter(CurrentHermesFeature.FOREGROUND_PROMPTS).supported)
+        assertEquals(
+            setOf(
+                "/api/files",
+                "/api/files/read",
+                "/api/files/download",
+                "/api/fs/read-text",
+                "/api/fs/read-data-url",
+            ),
+            registry.compatibilityAdapter(CurrentHermesFeature.MANAGED_FILES).methods,
+        )
         assertFalse(registry.state(HermesBackendCapability.EVENT_REPLAY_V1).isAvailable)
     }
 

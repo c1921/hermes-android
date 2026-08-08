@@ -309,7 +309,7 @@ class TimelineReducerTest {
             listOf(
                 TimelineItem.Message::class,
                 TimelineItem.Reference::class,
-                TimelineItem.Artifact::class,
+                TimelineItem.Unknown::class,
                 TimelineItem.Tool::class,
                 TimelineItem.Error::class,
             ),

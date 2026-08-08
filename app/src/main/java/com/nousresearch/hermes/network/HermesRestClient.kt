@@ -10,6 +10,8 @@ import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.AudioSpeakResponse
 import com.nousresearch.hermes.protocol.AudioTranscriptionResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
+import com.nousresearch.hermes.protocol.FsDataUrlResponse
+import com.nousresearch.hermes.protocol.FsTextPreview
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
@@ -52,6 +54,7 @@ import com.nousresearch.hermes.protocol.ServerConfigMutationResponse
 import com.nousresearch.hermes.protocol.ServerConfigSchemaResponse
 import java.io.IOException
 import java.io.OutputStream
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -149,6 +152,30 @@ class HermesRestClient(
         token,
         "/api/files/read?path=${encodePathSegment(path)}",
         ManagedFileReadResponse.serializer(),
+    )
+
+    suspend fun readFsDataUrl(
+        config: BackendConfig,
+        token: String,
+        path: String,
+    ): FsDataUrlResponse = boundedGet(
+        config = config,
+        token = token,
+        path = "/api/fs/read-data-url?path=${encodePathSegment(path)}",
+        maximumResponseBytes = MAX_FS_DATA_URL_RESPONSE_BYTES,
+        serializer = FsDataUrlResponse.serializer(),
+    )
+
+    suspend fun readFsText(
+        config: BackendConfig,
+        token: String,
+        path: String,
+    ): FsTextPreview = boundedGet(
+        config = config,
+        token = token,
+        path = "/api/fs/read-text?path=${encodePathSegment(path)}",
+        maximumResponseBytes = MAX_FS_TEXT_RESPONSE_BYTES,
+        serializer = FsTextPreview.serializer(),
     )
 
     suspend fun transcribeAudio(
@@ -920,6 +947,64 @@ class HermesRestClient(
         serializer: DeserializationStrategy<T>,
     ): T = json.decodeFromJsonElement(serializer, request(config, token, path))
 
+    private suspend fun <T> boundedGet(
+        config: BackendConfig,
+        token: String,
+        path: String,
+        maximumResponseBytes: Long,
+        serializer: DeserializationStrategy<T>,
+    ): T = withContext(Dispatchers.IO) {
+        val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+        require(path.startsWith('/')) { "Hermes API paths must be absolute" }
+        val request = Request.Builder()
+            .url(base + path)
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == AuthMode.DASHBOARD_SESSION) {
+                    header("Cookie", token)
+                } else {
+                    header("Authorization", "Bearer $token")
+                }
+            }
+            .build()
+        val noRedirectClient = client.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+        val call = noRedirectClient.newCall(request)
+        val cancellation = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) call.cancel()
+        }
+        try {
+            call.execute().use { response ->
+                if (response.request.url != request.url) {
+                    throw IOException("Hermes redirected an authenticated file request")
+                }
+                val raw = response.body?.use { body ->
+                    body.contentLength().takeIf { it >= 0 }?.let { length ->
+                        if (length > maximumResponseBytes) {
+                            throw IOException("Hermes file response exceeds the Android safety limit")
+                        }
+                    }
+                    readBounded(body.byteStream(), maximumResponseBytes)
+                }.orEmpty()
+                if (!response.isSuccessful) {
+                    val detail = runCatching {
+                        json.parseToJsonElement(raw).toString().take(500)
+                    }.getOrDefault(raw.take(500))
+                    throw HermesHttpException(response.code, detail.ifBlank { response.message })
+                }
+                updateStoredSession(config, token, response.headers.values("Set-Cookie"))
+                if (raw.isBlank()) throw IOException("Hermes returned an empty file response")
+                json.decodeFromString(serializer, raw)
+            }
+        } finally {
+            cancellation?.dispose()
+        }
+    }
+
     private suspend fun request(
         config: BackendConfig,
         token: String?,
@@ -978,12 +1063,28 @@ class HermesRestClient(
         okhttp3.HttpUrl.Builder().scheme("https").host("placeholder.invalid").addPathSegment(value)
             .build().encodedPath.removePrefix("/")
 
+    private fun readBounded(input: java.io.InputStream, maximumBytes: Long): String {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > maximumBytes) throw IOException("Hermes file response exceeds the Android safety limit")
+            output.write(buffer, 0, read)
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+
     private companion object {
         val ALLOWED_ACTIONS = setOf("doctor", "security-audit", "gateway-restart")
         val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
         val MCP_INSTALL_ACTION = Regex("mcp-install-[a-z0-9-]{1,48}-[a-f0-9]{8}")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
+        const val MAX_FS_DATA_URL_RESPONSE_BYTES = 23L * 1024L * 1024L
+        const val MAX_FS_TEXT_RESPONSE_BYTES = 1L * 1024L * 1024L
     }
 }
 

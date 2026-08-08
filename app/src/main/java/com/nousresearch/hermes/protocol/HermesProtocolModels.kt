@@ -42,6 +42,22 @@ data class FileAttachResult(
 )
 
 @Serializable
+data class FsDataUrlResponse(
+    @SerialName("dataUrl") val dataUrl: String,
+)
+
+@Serializable
+data class FsTextPreview(
+    val path: String,
+    val text: String,
+    @SerialName("mimeType") val mimeType: String,
+    val language: String = "text",
+    @SerialName("byteSize") val byteSize: Long,
+    val binary: Boolean = false,
+    val truncated: Boolean = false,
+)
+
+@Serializable
 data class StatusResponse(
     val status: String = "unknown",
     val version: String? = null,
@@ -355,6 +371,8 @@ data class ProtocolMessage(
     val text: String? = null,
     val timestamp: Double? = null,
     @SerialName("tool_calls") val toolCalls: JsonElement? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    @SerialName("tool_name") val toolName: String? = null,
 )
 
 @Serializable
