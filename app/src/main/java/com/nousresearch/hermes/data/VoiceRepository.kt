@@ -102,7 +102,6 @@ class VoiceRepository @Inject constructor(
             if (!session.finish() && !terminal.isCompleted) throw IOException("Hermes rejected spoken completion")
             return withTimeout(STREAM_TIMEOUT_MILLIS) { terminal.await() }.also { completedNormally = true }
         } finally {
-            sink.getAndSet(null)?.stop()
             if (!completedNormally) session.stop()
         }
     }

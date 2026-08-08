@@ -216,6 +216,7 @@ class VoiceViewModel @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
+                player.stop()
                 if (generation == speechGeneration) {
                     mutableSpeechState.value = SpeechUiState(error = error.userVoiceMessage())
                 }
