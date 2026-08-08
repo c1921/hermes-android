@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.SystemClock
 import androidx.benchmark.macro.FrameTimingMetric
+import androidx.benchmark.macro.ExperimentalMetricApi
+import androidx.benchmark.macro.MemoryUsageMetric
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
@@ -52,6 +54,7 @@ class HermesStartupBenchmark {
 }
 
 @RunWith(AndroidJUnit4::class)
+@OptIn(ExperimentalMetricApi::class)
 class HermesSurfaceJourneyBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
@@ -97,7 +100,7 @@ class HermesSurfaceJourneyBenchmark {
     ) {
         benchmarkRule.measureRepeated(
             packageName = TARGET_PACKAGE_NAME,
-            metrics = listOf(FrameTimingMetric()),
+            metrics = listOf(FrameTimingMetric(), MemoryUsageMetric(MemoryUsageMetric.Mode.Last)),
             iterations = 3,
             startupMode = StartupMode.WARM,
             setupBlock = { pressHome() },

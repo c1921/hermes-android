@@ -13,6 +13,7 @@ import android.os.CancellationSignal
 import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -80,6 +81,7 @@ class MainActivity : ComponentActivity() {
             val entryRequests by entryRequestStore.deliveries.collectAsStateWithLifecycle()
             val biometricAvailable = authenticationAvailable()
             val locked = biometricReentry == true && privacyGate.isLocked(enabled = true)
+            ReportDrawnWhen { biometricReentry != null }
             when {
                 biometricReentry == null -> HermesTheme(skin) { }
                 locked -> {
