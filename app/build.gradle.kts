@@ -244,13 +244,6 @@ android {
         }
     }
 
-    sourceSets {
-        maybeCreate("nonMinifiedRelease").apply {
-            java.srcDir("src/nonMinifiedRelease/java")
-            manifest.srcFile("src/nonMinifiedRelease/AndroidManifest.xml")
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -282,7 +275,12 @@ android {
 }
 
 androidComponents {
+    onVariants(selector().withName("benchmarkRelease")) { variant ->
+        variant.sources.kotlin?.addStaticSourceDirectory("src/benchmarkRelease/java")
+        variant.sources.manifests.addStaticManifestFile("src/benchmarkRelease/AndroidManifest.xml")
+    }
     onVariants(selector().withName("nonMinifiedRelease")) { variant ->
+        variant.sources.kotlin?.addStaticSourceDirectory("src/nonMinifiedRelease/java")
         variant.sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
     }
 }
