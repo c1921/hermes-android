@@ -86,6 +86,7 @@ internal enum class NativeDestinationAction {
     USAGE,
     BILLING,
     REMOTE_DIAGNOSTICS,
+    STARMAP,
 }
 
 internal data class NativeDestinationEntry(
@@ -489,7 +490,7 @@ internal fun defaultNativeManageSections(): List<NativeManageSectionModel> = lis
         title = "Memory & learning",
         description = "Remote memory status without local execution or invented storage.",
         entries = listOf(
-            entry("starmap-memory-graph", "Starmap / Memory Graph", "No dedicated Hermes route is currently exposed for this view.", NativeEntryAvailability.UNAVAILABLE, "NOT EXPOSED", Icons.Outlined.Memory),
+            entry("starmap-memory-graph", "Starmap / Memory Graph", "Search and maintain profile-scoped learning nodes exposed by Hermes.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Memory, NativeDestinationAction.STARMAP),
         ),
     ),
     NativeManageSectionModel(

@@ -31,6 +31,8 @@ import com.nousresearch.hermes.protocol.OAuthSubmitResponse
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.ManagedFileReadResponse
 import com.nousresearch.hermes.protocol.ManagedFilesResponse
+import com.nousresearch.hermes.protocol.LearningMutationResponse
+import com.nousresearch.hermes.protocol.LearningNodeDetail
 import com.nousresearch.hermes.protocol.McpCatalogResponse
 import com.nousresearch.hermes.protocol.McpCatalogInstallResponse
 import com.nousresearch.hermes.protocol.McpOperationResponse
@@ -50,6 +52,7 @@ import com.nousresearch.hermes.protocol.SkillHubSearchResponse
 import com.nousresearch.hermes.protocol.SkillHubSourcesResponse
 import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
+import com.nousresearch.hermes.protocol.StarmapGraph
 import com.nousresearch.hermes.protocol.ToolsetInfo
 import com.nousresearch.hermes.protocol.ToolsetToggleResult
 import com.nousresearch.hermes.protocol.ServerConfigMutationResponse
@@ -761,6 +764,86 @@ class HermesRestClient(
         require(result.ok) { "Hermes did not confirm the profile model update" }
     }
 
+    suspend fun learningGraph(config: BackendConfig, token: String, profile: String): StarmapGraph {
+        val cleanProfile = profile.trim()
+        require(cleanProfile.isNotEmpty() && cleanProfile.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid Hermes profile is required"
+        }
+        return boundedGet(
+            config,
+            token,
+            "/api/learning/graph?profile=${encodePathSegment(cleanProfile)}",
+            MAX_STARMAP_RESPONSE_BYTES,
+            StarmapGraph.serializer(),
+        )
+    }
+
+    suspend fun learningNode(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        id: String,
+    ): LearningNodeDetail {
+        val cleanProfile = profile.trim()
+        val cleanId = id.trim()
+        require(cleanProfile.isNotEmpty() && cleanProfile.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid Hermes profile is required"
+        }
+        require(cleanId.isNotEmpty() && cleanId.length <= MAX_LEARNING_NODE_ID_CHARACTERS) {
+            "A valid learning node is required"
+        }
+        return boundedGet(
+            config,
+            token,
+            "/api/learning/node?id=${encodePathSegment(cleanId)}&profile=${encodePathSegment(cleanProfile)}",
+            MAX_LEARNING_NODE_RESPONSE_BYTES,
+            LearningNodeDetail.serializer(),
+        )
+    }
+
+    suspend fun updateLearningNode(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        id: String,
+        content: String,
+    ) {
+        val payload = learningNodePayload(profile, id, content)
+        val result = json.decodeFromJsonElement(
+            LearningMutationResponse.serializer(),
+            request(config, token, "/api/learning/node", method = "PUT", body = payload),
+        )
+        require(result.ok) { result.message.ifBlank { "Hermes did not confirm the learning update" } }
+    }
+
+    suspend fun deleteLearningNode(config: BackendConfig, token: String, profile: String, id: String) {
+        val payload = learningNodePayload(profile, id)
+        val result = json.decodeFromJsonElement(
+            LearningMutationResponse.serializer(),
+            request(config, token, "/api/learning/node", method = "DELETE", body = payload),
+        )
+        require(result.ok) { result.message.ifBlank { "Hermes did not confirm the learning deletion" } }
+    }
+
+    private fun learningNodePayload(profile: String, id: String, content: String? = null): JsonObject {
+        val cleanProfile = profile.trim()
+        val cleanId = id.trim()
+        require(cleanProfile.isNotEmpty() && cleanProfile.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid Hermes profile is required"
+        }
+        require(cleanId.isNotEmpty() && cleanId.length <= MAX_LEARNING_NODE_ID_CHARACTERS) {
+            "A valid learning node is required"
+        }
+        require(content == null || content.length <= MAX_LEARNING_NODE_CONTENT_CHARACTERS) {
+            "Learning node content is too large to edit on Android"
+        }
+        return buildJsonObject {
+            put("id", cleanId)
+            put("profile", cleanProfile)
+            content?.let { put("content", it) }
+        }
+    }
+
     suspend fun runDoctor(config: BackendConfig, token: String): ActionResponse =
         startAction(config, token, "/api/ops/doctor")
 
@@ -1159,6 +1242,10 @@ class HermesRestClient(
         const val MAX_PROFILE_TEXT_RESPONSE_BYTES = 192L * 1024L
         const val MAX_PROFILE_SETUP_RESPONSE_BYTES = 16L * 1024L
         const val MAX_PROFILE_MODEL_CHARACTERS = 200
+        const val MAX_LEARNING_NODE_ID_CHARACTERS = 512
+        const val MAX_LEARNING_NODE_CONTENT_CHARACTERS = 256 * 1024
+        const val MAX_STARMAP_RESPONSE_BYTES = 2L * 1024L * 1024L
+        const val MAX_LEARNING_NODE_RESPONSE_BYTES = 384L * 1024L
     }
 }
 

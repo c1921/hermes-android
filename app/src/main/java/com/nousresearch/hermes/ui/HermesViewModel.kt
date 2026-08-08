@@ -243,6 +243,15 @@ class HermesViewModel @Inject constructor(
     suspend fun saveProfileSoul(name: String, content: String) = repository.saveProfileSoul(name, content)
     suspend fun saveProfileModel(name: String, provider: String, model: String) =
         repository.saveProfileModel(name, provider, model)
+    fun refreshStarmap(profile: String) = viewModelScope.launch { repository.refreshStarmap(profile) }
+    fun loadLearningNode(profile: String, id: String) = viewModelScope.launch { repository.loadLearningNode(profile, id) }
+    fun updateLearningNode(profile: String, id: String, content: String) = viewModelScope.launch {
+        repository.updateLearningNode(profile, id, content)
+    }
+    fun deleteLearningNode(profile: String, id: String) = viewModelScope.launch {
+        repository.deleteLearningNode(profile, id)
+    }
+    fun closeLearningNode() = repository.closeLearningNode()
     fun runDiagnostic(action: DiagnosticAction) = viewModelScope.launch { repository.runDiagnostic(action) }
     fun refreshProviders() = viewModelScope.launch { repository.refreshProviders(refresh = true) }
     fun startProviderOAuth(providerId: String) = viewModelScope.launch { repository.startProviderOAuth(providerId) }

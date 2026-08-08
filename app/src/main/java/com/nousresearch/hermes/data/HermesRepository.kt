@@ -71,6 +71,8 @@ import com.nousresearch.hermes.protocol.SlashCommandCatalog
 import com.nousresearch.hermes.protocol.SlashCommandResult
 import com.nousresearch.hermes.protocol.SlashCompletionResult
 import com.nousresearch.hermes.protocol.StatusResponse
+import com.nousresearch.hermes.protocol.StarmapGraph
+import com.nousresearch.hermes.protocol.LearningNodeDetail
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.SubscriptionStateResponse
 import com.nousresearch.hermes.protocol.SubagentInterruptResponse
@@ -152,6 +154,13 @@ data class HermesState(
     val activeProfile: String = "default",
     val currentProfile: String = "default",
     val managementLoading: Boolean = false,
+    val starmapProfile: String? = null,
+    val starmap: StarmapGraph? = null,
+    val starmapLoading: Boolean = false,
+    val starmapNodeId: String? = null,
+    val starmapNode: LearningNodeDetail? = null,
+    val starmapNotice: String? = null,
+    val starmapError: String? = null,
     val diagnostics: Map<DiagnosticAction, DiagnosticRunState> = emptyMap(),
     val providerOptions: ModelOptionsResult? = null,
     val providerEnv: Map<String, EnvVarInfo> = emptyMap(),
@@ -1965,6 +1974,109 @@ class HermesRepository @Inject constructor(
         val (backend, token) = activeCredentials()
         restClient.updateProfileModel(backend, token, name, provider, model)
         refreshProfiles()
+    }
+
+    suspend fun refreshStarmap(profile: String) {
+        val selectedProfile = profile.normalizedProfile()
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            starmapProfile = selectedProfile,
+            starmapLoading = true,
+            starmapNotice = null,
+            starmapError = null,
+        )
+        try {
+            val graph = restClient.learningGraph(backend, token, selectedProfile)
+            if (mutableState.value.backend?.id == backend.id && mutableState.value.starmapProfile == selectedProfile) {
+                mutableState.value = mutableState.value.copy(starmap = graph, starmapLoading = false)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            mutableState.value = mutableState.value.copy(
+                starmapLoading = false,
+                starmapError = error.message ?: "Hermes could not load the learning graph",
+            )
+        }
+    }
+
+    suspend fun loadLearningNode(profile: String, id: String) {
+        val selectedProfile = profile.normalizedProfile()
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(
+            starmapProfile = selectedProfile,
+            starmapNodeId = id,
+            starmapNode = null,
+            starmapLoading = true,
+            starmapNotice = null,
+            starmapError = null,
+        )
+        try {
+            val detail = restClient.learningNode(backend, token, selectedProfile, id)
+            if (
+                mutableState.value.backend?.id == backend.id &&
+                mutableState.value.starmapProfile == selectedProfile &&
+                mutableState.value.starmapNodeId == id
+            ) {
+                mutableState.value = mutableState.value.copy(starmapNode = detail, starmapLoading = false)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            mutableState.value = mutableState.value.copy(
+                starmapLoading = false,
+                starmapError = error.message ?: "Hermes could not load this learning node",
+            )
+        }
+    }
+
+    suspend fun updateLearningNode(profile: String, id: String, content: String) {
+        val selectedProfile = profile.normalizedProfile()
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(starmapLoading = true, starmapNotice = null, starmapError = null)
+        try {
+            restClient.updateLearningNode(backend, token, selectedProfile, id, content)
+            mutableState.value = mutableState.value.copy(
+                starmapNode = mutableState.value.starmapNode?.copy(content = content),
+                starmapLoading = false,
+            )
+            refreshStarmap(selectedProfile)
+            mutableState.value = mutableState.value.copy(starmapNotice = "Learning node updated")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            mutableState.value = mutableState.value.copy(
+                starmapLoading = false,
+                starmapError = error.message ?: "Hermes could not update this learning node",
+            )
+        }
+    }
+
+    suspend fun deleteLearningNode(profile: String, id: String) {
+        val selectedProfile = profile.normalizedProfile()
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(starmapLoading = true, starmapNotice = null, starmapError = null)
+        try {
+            restClient.deleteLearningNode(backend, token, selectedProfile, id)
+            mutableState.value = mutableState.value.copy(
+                starmapNodeId = null,
+                starmapNode = null,
+                starmapLoading = false,
+            )
+            refreshStarmap(selectedProfile)
+            mutableState.value = mutableState.value.copy(starmapNotice = "Learning node removed")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            mutableState.value = mutableState.value.copy(
+                starmapLoading = false,
+                starmapError = error.message ?: "Hermes could not remove this learning node",
+            )
+        }
+    }
+
+    fun closeLearningNode() {
+        mutableState.value = mutableState.value.copy(starmapNodeId = null, starmapNode = null, starmapError = null)
     }
 
     suspend fun runDiagnostic(action: DiagnosticAction) {

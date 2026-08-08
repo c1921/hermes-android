@@ -43,8 +43,8 @@ integration, full device accessibility, and release proof remain incomplete.
 | Rich conversation | Typed parts, artifacts, Markdown, tool disclosure, and respectful near-end streaming follow exist | Specialised safe reference/media actions and device/a11y proof remain |
 | Profiles | CRUD/default/start plus bounded SOUL editing, setup-command copy, and explicit provider/model assignment exist in the current patch | Profile import/export exchanges backend filesystem paths, not bounded archive bytes suitable for Android SAF |
 | MCP/toolsets | Catalog review/install/test/toggle/remove/reload and toolset toggles exist | Custom edit, OAuth, per-tool filters, and richer toolset setup remain client work; revision-safe patching lacks a server contract |
-| Messaging/webhooks/cron | Messaging and Cron CRUD/run history exist | Pairing, supported webhook CRUD, delivery targets, and blueprints remain; requested webhook edit/test routes do not exist upstream |
-| Memory/maintenance | Diagnostics and host status exist | Memory/Curator/learning/Starmap plus logs/backup/update surfaces remain client work |
+| Messaging/webhooks/cron | Messaging and Cron CRUD/run history exist | Pairing, delivery targets, and blueprints remain. Webhook HTTP routes do not accept a profile; Desktop scopes them by selecting a profile-specific child process inside Electron, which Android cannot reproduce safely. Requested webhook edit/test routes also do not exist upstream |
+| Memory/maintenance | Profile-scoped Starmap graph/search/node detail/edit/removal, diagnostics, and host status exist | Memory/Curator routes still target only the serving process rather than an explicit remote profile; logs/backup/update surfaces remain client work |
 | Android-native security/media | Secure-screen and voice playback exist | Biometric re-entry, MediaSession controls, and purposeful haptics remain client work and need physical-device proof |
 | Release quality | JVM/lint/build gates are available | TalkBack/switch/keyboard/foldable tests, benchmarks, battery/performance, reproducibility, provenance, and owner device acceptance remain |
 
@@ -58,6 +58,8 @@ integration, full device accessibility, and release proof remain incomplete.
 - Added bounded, acknowledgement-checked SOUL reads/writes, display/copy-only
   setup guidance, and explicit profile provider/model assignment. Unsaved
   identity edits use saveable state and require discard confirmation.
+- Replaced the stale Starmap placeholder with the current profile-scoped
+  `/api/learning` graph and bounded node maintenance contract.
 
 The practical conclusion is not “Android is missing most of Desktop.” The
 foreground client is broad and functional. The remaining distance is

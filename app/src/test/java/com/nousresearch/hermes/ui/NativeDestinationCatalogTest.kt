@@ -1,7 +1,6 @@
 package com.nousresearch.hermes.ui
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,6 +47,9 @@ class NativeDestinationCatalogTest {
             NativeEntryAvailability.REMOTE_STATUS,
             allEntries.first { it.id == "host-capabilities" }.availability,
         )
-        assertFalse(allEntries.first { it.id == "starmap-memory-graph" }.availability == NativeEntryAvailability.AVAILABLE)
+        assertEquals(
+            NativeEntryAvailability.AVAILABLE,
+            allEntries.first { it.id == "starmap-memory-graph" }.availability,
+        )
     }
 }

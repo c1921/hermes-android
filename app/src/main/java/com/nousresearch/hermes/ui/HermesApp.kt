@@ -299,6 +299,11 @@ private data class ManagementActions(
     val profileIdentity: suspend (String) -> ProfileIdentityDraft,
     val saveProfileSoul: suspend (String, String) -> Unit,
     val saveProfileModel: suspend (String, String, String) -> Unit,
+    val refreshStarmap: (String) -> Unit,
+    val loadLearningNode: (String, String) -> Unit,
+    val closeLearningNode: () -> Unit,
+    val updateLearningNode: (String, String, String) -> Unit,
+    val deleteLearningNode: (String, String) -> Unit,
     val runDiagnostic: (DiagnosticAction) -> Unit,
     val refreshProviders: () -> Unit,
     val startProviderOAuth: (String) -> Unit,
@@ -418,6 +423,11 @@ fun HermesApp(
             profileIdentity = viewModel::profileIdentity,
             saveProfileSoul = viewModel::saveProfileSoul,
             saveProfileModel = viewModel::saveProfileModel,
+            refreshStarmap = viewModel::refreshStarmap,
+            loadLearningNode = viewModel::loadLearningNode,
+            closeLearningNode = viewModel::closeLearningNode,
+            updateLearningNode = viewModel::updateLearningNode,
+            deleteLearningNode = viewModel::deleteLearningNode,
             runDiagnostic = viewModel::runDiagnostic,
             refreshProviders = viewModel::refreshProviders,
             startProviderOAuth = viewModel::startProviderOAuth,
@@ -1196,6 +1206,12 @@ private fun HermesWorkspace(
                     ManageSection.SERVER_AND_ACCOUNT,
                     ManageDestination.DIAGNOSTICS,
                 )
+                NativeDestinationAction.STARMAP -> navigator.openManage(
+                    backendId,
+                    profileId,
+                    ManageSection.MEMORY_AND_LEARNING,
+                    ManageDestination.STARMAP,
+                )
                 null -> Unit
             }
         }
@@ -1355,8 +1371,14 @@ private fun HermesWorkspace(
                         onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
-                    WorkspaceContent.STARMAP -> NativeDestinationScreen(
-                        destination = NativeDestination.MANAGE,
+                    WorkspaceContent.STARMAP -> StarmapScreen(
+                        state = state,
+                        profile = profileId,
+                        onRefresh = managementActions.refreshStarmap,
+                        onOpenNode = managementActions.loadLearningNode,
+                        onCloseNode = managementActions.closeLearningNode,
+                        onUpdateNode = managementActions.updateLearningNode,
+                        onDeleteNode = managementActions.deleteLearningNode,
                         onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )

@@ -3,6 +3,7 @@ package com.nousresearch.hermes.protocol
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class SkillInfo(
@@ -147,6 +148,63 @@ data class ProfileSoulResponse(
 @Serializable
 data class ProfileSetupCommandResponse(
     val command: String = "",
+)
+
+@Serializable
+data class StarmapNode(
+    val id: String,
+    val label: String,
+    val kind: String,
+    @SerialName("memorySource") val memorySource: String? = null,
+    val timestamp: Long? = null,
+    val category: String = "",
+    @SerialName("useCount") val useCount: Int = 0,
+    val state: String = "",
+    @SerialName("createdBy") val createdBy: String? = null,
+    val pinned: Boolean = false,
+)
+
+@Serializable
+data class StarmapEdge(
+    val source: String,
+    val target: String,
+)
+
+@Serializable
+data class StarmapCluster(
+    val category: String,
+    val count: Int,
+)
+
+@Serializable
+data class StarmapMemoryCard(
+    val source: String,
+    val timestamp: Long? = null,
+    val title: String,
+    val body: String,
+)
+
+@Serializable
+data class StarmapGraph(
+    val nodes: List<StarmapNode> = emptyList(),
+    val edges: List<StarmapEdge> = emptyList(),
+    val clusters: List<StarmapCluster> = emptyList(),
+    val memory: List<StarmapMemoryCard> = emptyList(),
+    val stats: JsonObject = JsonObject(emptyMap()),
+)
+
+@Serializable
+data class LearningNodeDetail(
+    val content: String,
+    val kind: String,
+    val label: String,
+    val ok: Boolean,
+)
+
+@Serializable
+data class LearningMutationResponse(
+    val message: String = "",
+    val ok: Boolean,
 )
 
 @Serializable
