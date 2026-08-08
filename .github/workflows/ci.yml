@@ -191,7 +191,7 @@ jobs:
       - name: Build second clean unsigned candidate
         run: |
           set -euo pipefail
-          ./gradlew --no-daemon --no-parallel --max-workers=2 clean \
+          ./gradlew --no-daemon --no-parallel --max-workers=2 --no-build-cache --rerun-tasks clean \
             -Phermes.provenance.channel=release \
             :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease
           mkdir -p "$RUNNER_TEMP/hermes-candidate/second"
