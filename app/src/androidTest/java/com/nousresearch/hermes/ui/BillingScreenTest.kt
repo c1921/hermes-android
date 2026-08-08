@@ -54,7 +54,8 @@ class BillingScreenTest {
         compose.onNodeWithText("Super / $20/mo").assertExists()
         compose.onNodeWithText("ACCOUNT").assertExists()
         compose.onNodeWithText("Visa •••• 4242").assertExists()
-        compose.onNodeWithText("USAGE").performScrollTo().assertExists()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("USAGE"))
+        compose.onNodeWithText("USAGE").assertExists()
         compose.onNodeWithText("$40.00 remaining").performScrollTo().assertExists()
     }
 

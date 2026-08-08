@@ -50,6 +50,7 @@ class MessageActionsTest {
             }
         }
 
+        compose.waitForIdle()
         compose.onNodeWithText("Rendered heading").assertExists()
         compose.onNodeWithText("First item").assertExists()
         compose.onNodeWithText("val answer = 42", substring = true).assertExists()
