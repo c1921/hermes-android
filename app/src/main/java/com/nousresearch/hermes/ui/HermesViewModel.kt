@@ -83,6 +83,7 @@ class HermesViewModel @Inject constructor(
 ) : ViewModel() {
     val state = repository.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), repository.state.value)
     val connectionState = repository.connectionState
+    val startupReady = repository.startupReady.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     private val detectedArtifactIndex = DetectedArtifactIndex(HermesArtifactSessionLoader(restClient))
     private val mutableArtifactIndex = MutableStateFlow(ArtifactIndexUiState())
     private val mutableArtifactPreferences = MutableStateFlow(

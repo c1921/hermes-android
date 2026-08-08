@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nousresearch.hermes.data.PrivacyPreferences
-import com.nousresearch.hermes.data.HermesRepository
 import com.nousresearch.hermes.platform.HermesEntryRequestStore
 import com.nousresearch.hermes.platform.parseHermesEntryRequest
 import com.nousresearch.hermes.platform.publishPrivacySafeShortcuts
@@ -43,8 +42,8 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var privacyPreferences: PrivacyPreferences
-    @Inject lateinit var hermesRepository: HermesRepository
     @Inject lateinit var entryRequestStore: HermesEntryRequestStore
+    private var workspaceReady = false
     private val privacyGate: PrivacyGateViewModel by viewModels()
     private var biometricPromptActive = false
     private var biometricCancellation: CancellationSignal? = null
@@ -81,11 +80,8 @@ class MainActivity : ComponentActivity() {
             val biometricReentry by biometricReentryFlow.collectAsStateWithLifecycle(initialValue = null)
             val skin by privacyPreferences.skin.collectAsStateWithLifecycle(initialValue = HermesSkin.NOUS)
             val entryRequests by entryRequestStore.deliveries.collectAsStateWithLifecycle()
-            val hermesState by hermesRepository.state.collectAsStateWithLifecycle()
             val biometricAvailable = authenticationAvailable()
             val locked = biometricReentry == true && privacyGate.isLocked(enabled = true)
-            val workspaceReady = hermesState.backend == null ||
-                (!hermesState.loading && !hermesState.backendTransitionInProgress)
             ReportDrawnWhen {
                 biometricReentry != null && (locked || workspaceReady)
             }
@@ -115,6 +111,7 @@ class MainActivity : ComponentActivity() {
                         lifecycleScope.launch { privacyPreferences.setSkin(selected) }
                     },
                     entryDelivery = entryRequests.firstOrNull(),
+                    onWorkspaceReady = { workspaceReady = true },
                     onEntryConsumed = ::consumeEntryRequest,
                     onEntryFailed = entryRequestStore::fail,
                     onEntryRetry = entryRequestStore::retry,

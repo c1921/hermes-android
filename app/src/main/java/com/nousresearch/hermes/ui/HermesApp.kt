@@ -356,6 +356,7 @@ fun HermesApp(
     onBiometricReentryChange: (Boolean) -> Unit = {},
     skin: HermesSkin = HermesSkin.NOUS,
     onSkinChange: (HermesSkin) -> Unit = {},
+    onWorkspaceReady: () -> Unit = {},
     entryDelivery: HermesEntryDelivery? = null,
     onEntryConsumed: (String) -> Unit = {},
     onEntryFailed: (String, String) -> Unit = { _, _ -> },
@@ -364,10 +365,14 @@ fun HermesApp(
     viewModel: HermesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val startupReady by viewModel.startupReady.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val artifactIndex by viewModel.artifactIndex.collectAsStateWithLifecycle()
     val artifactPreferences by viewModel.artifactPreferences.collectAsStateWithLifecycle()
     val hostBackup by viewModel.hostBackup.collectAsStateWithLifecycle()
+    LaunchedEffect(startupReady) {
+        if (startupReady) onWorkspaceReady()
+    }
     LaunchedEffect(state.backend?.id) { viewModel.bindHostBackupBackend(state.backend?.id) }
     val latestConnectionState = rememberUpdatedState(connection)
     val latestHermesState = rememberUpdatedState(state)
