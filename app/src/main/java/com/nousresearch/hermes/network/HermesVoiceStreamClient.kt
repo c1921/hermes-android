@@ -2,6 +2,7 @@ package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.audio.PcmFrameAssembler
 import com.nousresearch.hermes.audio.VoicePcmFormat
+import com.nousresearch.hermes.audio.MAX_PCM_CHUNK_BYTES
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
 import java.io.IOException
@@ -176,6 +177,10 @@ class HermesVoiceStreamClient @Inject constructor(
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
             if (terminal.get()) return
+            if (bytes.size > MAX_PCM_CHUNK_BYTES) {
+                fail(VoiceStreamFailure.INVALID_AUDIO)
+                return
+            }
             val output = try {
                 val active = assembler ?: throw IllegalArgumentException("PCM arrived before start")
                 active.append(bytes.toByteArray())

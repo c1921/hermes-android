@@ -436,7 +436,9 @@ class AndroidVoicePlayer @Inject constructor(
     @Synchronized
     private fun fail(message: String) {
         val callback = errorCallback
+        val streamStopCallback = mediaStopCallback.takeIf { pcmTrack != null }
         finish()
+        streamStopCallback?.invoke()
         callback?.invoke(message)
     }
 

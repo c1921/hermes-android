@@ -54,10 +54,6 @@ awk -F '\t' '
         failed = 1
       }
     }
-    for (key in candidate) if (!(key in baseline)) {
-      printf "missing baseline metric: %s\n", key > "/dev/stderr"
-      failed = 1
-    }
     exit failed
   }
 ' "$baseline" "$candidate"

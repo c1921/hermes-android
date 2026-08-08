@@ -2349,18 +2349,23 @@ internal fun Timeline(
     var followLatest by rememberSaveable { mutableStateOf(true) }
     var focusConsumed by rememberSaveable(focusMessageId) { mutableStateOf(false) }
     var initialScrollObserved by remember { mutableStateOf(false) }
+    var previousTotalItems by remember { mutableIntStateOf(0) }
     LaunchedEffect(listState) {
         snapshotFlow {
-            Pair(
+            Triple(
                 listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
                 listState.layoutInfo.totalItemsCount,
+                listState.isScrollInProgress,
             )
-        }.collect { (lastVisibleIndex, totalItems) ->
+        }.collect { (lastVisibleIndex, totalItems, isScrollInProgress) ->
             if (initialScrollObserved) {
-                followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+                if (!(totalItems > previousTotalItems && !isScrollInProgress)) {
+                    followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+                }
             } else {
                 initialScrollObserved = true
             }
+            previousTotalItems = totalItems
         }
     }
     LaunchedEffect(items.size, items.lastOrNull(), focusMessageId, followLatest) {

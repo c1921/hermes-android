@@ -88,7 +88,9 @@ class HermesSurfaceJourneyBenchmark {
         val expectedText = "Deterministic benchmark composer input"
         composer.click()
         composer.text = expectedText
-        require(composer.text == expectedText) { "Benchmark composer field did not accept deterministic input" }
+        requireNotNull(wait(Until.findObject(By.textContains(expectedText)), 5_000L)) {
+            "Benchmark composer field did not accept deterministic input"
+        }
         waitForIdle()
     }
 

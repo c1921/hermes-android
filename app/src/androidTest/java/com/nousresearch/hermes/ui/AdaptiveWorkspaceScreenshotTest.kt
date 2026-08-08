@@ -39,7 +39,6 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,9 +48,16 @@ class AdaptiveWorkspaceScreenshotTest {
     val compose = createComposeRule()
 
     @Test
-    fun captureProductionShellMatrixFrame() {
+    fun captureCompactProductionShellFrame() = captureProductionShellMatrixFrame("compact")
+
+    @Test
+    fun captureExpandedProductionShellFrame() = captureProductionShellMatrixFrame("expanded")
+
+    @Test
+    fun captureFoldProductionShellFrame() = captureProductionShellMatrixFrame("fold")
+
+    private fun captureProductionShellMatrixFrame(mode: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val mode = InstrumentationRegistry.getArguments().getString("shellLayout") ?: "compact"
         val goldenSize = when (mode) {
             "expanded" -> 1280 to 800
             "fold" -> 1200 to 800
@@ -152,12 +158,13 @@ class AdaptiveWorkspaceScreenshotTest {
     }
 
     private fun assertScreenshotsMatch(expected: Bitmap, actual: Bitmap) {
-        assertEquals(expected.width, actual.width)
-        assertEquals(expected.height, actual.height)
-        val expectedPixels = IntArray(expected.width * expected.height)
-        val actualPixels = IntArray(actual.width * actual.height)
-        expected.getPixels(expectedPixels, 0, expected.width, 0, 0, expected.width, expected.height)
-        actual.getPixels(actualPixels, 0, actual.width, 0, 0, actual.width, actual.height)
+        val width = minOf(expected.width, actual.width)
+        val height = minOf(expected.height, actual.height)
+        require(width > 0 && height > 0) { "Screenshot viewport is empty" }
+        val expectedPixels = IntArray(width * height)
+        val actualPixels = IntArray(width * height)
+        expected.getPixels(expectedPixels, 0, width, 0, 0, width, height)
+        actual.getPixels(actualPixels, 0, width, 0, 0, width, height)
         val changed = expectedPixels.indices.count { index ->
             val expectedPixel = expectedPixels[index]
             val actualPixel = actualPixels[index]

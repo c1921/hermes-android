@@ -5,7 +5,10 @@
     "commit": "fd3a9b9bc3674f68f404f269aed06a1a35914d0c",
     "device": "pixel6Api36",
     "androidApi": 36,
-    "repetitions": 5
+    "repetitions": {
+      "startup": 5,
+      "surface": 3
+    }
   },
   "regressionLimit": 0.1,
   "metrics": {
