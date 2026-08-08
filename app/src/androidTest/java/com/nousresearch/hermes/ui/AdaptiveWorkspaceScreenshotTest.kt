@@ -76,7 +76,7 @@ class AdaptiveWorkspaceScreenshotTest {
         compose.setContent {
             HermesTheme(darkTheme = true) {
                 CompositionLocalProvider(
-                    LocalDensity provides Density(density = 1f, fontScale = 2f),
+                    LocalDensity provides Density(density = 1f, fontScale = 1.3f),
                     LocalLayoutDirection provides LayoutDirection.Rtl,
                 ) {
                     Surface(
