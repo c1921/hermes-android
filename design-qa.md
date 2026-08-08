@@ -95,6 +95,41 @@ The compact Chats surface uses a modal navigation drawer; expanded layouts keep
 the session rail and detail pane. Manage section containers are flat, avoiding
 nested card hierarchies.
 
+### Adaptive product shell verification — 2026-08-08
+
+Issue #17 was exercised on the isolated Android 16 / API 36 emulator at
+320×640 and 1280×800 pixels at 160 dpi, with 130% text, forced RTL, and
+animations disabled. The device was restored to 320×640 after the matrix.
+
+- Material 3 Adaptive 1.2.0 now supplies the current window size and posture.
+  The canonical expanded breakpoint replaces the former fixed local `840.dp`
+  branch; any separating or occluding hinge collapses to one safe pane.
+- Compact and expanded modes call the same exhaustive production destination
+  renderer. Expanded mode uses a true persistent rail rather than wrapping it
+  in a modal drawer, and the shared expanded boundary consumes system-bar
+  insets.
+- `AdaptiveWorkspaceShell` owns the production compact/list-detail transition,
+  destination-keyed saveable state, and an optional stable-resource-keyed
+  supporting pane for tool output or artifact detail.
+- `AdaptiveWorkspaceStateTest` calls that production shell, moves a focused,
+  populated composer compact → expanded → compact, then emulates saved-instance
+  restoration. It verifies route/session identity, the hoisted runtime owner,
+  draft, focus, and supporting-pane visibility: 1/1 passed.
+- `AdaptiveWorkspaceResizeTest` changes the real emulator display from phone
+  portrait (320×640) to tablet landscape (1280×800) while the production shell
+  is active and verifies the compact → expanded transition preserves draft and
+  focus: 1/1 passed. The save/restore test separately covers activity
+  recreation because the generic resize harness handles size callbacks in
+  place.
+- `AdaptiveWorkspaceLayoutTest` verifies compact, medium, expanded, large, and
+  separating/occluding-hinge policy: 3/3 passed.
+- `AdaptiveWorkspaceScreenshotTest` produced and passed three deterministic
+  production-shell frames. The captures were visually compared for compact,
+  expanded list/detail/support, and wide hinged collapse:
+  [compact](docs/design/evidence/issue17-shell-compact-api36.png),
+  [expanded](docs/design/evidence/issue17-shell-expanded-api36.png), and
+  [hinged](docs/design/evidence/issue17-shell-fold-api36.png).
+
 - [x] Exact live-site palette tokens
 - [x] Real first-party hero and badge assets
 - [x] Official Desktop launcher icon

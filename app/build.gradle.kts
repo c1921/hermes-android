@@ -251,6 +251,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.material3.adaptive)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material.icons)
     implementation(libs.compose.material3)

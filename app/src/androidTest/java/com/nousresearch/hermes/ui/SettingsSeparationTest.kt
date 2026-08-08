@@ -1,7 +1,9 @@
 package com.nousresearch.hermes.ui
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToIndex
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.ui.theme.HermesSkin
@@ -29,6 +31,7 @@ class SettingsSeparationTest {
 
         compose.onNodeWithText("APP SETTINGS").assertExists()
         compose.onNodeWithText("APPEARANCE").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(1)
         compose.onNodeWithText("SECURE SCREEN").assertExists()
     }
 
