@@ -190,6 +190,7 @@ class HermesRestClient(
     suspend fun transcribeAudio(
         config: BackendConfig,
         token: String,
+        profile: String,
         dataUrl: String,
         mimeType: String,
     ): AudioTranscriptionResponse = json.decodeFromJsonElement(
@@ -197,7 +198,7 @@ class HermesRestClient(
         request(
             config,
             token,
-            "/api/audio/transcribe",
+            "/api/audio/transcribe?profile=${encodePathSegment(profile)}",
             method = "POST",
             body = buildJsonObject {
                 put("data_url", dataUrl)
@@ -209,13 +210,14 @@ class HermesRestClient(
     suspend fun speakText(
         config: BackendConfig,
         token: String,
+        profile: String,
         text: String,
     ): AudioSpeakResponse = json.decodeFromJsonElement(
         AudioSpeakResponse.serializer(),
         request(
             config,
             token,
-            "/api/audio/speak",
+            "/api/audio/speak?profile=${encodePathSegment(profile)}",
             method = "POST",
             body = buildJsonObject { put("text", text) },
         ),

@@ -26,6 +26,7 @@ class HermesRestClientVoiceTest {
             val result = client.transcribeAudio(
                 config(server),
                 "hermes_session_at=abc",
+                "work/ops",
                 "data:audio/mp4;base64,dGVzdA==",
                 "audio/mp4",
             )
@@ -34,7 +35,7 @@ class HermesRestClientVoiceTest {
             assertEquals("local", result.provider)
             val request = server.takeRequest()
             assertEquals("POST", request.method)
-            assertEquals("/api/audio/transcribe", request.path)
+            assertEquals("/api/audio/transcribe?profile=work%2Fops", request.path)
             assertEquals("hermes_session_at=abc", request.getHeader("Cookie"))
             val body = json.parseToJsonElement(request.body.readUtf8()).jsonObject
             assertEquals("audio/mp4", body.getValue("mime_type").jsonPrimitive.content)
@@ -55,13 +56,14 @@ class HermesRestClientVoiceTest {
             val result = HermesRestClient(OkHttpClient(), json).speakText(
                 config(server),
                 "hermes_session_at=abc",
+                "work/ops",
                 "Read this response",
             )
 
             assertEquals("audio/mpeg", result.mimeType)
             assertEquals("edge", result.provider)
             val request = server.takeRequest()
-            assertEquals("/api/audio/speak", request.path)
+            assertEquals("/api/audio/speak?profile=work%2Fops", request.path)
             assertEquals("Read this response", json.parseToJsonElement(request.body.readUtf8()).jsonObject.getValue("text").jsonPrimitive.content)
         }
     }

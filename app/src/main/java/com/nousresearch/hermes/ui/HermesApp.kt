@@ -1269,7 +1269,7 @@ private fun HermesWorkspace(
             fun ConversationContent() {
                 if (conversationReady) {
                     ChatSurface(
-                        state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
+                        state, connection, profileId, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
                         onAttach, onRetryAttachment, onCancelAttachment, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions,
                         Modifier.weight(1f),
@@ -2165,6 +2165,7 @@ private fun SessionRow(
 private fun ChatSurface(
     state: HermesState,
     connection: GatewayConnectionState,
+    profileId: String,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onDraftChange: (String) -> Unit,
@@ -2193,7 +2194,7 @@ private fun ChatSurface(
 ) {
     val voiceViewModel: VoiceViewModel = hiltViewModel()
     val speechState by voiceViewModel.speechState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.backend?.id) { state.backend?.let(voiceViewModel::bind) }
+    LaunchedEffect(state.backend?.id, profileId) { state.backend?.let { voiceViewModel.bind(it, profileId) } }
     DisposableEffect(voiceViewModel) {
         onDispose {
             voiceViewModel.cancelRecording()

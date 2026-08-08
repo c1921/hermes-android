@@ -16,7 +16,7 @@ class VoiceRepository @Inject constructor(
     private val rest: HermesRestClient,
     private val credentials: SecureTokenStore,
 ) {
-    suspend fun transcribe(config: BackendConfig, recording: VoiceRecording): String {
+    suspend fun transcribe(config: BackendConfig, profile: String, recording: VoiceRecording): String {
         try {
             require(recording.durationMillis >= MIN_RECORDING_MILLIS) { "Hold the microphone a little longer before releasing" }
             val bytes = withContext(Dispatchers.IO) {
@@ -25,7 +25,7 @@ class VoiceRepository @Inject constructor(
                 recording.file.readBytes()
             }
             val payload = "data:${recording.mimeType};base64,${Base64.getEncoder().encodeToString(bytes)}"
-            val response = rest.transcribeAudio(config, credential(config), payload, recording.mimeType)
+            val response = rest.transcribeAudio(config, credential(config), profile, payload, recording.mimeType)
             if (!response.ok) throw IOException("Hermes could not transcribe the recording")
             return response.transcript.trim()
         } finally {
@@ -33,9 +33,9 @@ class VoiceRepository @Inject constructor(
         }
     }
 
-    suspend fun speak(config: BackendConfig, text: String): SpokenAudio {
+    suspend fun speak(config: BackendConfig, profile: String, text: String): SpokenAudio {
         require(text.isNotBlank()) { "There is no Hermes reply to speak" }
-        val response = rest.speakText(config, credential(config), text)
+        val response = rest.speakText(config, credential(config), profile, text)
         if (!response.ok) throw IOException("Hermes could not generate a spoken reply")
         return decodeSpokenAudio(response.dataUrl, response.mimeType)
     }

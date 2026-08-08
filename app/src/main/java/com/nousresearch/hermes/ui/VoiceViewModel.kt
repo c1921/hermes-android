@@ -58,6 +58,7 @@ class VoiceViewModel @Inject constructor(
     val speechState = mutableSpeechState.asStateFlow()
 
     private var backend: BackendConfig? = null
+    private var profile: String? = null
     private var clockJob: Job? = null
     private var levelJob: Job? = null
     private var timeoutJob: Job? = null
@@ -65,11 +66,12 @@ class VoiceViewModel @Inject constructor(
     private var speechJob: Job? = null
     private var speechGeneration = 0L
 
-    fun bind(config: BackendConfig) {
-        if (backend?.id != config.id) {
+    fun bind(config: BackendConfig, profile: String) {
+        if (backend?.id != config.id || this.profile != profile) {
             cancelRecording(feedback = false)
             stopSpeaking()
             backend = config
+            this.profile = profile
             mutableState.value = VoiceUiState()
         }
     }
@@ -117,13 +119,14 @@ class VoiceViewModel @Inject constructor(
     fun stopAndTranscribe() {
         if (mutableState.value.phase != VoicePhase.RECORDING) return
         val config = backend ?: return cancelRecording("Reconnect Hermes before using voice input")
+        val profile = profile ?: return cancelRecording("Reopen the Hermes profile before using voice input")
         haptics.perform(VoiceHaptic.RECORD_STOP)
         stopMetering()
         mutableState.update { it.copy(phase = VoicePhase.TRANSCRIBING, level = 0f, error = null) }
         transcriptionJob = viewModelScope.launch {
             try {
                 val recording = withContext(Dispatchers.IO) { recorder.stop() }
-                val transcript = voice.transcribe(config, recording)
+                val transcript = voice.transcribe(config, profile, recording)
                 if (transcript.isBlank()) {
                     mutableState.value = VoiceUiState(error = "Hermes did not detect speech in that recording")
                 } else {
@@ -174,7 +177,8 @@ class VoiceViewModel @Inject constructor(
         speechJob = viewModelScope.launch {
             try {
                 val config = backend ?: throw IllegalStateException("Reconnect Hermes before playing spoken replies")
-                val audio = voice.speak(config, speakableText)
+                val profile = profile ?: throw IllegalStateException("Reopen the Hermes profile before playing spoken replies")
+                val audio = voice.speak(config, profile, speakableText)
                 if (generation != speechGeneration) return@launch
                 player.play(
                     audio = audio,
