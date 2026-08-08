@@ -120,12 +120,15 @@ jobs:
             :benchmark:pixel6Api36BenchmarkReleaseAndroidTest
           ./gradlew --no-daemon --no-parallel --max-workers=1 \
             :app:generateBaselineProfile
+      - name: Enforce accepted API 36 benchmark baseline
+        run: ./scripts/check-benchmark-regression.sh benchmark/build/outputs benchmark/accepted-baseline.json
       - uses: actions/upload-artifact@v4
         with:
           name: hermes-android-api36-benchmarks
           path: |
             benchmark/build/outputs/**
             app/src/release/generated/baselineProfiles/**
+            benchmark/accepted-baseline.json
           if-no-files-found: error
           retention-days: 14
 

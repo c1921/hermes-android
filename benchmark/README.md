@@ -50,6 +50,8 @@ candidate values may be at most 10% above the accepted baseline. Missing
 metrics fail the comparison. `BenchmarkHarnessTest` verifies the exact 10%
 boundary and rejection above it.
 
-No physical-device result is inferred from the emulator. The accepted API 36
-baseline and its 10% CI comparison are recorded from the manually dispatched
-evidence run; physical reference-device results remain an owner-review gate.
+`accepted-baseline.json` records the API 36 Pixel 6 managed-device medians
+from the accepted evidence run. Pull requests run the comparator against every
+numeric benchmark median and fail when a value regresses by more than 10% or a
+metric disappears. No physical-device result is inferred from the emulator;
+physical reference-device results remain an owner-review gate.
