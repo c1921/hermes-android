@@ -2,7 +2,11 @@ package com.nousresearch.hermes.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class ImageAttachResult(
@@ -38,13 +42,276 @@ data class FileAttachResult(
 )
 
 @Serializable
+data class FsDataUrlResponse(
+    @SerialName("dataUrl") val dataUrl: String,
+)
+
+@Serializable
+data class FsTextPreview(
+    val path: String,
+    val text: String,
+    @SerialName("mimeType") val mimeType: String,
+    val language: String = "text",
+    @SerialName("byteSize") val byteSize: Long,
+    val binary: Boolean = false,
+    val truncated: Boolean = false,
+)
+
+@Serializable
 data class StatusResponse(
     val status: String = "unknown",
     val version: String? = null,
     @SerialName("hermes_version") val hermesVersion: String? = null,
     @SerialName("auth_required") val authRequired: Boolean = false,
     val capabilities: JsonElement? = null,
+    @SerialName("capability_contract") val capabilityContract: JsonElement? = null,
 )
+
+/**
+ * The versioned, server-owned part of the full-client compatibility contract.
+ *
+ * This is deliberately a normalized model rather than a direct copy of a
+ * server JSON shape.  The parser below accepts the canonical envelope and the
+ * older direct capability map, while keeping unknown fields forward
+ * compatible and known malformed fields fail-closed.
+ */
+data class CapabilityContractDocument(
+    val schemaVersion: Int,
+    val contractVersion: Int,
+    val authorized: Boolean,
+    val resolvedProfile: String?,
+    val profiles: Set<String>,
+    val audience: String?,
+    val scopes: Set<String>,
+    val capabilities: Map<String, CapabilityDeclaration>,
+    val source: CapabilityDocumentSource,
+)
+
+enum class CapabilityDocumentSource {
+    CANONICAL,
+    LEGACY_STATUS,
+}
+
+data class CapabilityDeclaration(
+    val wireName: String,
+    val advertised: Boolean,
+    val methods: Map<String, CapabilityMethodContract>,
+    val events: Set<String>,
+    val profiles: Set<String>,
+    val profileScope: CapabilityProfileScope,
+    val scopes: Set<String>,
+    val audience: String?,
+    val minClientContract: Int?,
+    val maxClientContract: Int?,
+)
+
+data class CapabilityMethodContract(
+    val name: String,
+    val requiredParameters: Set<String>,
+    val optionalParameters: Set<String>,
+    val scopes: Set<String>,
+) {
+    val allowedParameters: Set<String> get() = requiredParameters + optionalParameters
+}
+
+enum class CapabilityProfileScope {
+    GLOBAL,
+    PROFILE,
+    UNKNOWN,
+}
+
+sealed interface CapabilityContractParseResult {
+    data class Valid(val document: CapabilityContractDocument) : CapabilityContractParseResult
+
+    data class Malformed(val reason: String) : CapabilityContractParseResult
+
+    data class Unsupported(
+        val compatibility: CapabilityContractCompatibility,
+        val schemaVersion: Int,
+    ) : CapabilityContractParseResult
+
+    data object Missing : CapabilityContractParseResult
+}
+
+enum class CapabilityContractCompatibility {
+    OLDER_SERVER,
+    NEWER_SERVER,
+}
+
+/** Parses both the current envelope and the explicit legacy status adapter. */
+object CapabilityContractParser {
+    const val CURRENT_SCHEMA_VERSION = 1
+    const val CURRENT_CLIENT_CONTRACT = 1
+
+    fun parse(element: JsonElement?): CapabilityContractParseResult {
+        if (element == null || element is JsonNull) return CapabilityContractParseResult.Missing
+        if (element !is JsonObject) return CapabilityContractParseResult.Malformed("Capability document must be an object")
+
+        return runCatching {
+            val hasEnvelope = element.containsKey("capabilities") ||
+                element.containsKey("schema_version") ||
+                element.containsKey("contract_version")
+            val source = if (hasEnvelope) CapabilityDocumentSource.CANONICAL else CapabilityDocumentSource.LEGACY_STATUS
+            val schemaVersion = element.int("schema_version") ?: CURRENT_SCHEMA_VERSION
+            if (schemaVersion < CURRENT_SCHEMA_VERSION) {
+                return@runCatching CapabilityContractParseResult.Unsupported(
+                    CapabilityContractCompatibility.OLDER_SERVER,
+                    schemaVersion,
+                )
+            }
+            if (schemaVersion > CURRENT_SCHEMA_VERSION) {
+                return@runCatching CapabilityContractParseResult.Unsupported(
+                    CapabilityContractCompatibility.NEWER_SERVER,
+                    schemaVersion,
+                )
+            }
+
+            val capabilityElement = if (hasEnvelope) {
+                element["capabilities"] ?: JsonObject(emptyMap())
+            } else {
+                element
+            }
+            if (capabilityElement !is JsonObject) {
+                return@runCatching CapabilityContractParseResult.Malformed("capabilities must be an object")
+            }
+            val capabilities = capabilityElement.mapNotNull { (wireName, raw) ->
+                val known = HermesBackendCapability.fromWireName(wireName)
+                    ?: return@mapNotNull null
+                known.wireName to parseDeclaration(known.wireName, raw)
+            }.toMap()
+
+            CapabilityContractParseResult.Valid(
+                CapabilityContractDocument(
+                    schemaVersion = schemaVersion,
+                    contractVersion = element.int("contract_version") ?: CURRENT_CLIENT_CONTRACT,
+                    authorized = element.boolean("authorized") ?: true,
+                    resolvedProfile = element.string("resolved_profile")
+                        ?: element.string("profile"),
+                    profiles = element.stringSet("profiles"),
+                    audience = element.string("audience"),
+                    scopes = element.stringSet("scopes"),
+                    capabilities = capabilities,
+                    source = source,
+                ),
+            )
+        }.getOrElse { error ->
+            CapabilityContractParseResult.Malformed(
+                error.message?.take(240).orEmpty().ifBlank { "Capability document is malformed" },
+            )
+        }
+    }
+
+    private fun parseDeclaration(wireName: String, raw: JsonElement): CapabilityDeclaration {
+        if (raw is JsonPrimitive && raw.isString.not()) {
+            return CapabilityDeclaration(
+                wireName = wireName,
+                advertised = raw.booleanValueOrNull()
+                    ?: throw IllegalArgumentException("$wireName advertised value must be boolean"),
+                methods = emptyMap(),
+                events = emptySet(),
+                profiles = emptySet(),
+                profileScope = CapabilityProfileScope.GLOBAL,
+                scopes = emptySet(),
+                audience = null,
+                minClientContract = null,
+                maxClientContract = null,
+            )
+        }
+        val declaration = raw as? JsonObject
+            ?: throw IllegalArgumentException("$wireName declaration must be an object or boolean")
+        val profileScope = when {
+            declaration.boolean("profile_scoped") == true -> CapabilityProfileScope.PROFILE
+            declaration.string("profile_scope") == null -> CapabilityProfileScope.GLOBAL
+            declaration.string("profile_scope")?.lowercase() in setOf("profile", "profiles") -> CapabilityProfileScope.PROFILE
+            declaration.string("profile_scope")?.lowercase() == "global" -> CapabilityProfileScope.GLOBAL
+            else -> CapabilityProfileScope.UNKNOWN
+        }
+        return CapabilityDeclaration(
+            wireName = wireName,
+            advertised = declaration.boolean("advertised") ?: declaration.boolean("enabled") ?: true,
+            methods = parseMethods(declaration["methods"] ?: declaration["required_methods"]),
+            events = declaration.stringSet("events"),
+            profiles = declaration.stringSet("profiles"),
+            profileScope = profileScope,
+            scopes = declaration.stringSet("scopes"),
+            audience = declaration.string("audience"),
+            minClientContract = declaration.int("min_client") ?: declaration.int("min_client_contract"),
+            maxClientContract = declaration.int("max_client") ?: declaration.int("max_client_contract"),
+        )
+    }
+
+    private fun parseMethods(element: JsonElement?): Map<String, CapabilityMethodContract> {
+        if (element == null) return emptyMap()
+        val methods = element as? JsonObject ?: throw IllegalArgumentException("methods must be an object")
+        return methods.map { (name, raw) ->
+            val method = when (raw) {
+                is JsonArray -> CapabilityMethodContract(
+                    name = name,
+                    requiredParameters = raw.stringSet(),
+                    optionalParameters = emptySet(),
+                    scopes = emptySet(),
+                )
+                is JsonObject -> CapabilityMethodContract(
+                    name = name,
+                    requiredParameters = raw.stringSet("parameters")
+                        .ifEmpty { raw.stringSet("required_parameters") },
+                    optionalParameters = raw.stringSet("optional_parameters"),
+                    scopes = raw.stringSet("scopes"),
+                )
+                else -> throw IllegalArgumentException("method $name must be an object or array")
+            }
+            name to method
+        }.toMap()
+    }
+}
+
+fun StatusResponse.capabilityContract(): CapabilityContractParseResult =
+    CapabilityContractParser.parse(capabilityContract ?: capabilities)
+
+private fun JsonObject.string(name: String): String? {
+    val value = this[name] ?: return null
+    val primitive = value as? JsonPrimitive
+        ?: throw IllegalArgumentException("$name must be a string")
+    if (!primitive.isString) throw IllegalArgumentException("$name must be a string")
+    return primitive.content.takeIf(String::isNotBlank)
+}
+
+private fun JsonObject.int(name: String): Int? {
+    val value = this[name] ?: return null
+    val primitive = value as? JsonPrimitive
+        ?: throw IllegalArgumentException("$name must be an integer")
+    if (primitive.isString) throw IllegalArgumentException("$name must be an integer")
+    return primitive.content.toIntOrNull()
+        ?: throw IllegalArgumentException("$name must be an integer")
+}
+
+private fun JsonObject.boolean(name: String): Boolean? {
+    val value = this[name] ?: return null
+    val primitive = value as? JsonPrimitive
+        ?: throw IllegalArgumentException("$name must be a boolean")
+    return primitive.booleanValueOrNull()
+        ?: throw IllegalArgumentException("$name must be a boolean")
+}
+
+private fun JsonObject.stringSet(name: String): Set<String> = this[name]?.stringSet().orEmpty()
+
+private fun JsonElement.stringSet(): Set<String> = when (this) {
+    is kotlinx.serialization.json.JsonArray -> map { entry ->
+        (entry as? JsonPrimitive)?.takeIf { it.isString }?.content
+            ?: throw IllegalArgumentException("Expected a string array")
+    }.filter(String::isNotBlank).toSet()
+    is JsonPrimitive -> if (isString) setOf(content) else throw IllegalArgumentException("Expected strings")
+    else -> throw IllegalArgumentException("Expected a string array")
+}
+
+private fun JsonPrimitive.booleanValueOrNull(): Boolean? = when {
+    isString -> when (content.lowercase()) {
+        "true" -> true
+        "false" -> false
+        else -> null
+    }
+    else -> content.toBooleanStrictOrNull()
+}
 
 @Serializable
 data class SessionPage(
@@ -104,6 +371,8 @@ data class ProtocolMessage(
     val text: String? = null,
     val timestamp: Double? = null,
     @SerialName("tool_calls") val toolCalls: JsonElement? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    @SerialName("tool_name") val toolName: String? = null,
 )
 
 @Serializable
@@ -124,8 +393,21 @@ data class SessionResumeResult(
     val messages: List<ProtocolMessage> = emptyList(),
     val status: String = "idle",
     val running: Boolean = false,
-    val inflight: JsonElement? = null,
+    val inflight: SessionInflightProjection? = null,
+    val queued: SessionQueuedProjection? = null,
     val info: SessionRuntimeInfo = SessionRuntimeInfo(),
+)
+
+@Serializable
+data class SessionInflightProjection(
+    val user: String = "",
+    val assistant: String = "",
+    val streaming: Boolean = false,
+)
+
+@Serializable
+data class SessionQueuedProjection(
+    val user: String = "",
 )
 
 @Serializable
@@ -192,8 +474,11 @@ data class SessionTitleResult(
 @Serializable
 data class SessionBranchResult(
     @SerialName("session_id") val runtimeSessionId: String,
+    @SerialName("stored_session_id") val durableSessionId: String? = null,
     val title: String,
     val parent: String,
+    val messages: List<ProtocolMessage> = emptyList(),
+    val info: SessionRuntimeInfo = SessionRuntimeInfo(),
 )
 
 @Serializable

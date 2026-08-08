@@ -2,13 +2,20 @@ package com.nousresearch.hermes.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.core.content.FileProvider
 import com.nousresearch.hermes.network.DashboardAuthClient
-import com.nousresearch.hermes.network.DashboardSessionCookie
+import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.HermesRestClient
+import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.GatewayEvent
 import com.nousresearch.hermes.protocol.HermesGatewayClient
+import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.platform.newCameraCaptureUri
+import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,6 +28,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -40,6 +49,271 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class HermesRepositoryBillingTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
+
+    @Test
+    fun `system shared text opens a draft and never submits it`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-share","stored_session_id":"stored-share","messages":[],"info":{"stored_session_id":"stored-share"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            val imported = repository.ingestSharedContent("Review this before sending", emptyList())
+
+            assertTrue(imported)
+            assertEquals("Review this before sending", repository.state.value.draft)
+            assertEquals("stored-share", repository.state.value.activeStoredSession?.durableId)
+            assertFalse(gateway.requests.any { it.method == "prompt.submit" })
+        }
+    }
+
+    @Test
+    fun `shared attachment failures stay independent and successful camera files are released`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-files","stored_session_id":"stored-files","messages":[],"info":{"stored_session_id":"stored-files"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            gateway.enqueue(
+                "image.attach_bytes",
+                json.parseToJsonElement(
+                    """{"attached":true,"path":"/srv/.hermes/images/upload.png","count":1,"text":"[User attached image]","bytes":4,"width":2}""",
+                ),
+            )
+            val rejectedFile = File(context.cacheDir, "camera/rejected.apk").apply {
+                parentFile?.mkdirs()
+                writeBytes(byteArrayOf(1, 2))
+            }
+            val rejectedUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                rejectedFile,
+            )
+            val cameraUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+
+            assertTrue(repository.ingestSharedContent("", listOf(rejectedUri, cameraUri)))
+
+            assertEquals(
+                listOf(AttachmentPhase.ERROR, AttachmentPhase.READY),
+                repository.state.value.pendingAttachments.map(PendingAttachment::phase),
+            )
+            assertTrue(repository.state.value.pendingAttachments.first().error.orEmpty().contains("not supported"))
+            assertTrue(runCatching { context.contentResolver.openInputStream(cameraUri)!!.close() }.isFailure)
+            assertFalse(gateway.requests.any { it.method == "prompt.submit" })
+            repository.state.value.pendingAttachments.toList().forEach { repository.removePendingAttachment(it.id) }
+
+            val uploadStarted = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("image.attach_bytes") {
+                uploadStarted.complete(Unit)
+                CompletableDeferred<JsonElement>().await()
+            }
+            val retryUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+            val attaching = launch { repository.attach(retryUri) }
+            uploadStarted.await()
+            val attachmentId = repository.state.value.pendingAttachments.single().id
+
+            repository.cancelPendingAttachment(attachmentId)
+            attaching.join()
+
+            assertEquals(AttachmentPhase.ERROR, repository.state.value.pendingAttachments.single().phase)
+            assertEquals("Attachment cancelled", repository.state.value.pendingAttachments.single().error)
+            gateway.enqueue(
+                "image.attach_bytes",
+                json.parseToJsonElement(
+                    """{"attached":false,"path":"","count":0,"text":"","bytes":0,"width":0}""",
+                ),
+            )
+
+            repository.retryPendingAttachment(attachmentId)
+
+            assertEquals(AttachmentPhase.ERROR, repository.state.value.pendingAttachments.single().phase)
+            assertTrue(repository.state.value.pendingAttachments.single().error.orEmpty().contains("did not attach"))
+            gateway.enqueue(
+                "image.attach_bytes",
+                json.parseToJsonElement(
+                    """{"attached":true,"path":"/srv/.hermes/images/retry.png","count":1,"text":"[User attached image]","bytes":4,"width":2}""",
+                ),
+            )
+
+            repository.retryPendingAttachment(attachmentId)
+
+            assertEquals(AttachmentPhase.READY, repository.state.value.pendingAttachments.single().phase)
+            assertTrue(runCatching { context.contentResolver.openInputStream(retryUri)!!.close() }.isFailure)
+            repository.removePendingAttachment(attachmentId)
+
+            val staleUploadStarted = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("image.attach_bytes") {
+                staleUploadStarted.complete(Unit)
+                CompletableDeferred<JsonElement>().await()
+            }
+            val staleUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+            val staleAttachment = launch { repository.attach(staleUri) }
+            staleUploadStarted.await()
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-new","stored_session_id":"stored-new","messages":[],"info":{"stored_session_id":"stored-new"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            assertTrue(repository.newSession())
+            staleAttachment.join()
+
+            assertEquals("live-new", repository.state.value.runtimeSessionId)
+            assertTrue(repository.state.value.pendingAttachments.isEmpty())
+            assertTrue(runCatching { context.contentResolver.openInputStream(staleUri)!!.close() }.isFailure)
+        }
+    }
+
+    @Test
+    fun `all failed shared attachments remain retryable and do not consume the share`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                RecordingGateway(json),
+            )
+            awaitReady(repository, backend.id)
+            val rejectedUri = android.net.Uri.parse("content://missing-share-provider/rejected")
+
+            assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
+            assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
+            assertEquals(1, repository.state.value.pendingAttachments.size)
+            assertEquals(AttachmentPhase.ERROR, repository.state.value.pendingAttachments.single().phase)
+        }
+    }
+
+    @Test
+    fun `failed new session preserves the active session and never closes it first`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-existing","stored_session_id":"stored-existing","messages":[],"info":{"stored_session_id":"stored-existing"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            assertTrue(repository.newSession())
+            gateway.enqueueFailure("session.create", IOException("create failed"))
+
+            assertFalse(repository.newSession())
+
+            assertEquals("live-existing", repository.state.value.runtimeSessionId)
+            assertEquals("stored-existing", repository.state.value.activeStoredSession?.durableId)
+            assertFalse(gateway.requests.any { it.method == "session.close" })
+        }
+    }
+
+    @Test
+    fun `cancelled new session clears its loading state`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("session.create") {
+                started.complete(Unit)
+                release.await()
+                error("cancelled request unexpectedly resumed")
+            }
+
+            val creation = launch { repository.newSession() }
+            withTimeout(5_000L) { started.await() }
+            creation.cancelAndJoin()
+
+            assertFalse(repository.state.value.loading)
+            assertEquals(null, repository.state.value.runtimeSessionId)
+        }
+    }
 
     @Test
     fun `ambiguous charge retries with the same key until settlement`() = runBlocking {
@@ -181,6 +455,239 @@ class HermesRepositoryBillingTest {
         }
     }
 
+    @Test
+    fun `latest session open wins when an earlier resume finishes last`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody("""{"sessions":[]}""")
+                    "/api/sessions/session-a/messages" -> MockResponse().setBody(
+                        """{"session_id":"session-a","messages":[{"role":"user","text":"A"}]}""",
+                    )
+                    "/api/sessions/session-b/messages" -> MockResponse().setBody(
+                        """{"session_id":"session-b","messages":[{"role":"user","text":"B"}]}""",
+                    )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            val firstStarted = CompletableDeferred<Unit>()
+            val releaseFirst = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("session.resume") {
+                firstStarted.complete(Unit)
+                releaseFirst.await()
+                json.parseToJsonElement(
+                    """{"session_id":"live-a","session_key":"session-a","messages":[{"role":"user","text":"A"}]}""",
+                )
+            }
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-b","session_key":"session-b","messages":[{"role":"user","text":"B"}]}""",
+                ),
+            )
+            repeat(2) { gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}""")) }
+
+            val first = launch { repository.openSession(StoredSession(sessionId = "session-a")) }
+            withTimeout(5_000L) { firstStarted.await() }
+            val second = launch { repository.openSession(StoredSession(sessionId = "session-b")) }
+            withTimeout(5_000L) { repository.state.first { it.runtimeSessionId == "live-b" } }
+            releaseFirst.complete(Unit)
+            first.join()
+            second.join()
+
+            assertEquals("session-b", repository.state.value.activeStoredSession?.durableId)
+            assertEquals("live-b", repository.state.value.runtimeSessionId)
+            assertEquals("session-b", registry.sessionTarget(backend.id)?.sessionId)
+        }
+    }
+
+    @Test
+    fun `session preflight failure leaves restoration in explicit authentication recovery`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            credentials.remove(backend.id)
+
+            repository.openSession(StoredSession(sessionId = "stored-session"))
+
+            assertEquals(SessionRestorationStatus.AUTHENTICATION_REQUIRED, repository.state.value.restoration.status)
+            assertTrue(repository.state.value.error.orEmpty().contains("Reconnect", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun `branch becomes immediately durable and restorable from authoritative response`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-parent","stored_session_id":"stored-parent","messages":[],"info":{"stored_session_id":"stored-parent"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            repository.newSession()
+            gateway.enqueue(
+                "session.branch",
+                json.parseToJsonElement(
+                    """{"session_id":"live-branch","stored_session_id":"stored-branch","title":"Branch","parent":"stored-parent","messages":[{"role":"user","text":"Parent message"}],"info":{"stored_session_id":"stored-branch"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            repository.branchActive()
+
+            assertEquals(SessionRestorationStatus.READY, repository.state.value.restoration.status)
+            assertEquals("stored-branch", repository.state.value.activeStoredSession?.durableId)
+            assertEquals("stored-branch", registry.sessionTarget(backend.id)?.sessionId)
+        }
+    }
+
+    @Test
+    fun `fresh repository reauthenticates and restores the persisted durable target`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody(
+                        """{"sessions":[{"session_id":"stored-session","profile":"research","title":"Restored"}]}""",
+                    )
+                    "/api/sessions/stored-session/messages" -> MockResponse().setBody(
+                        """{"session_id":"stored-session","messages":[{"role":"user","text":"Persisted question"}]}""",
+                    )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            registry.saveSessionTarget(SessionTarget(backend.id, "research", "stored-session"))
+            credentials.put(backend.id, SESSION_COOKIE)
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-restored","session_key":"stored-session","messages":[{"role":"user","text":"Persisted question"}],"info":{"stored_session_id":"stored-session"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            val restored = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+
+            withTimeout(5_000L) {
+                restored.state.first {
+                    it.restoration.status == SessionRestorationStatus.READY &&
+                        it.runtimeSessionId == "live-restored"
+                }
+            }
+            assertEquals("stored-session", restored.state.value.activeStoredSession?.durableId)
+            assertEquals("research", restored.state.value.activeStoredSession?.profile)
+        }
+    }
+
+    @Test
+    fun `completion received during history refresh survives the older resume snapshot`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody("""{"sessions":[]}""")
+                    "/api/sessions/session-1/messages" -> MockResponse()
+                        .setBodyDelay(1, TimeUnit.SECONDS)
+                        .setBody(
+                            """{"session_id":"session-1","messages":[{"role":"user","text":"Question"},{"role":"assistant","text":"Complete answer"}]}""",
+                        )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-1","session_key":"session-1","messages":[],"running":true,"inflight":{"user":"Question","assistant":"Partial","streaming":true},"info":{"running":true}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            val opening = launch { repository.openSession(StoredSession(sessionId = "session-1")) }
+            withTimeout(5_000L) {
+                repository.state.first { state ->
+                    state.runtimeSessionId == "live-1" && state.timeline.items.any {
+                        it is TimelineItem.Message && it.text == "Partial" && it.streaming
+                    }
+                }
+            }
+            gateway.emit(
+                GatewayEvent(
+                    "message.complete",
+                    "live-1",
+                    buildJsonObject { put("text", "Complete answer"); put("status", "complete") },
+                ),
+            )
+            withTimeout(5_000L) {
+                repository.state.first { state ->
+                    !state.runtimeInfo.running && state.timeline.items.any {
+                        it is TimelineItem.Message && it.text == "Complete answer" && !it.streaming
+                    }
+                }
+            }
+            opening.join()
+
+            val assistant = repository.state.value.timeline.items.filterIsInstance<TimelineItem.Message>().last()
+            assertEquals("Complete answer", assistant.text)
+            assertFalse(assistant.streaming)
+            assertFalse(repository.state.value.runtimeInfo.running)
+        }
+    }
+
     private fun repository(
         context: Context,
         registry: BackendRegistry,
@@ -222,7 +729,7 @@ class HermesRepositoryBillingTest {
     }
 
     private fun backend(server: MockWebServer) = BackendConfig(
-        id = "personal",
+        id = "personal-${BACKEND_IDS.incrementAndGet()}",
         label = "Personal",
         baseUrl = server.url("/").toString().replace("localhost", "127.0.0.1").trimEnd('/'),
         authMode = AuthMode.DASHBOARD_SESSION,
@@ -242,18 +749,19 @@ class HermesRepositoryBillingTest {
     }
 
     private companion object {
-        val SESSION_COOKIE = DashboardSessionCookie("hermes_session_at", "session-value")
+        val BACKEND_IDS = AtomicInteger()
+        val SESSION_COOKIE = DashboardSessionCredential("hermes_session_at", "session-value")
     }
 }
 
 private class InMemoryCredentialStore : SessionCredentialStore {
-    private val cookies = mutableMapOf<String, DashboardSessionCookie>()
+    private val cookies = mutableMapOf<String, DashboardSessionCredential>()
 
-    override fun put(backendId: String, cookie: DashboardSessionCookie) {
+    override fun put(backendId: String, cookie: DashboardSessionCredential) {
         cookies[backendId] = cookie
     }
 
-    override fun get(backendId: String): DashboardSessionCookie? = cookies[backendId]
+    override fun get(backendId: String): DashboardSessionCredential? = cookies[backendId]
 
     override fun remove(backendId: String) {
         cookies.remove(backendId)
@@ -297,11 +805,15 @@ private class RecordingGateway(
         mutableConnectionState.value = GatewayConnectionState.Failed(reason)
     }
 
+    fun emit(event: GatewayEvent) {
+        check(mutableEvents.tryEmit(event))
+    }
+
     override suspend fun connect(config: BackendConfig, token: String) {
         connect(config)
     }
 
-    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCookie) {
+    override suspend fun connect(config: BackendConfig, cookie: DashboardSessionCredential) {
         connect(config)
     }
 

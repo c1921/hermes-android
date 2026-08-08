@@ -25,35 +25,39 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.nousresearch.hermes.BuildConfig
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.DiagnosticRunState
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
+import com.nousresearch.hermes.provenance.BuildProvenance
+import com.nousresearch.hermes.provenance.BuildProvenanceSource
 import com.nousresearch.hermes.security.DiagnosticRedactor
 import com.nousresearch.hermes.security.DiagnosticReportInput
 import com.nousresearch.hermes.security.DiagnosticReportSection
@@ -70,17 +74,23 @@ internal fun DiagnosticsScreen(
     state: HermesState,
     connection: GatewayConnectionState,
     onRun: (DiagnosticAction) -> Unit,
-    secureScreen: Boolean,
-    onSecureScreenChange: (Boolean) -> Unit,
-    skin: HermesSkin,
-    onSkinChange: (HermesSkin) -> Unit,
+    onRefreshHost: (Boolean) -> Unit,
+    backup: HostBackupUiState,
+    onPrepareBackup: () -> Unit,
+    onSaveBackup: (android.net.Uri) -> Unit,
+    onCancelBackup: () -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var exportInProgress by rememberSaveable { mutableStateOf(false) }
-    var exportNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var exportNotice by remember { mutableStateOf<String?>(null) }
+    var confirmBackup by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.backend?.id) { if (state.backend != null) onRefreshHost(false) }
+    val createBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        uri?.let(onSaveBackup)
+    }
     val createReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri == null) {
             exportInProgress = false
@@ -121,37 +131,23 @@ internal fun DiagnosticsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                DiagnosticInfoCard(state, connection)
-            }
-            item {
-                AppearancePicker(skin, onSkinChange)
-            }
-            item {
-                Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("SECURE SCREEN", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Block screenshots, screen recording and the recent-app thumbnail for Hermes content on this device.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = secureScreen,
-                            onCheckedChange = onSecureScreenChange,
-                            modifier = Modifier.semantics { contentDescription = "Secure screen" },
-                        )
-                    }
-                }
+                DiagnosticInfoCard(state, connection, BuildProvenanceSource.current)
             }
             item {
                 Text(
-                    "These commands run on the selected Hermes server. Output is bounded and redacted again on Android before display; it is not uploaded by the app.",
+                    "These commands run on the selected Hermes server. Host logs and update state describe the whole authenticated Hermes installation, not only the selected profile. Output is bounded and redacted again on Android before display; it is not uploaded by the app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            item {
+                HostMaintenanceCard(
+                    state = state,
+                    backup = backup,
+                    onRefresh = onRefreshHost,
+                    onPrepareBackup = { confirmBackup = true },
+                    onSaveBackup = { createBackup.launch(backup.suggestedName) },
+                    onCancelBackup = onCancelBackup,
                 )
             }
             item {
@@ -198,10 +194,106 @@ internal fun DiagnosticsScreen(
             }
         }
     }
+    if (confirmBackup) {
+        AlertDialog(
+            onDismissRequest = { confirmBackup = false },
+            title = { Text("CREATE HERMES HOST BACKUP?") },
+            text = {
+                Text(
+                    "This runs backup on the whole authenticated Hermes installation, not only profile ${state.activeProfile}. " +
+                        "After Hermes confirms the exact process succeeded, Android will ask where to save the ZIP. " +
+                        "The archive is never stored in this app or Android backup.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmBackup = false; onPrepareBackup() }) { Text("Create backup") }
+            },
+            dismissButton = { TextButton(onClick = { confirmBackup = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
-private fun AppearancePicker(
+private fun HostMaintenanceCard(
+    state: HermesState,
+    backup: HostBackupUiState,
+    onRefresh: (Boolean) -> Unit,
+    onPrepareBackup: () -> Unit,
+    onSaveBackup: () -> Unit,
+    onCancelBackup: () -> Unit,
+) {
+    val update = state.hostUpdate
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("HERMES HOST", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (state.hostMaintenanceLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+            Text(
+                "Read-only status for the authenticated Hermes host. Android does not apply updates or infer a profile from this host-wide endpoint.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (update != null) {
+                DiagnosticValue("Installed version", update.currentVersion)
+                DiagnosticValue("Install method", update.installMethod)
+                DiagnosticValue(
+                    "Update state",
+                    when {
+                        update.behind == 0 -> "Current"
+                        update.behind != null && update.behind > 0 -> "${update.behind} commits behind"
+                        update.updateAvailable -> "Update available; count unavailable"
+                        else -> "Unavailable"
+                    },
+                )
+                update.message?.takeIf(String::isNotBlank)?.let { DiagnosticValue("Host guidance", it) }
+                update.commits.take(20).takeIf { it.isNotEmpty() }?.let { commits ->
+                    SelectionContainer {
+                        Text(
+                            commits.joinToString("\n") { "${it.sha.take(8)}  ${it.summary.take(300)}" },
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+            }
+            state.hostMaintenanceError?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            if (state.hostLogs.isNotEmpty()) {
+                Text("RECENT REDACTED AGENT LOG", style = MaterialTheme.typography.labelMedium)
+                SelectionContainer {
+                    Text(
+                        state.hostLogs.joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+            Button(onClick = { onRefresh(true) }, enabled = !state.hostMaintenanceLoading) { Text("Check now") }
+            HorizontalDivider()
+            Text("HOST BACKUP", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Hermes creates the archive on its host. Android downloads it only after the same process ID reports exit 0, directly into the document destination you choose.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            backup.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+            backup.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            if (backup.preparing || backup.saving) {
+                backup.progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+                    ?: LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = onCancelBackup) { Text(if (backup.preparing) "Stop waiting" else "Cancel export") }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onPrepareBackup) { Text(if (backup.archive == null) "Create backup" else "Create another") }
+                    if (backup.archive != null) Button(onClick = onSaveBackup) { Text("Save ZIP…") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun AppearancePicker(
     selected: HermesSkin,
     onSelected: (HermesSkin) -> Unit,
 ) {
@@ -263,7 +355,6 @@ private fun AppearancePicker(
                                     skin.description,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = preview.onSurfaceVariant,
-                                    maxLines = 2,
                                 )
                             }
                         }
@@ -276,11 +367,17 @@ private fun AppearancePicker(
 }
 
 @Composable
-private fun DiagnosticInfoCard(state: HermesState, connection: GatewayConnectionState) {
+private fun DiagnosticInfoCard(
+    state: HermesState,
+    connection: GatewayConnectionState,
+    provenance: BuildProvenance,
+) {
     val status = state.status
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DiagnosticValue("Android app", BuildConfig.VERSION_NAME)
+            DiagnosticValue("Android app", provenance.androidVersion)
+            DiagnosticValue("Build channel", provenance.channel)
+            DiagnosticValue("Android commit", provenance.androidCommit)
             DiagnosticValue("Backend", state.backend?.label.orEmpty())
             DiagnosticValue("Endpoint", state.backend?.baseUrl.orEmpty())
             DiagnosticValue("Connection", DiagnosticRedactor.redact(connection.displayName()))
@@ -292,7 +389,14 @@ private fun DiagnosticInfoCard(state: HermesState, connection: GatewayConnection
                 "Capabilities",
                 status?.capabilities?.toString()?.let(DiagnosticRedactor::redact)?.take(1_000) ?: "Not reported",
             )
-            DiagnosticValue("Audited upstream", BuildConfig.AUDITED_HERMES_COMMIT)
+            DiagnosticValue("Audited upstream", provenance.auditedHermesCommit)
+            DiagnosticValue("Hermes Agent", "${provenance.hermesAgentVersion} (${provenance.hermesAgentVersionRange})")
+            DiagnosticValue("Hermes Desktop", "${provenance.hermesDesktopVersion} (${provenance.hermesDesktopVersionRange})")
+            DiagnosticValue("Toolchain digest", provenance.toolchainDigest)
+            DiagnosticValue("Build identity", provenance.buildIdentity)
+            DiagnosticValue("Package", provenance.packageName)
+            DiagnosticValue("Signing fingerprint", provenance.signingFingerprint)
+            DiagnosticValue("Build author", provenance.author)
         }
     }
 }
@@ -348,11 +452,12 @@ private fun DiagnosticActionCard(
 
 private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState): String {
     val status = status
+    val provenance = BuildProvenanceSource.current
     return buildDiagnosticReport(
         DiagnosticReportInput(
             generatedAt = Instant.now().toString(),
-            appVersion = BuildConfig.VERSION_NAME,
-            auditedCommit = BuildConfig.AUDITED_HERMES_COMMIT,
+            appVersion = provenance.androidVersion,
+            auditedCommit = provenance.auditedHermesCommit,
             backendLabel = backend?.label,
             endpoint = backend?.baseUrl,
             connection = connection.displayName(),
@@ -361,6 +466,7 @@ private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState
             authRequired = status?.authRequired,
             desktopContract = runtimeInfo.desktopContract,
             capabilities = status?.capabilities?.toString(),
+            provenance = provenance,
             sections = DiagnosticAction.entries.mapNotNull { action ->
                 diagnostics[action]?.let { run ->
                     DiagnosticReportSection(
@@ -372,7 +478,15 @@ private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState
                         lines = run.error?.let { run.lines + it } ?: run.lines,
                     )
                 }
-            },
+            } + hostLogs.takeIf { it.isNotEmpty() }?.let {
+                listOf(
+                    DiagnosticReportSection(
+                        title = "Recent redacted Hermes host log",
+                        status = "${it.size.coerceAtMost(200)} lines",
+                        lines = it.takeLast(200),
+                    ),
+                )
+            }.orEmpty(),
         ),
     )
 }

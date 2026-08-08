@@ -58,9 +58,17 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun restClient(client: OkHttpClient, json: Json): HermesRestClient = HermesRestClient(client, json)
+    fun restClient(
+        client: OkHttpClient,
+        json: Json,
+        credentials: SessionCredentialStore,
+    ): HermesRestClient = HermesRestClient(client, json, credentials)
 
     @Provides
     @Singleton
-    fun dashboardAuthClient(client: OkHttpClient, json: Json): DashboardAuthClient = DashboardAuthClient(client, json)
+    fun dashboardAuthClient(
+        client: OkHttpClient,
+        json: Json,
+        credentials: SessionCredentialStore,
+    ): DashboardAuthClient = DashboardAuthClient(client, json, credentials)
 }

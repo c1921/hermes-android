@@ -1,0 +1,9 @@
+{
+  "providers": [
+    {
+      "name": "basic",
+      "display_name": "Password",
+      "supports_password": true
+    }
+  ]
+}

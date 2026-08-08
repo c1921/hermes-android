@@ -1,19 +1,28 @@
 package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.AuthMode
+import com.nousresearch.hermes.data.SessionCredentialStore
 import com.nousresearch.hermes.data.buildServerConfigPatch
 import com.nousresearch.hermes.protocol.ActionResponse
 import com.nousresearch.hermes.protocol.ActionStatusResponse
 import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.AudioSpeakResponse
 import com.nousresearch.hermes.protocol.AudioTranscriptionResponse
+import com.nousresearch.hermes.protocol.BackendUpdateCheck
+import com.nousresearch.hermes.protocol.BackupActionResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
+import com.nousresearch.hermes.protocol.FsDataUrlResponse
+import com.nousresearch.hermes.protocol.FsTextPreview
+import com.nousresearch.hermes.protocol.HostLogsResponse
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
 import com.nousresearch.hermes.protocol.CronRunPage
 import com.nousresearch.hermes.protocol.ActiveProfileResponse
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
+import com.nousresearch.hermes.protocol.ProfileSetupCommandResponse
+import com.nousresearch.hermes.protocol.ProfileSoulResponse
 import com.nousresearch.hermes.protocol.ProfilesResponse
 import com.nousresearch.hermes.protocol.ProviderValidationResult
 import com.nousresearch.hermes.protocol.OAuthProvider
@@ -25,6 +34,8 @@ import com.nousresearch.hermes.protocol.OAuthSubmitResponse
 import com.nousresearch.hermes.protocol.ModelOptionsResult
 import com.nousresearch.hermes.protocol.ManagedFileReadResponse
 import com.nousresearch.hermes.protocol.ManagedFilesResponse
+import com.nousresearch.hermes.protocol.LearningMutationResponse
+import com.nousresearch.hermes.protocol.LearningNodeDetail
 import com.nousresearch.hermes.protocol.McpCatalogResponse
 import com.nousresearch.hermes.protocol.McpCatalogInstallResponse
 import com.nousresearch.hermes.protocol.McpOperationResponse
@@ -44,12 +55,14 @@ import com.nousresearch.hermes.protocol.SkillHubSearchResponse
 import com.nousresearch.hermes.protocol.SkillHubSourcesResponse
 import com.nousresearch.hermes.protocol.SkillToggleResult
 import com.nousresearch.hermes.protocol.StatusResponse
+import com.nousresearch.hermes.protocol.StarmapGraph
 import com.nousresearch.hermes.protocol.ToolsetInfo
 import com.nousresearch.hermes.protocol.ToolsetToggleResult
 import com.nousresearch.hermes.protocol.ServerConfigMutationResponse
 import com.nousresearch.hermes.protocol.ServerConfigSchemaResponse
 import java.io.IOException
 import java.io.OutputStream
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -75,22 +88,27 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class HermesRestClient(
     private val client: OkHttpClient,
     private val json: Json,
+    private val credentials: SessionCredentialStore? = null,
 ) {
     suspend fun status(config: BackendConfig, token: String?): StatusResponse =
         get(config, token, "/api/status", StatusResponse.serializer())
 
-    suspend fun status(config: BackendConfig, cookie: DashboardSessionCookie): StatusResponse =
-        get(config, cookie.headerValue, "/api/status", StatusResponse.serializer())
+    suspend fun status(config: BackendConfig, cookie: DashboardSessionCredential): StatusResponse =
+        json.decodeFromJsonElement(
+            StatusResponse.serializer(),
+            request(config, cookie.headerValue, "/api/status", sessionCookie = cookie),
+        )
 
     suspend fun sessions(
         config: BackendConfig,
         token: String,
         limit: Int = 50,
         offset: Int = 0,
+        profile: String? = null,
     ): SessionPage = get(
         config,
         token,
-        "/api/profiles/sessions?limit=$limit&offset=$offset&order=recent&profile=all&exclude_sources=cron",
+        "/api/profiles/sessions?limit=$limit&offset=$offset&order=recent&profile=${profile?.takeIf(String::isNotBlank)?.let(::encodePathSegment) ?: "all"}&exclude_sources=cron",
         SessionPage.serializer(),
     )
 
@@ -143,6 +161,30 @@ class HermesRestClient(
         token,
         "/api/files/read?path=${encodePathSegment(path)}",
         ManagedFileReadResponse.serializer(),
+    )
+
+    suspend fun readFsDataUrl(
+        config: BackendConfig,
+        token: String,
+        path: String,
+    ): FsDataUrlResponse = boundedGet(
+        config = config,
+        token = token,
+        path = "/api/fs/read-data-url?path=${encodePathSegment(path)}",
+        maximumResponseBytes = MAX_FS_DATA_URL_RESPONSE_BYTES,
+        serializer = FsDataUrlResponse.serializer(),
+    )
+
+    suspend fun readFsText(
+        config: BackendConfig,
+        token: String,
+        path: String,
+    ): FsTextPreview = boundedGet(
+        config = config,
+        token = token,
+        path = "/api/fs/read-text?path=${encodePathSegment(path)}",
+        maximumResponseBytes = MAX_FS_TEXT_RESPONSE_BYTES,
+        serializer = FsTextPreview.serializer(),
     )
 
     suspend fun transcribeAudio(
@@ -413,6 +455,7 @@ class HermesRestClient(
                     val detail = response.body?.string().orEmpty().take(500)
                     throw HermesHttpException(response.code, detail.ifBlank { response.message })
                 }
+                updateStoredSession(config, token, response.headers.values("Set-Cookie"))
                 val body = response.body ?: throw IOException("Hermes returned an empty file response")
                 val total = body.contentLength().takeIf { it >= 0 }
                 body.byteStream().use { input ->
@@ -657,11 +700,248 @@ class HermesRestClient(
         )
     }
 
+    suspend fun profileSoul(config: BackendConfig, token: String, name: String): ProfileSoulResponse =
+        boundedGet(
+            config,
+            token,
+            "/api/profiles/${encodePathSegment(name)}/soul",
+            MAX_PROFILE_TEXT_RESPONSE_BYTES,
+            ProfileSoulResponse.serializer(),
+        )
+
+    suspend fun profileSetupCommand(
+        config: BackendConfig,
+        token: String,
+        name: String,
+    ): ProfileSetupCommandResponse = boundedGet(
+        config,
+        token,
+        "/api/profiles/${encodePathSegment(name)}/setup-command",
+        MAX_PROFILE_SETUP_RESPONSE_BYTES,
+        ProfileSetupCommandResponse.serializer(),
+    )
+
+    suspend fun updateProfileSoul(config: BackendConfig, token: String, name: String, content: String) {
+        require(content.length <= MAX_PROFILE_SOUL_CHARACTERS) { "SOUL.md is too large to edit on Android" }
+        val result = json.decodeFromJsonElement(
+            ServerConfigMutationResponse.serializer(),
+            request(
+                config,
+                token,
+                "/api/profiles/${encodePathSegment(name)}/soul",
+                method = "PUT",
+                body = buildJsonObject { put("content", content) },
+            ),
+        )
+        require(result.ok) { "Hermes did not confirm the SOUL.md update" }
+    }
+
+    suspend fun updateProfileModel(
+        config: BackendConfig,
+        token: String,
+        name: String,
+        provider: String,
+        model: String,
+    ) {
+        val cleanProvider = provider.trim()
+        val cleanModel = model.trim()
+        require(cleanProvider.isNotEmpty() && cleanProvider.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid profile provider is required"
+        }
+        require(cleanModel.isNotEmpty() && cleanModel.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid profile model is required"
+        }
+        val result = json.decodeFromJsonElement(
+            ServerConfigMutationResponse.serializer(),
+            request(
+                config,
+                token,
+                "/api/profiles/${encodePathSegment(name)}/model",
+                method = "PUT",
+                body = buildJsonObject {
+                    put("provider", cleanProvider)
+                    put("model", cleanModel)
+                },
+            ),
+        )
+        require(result.ok) { "Hermes did not confirm the profile model update" }
+    }
+
+    suspend fun learningGraph(config: BackendConfig, token: String, profile: String): StarmapGraph {
+        val cleanProfile = profile.trim()
+        require(cleanProfile.isNotEmpty() && cleanProfile.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid Hermes profile is required"
+        }
+        return boundedGet(
+            config,
+            token,
+            "/api/learning/graph?profile=${encodePathSegment(cleanProfile)}",
+            MAX_STARMAP_RESPONSE_BYTES,
+            StarmapGraph.serializer(),
+        )
+    }
+
+    suspend fun learningNode(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        id: String,
+    ): LearningNodeDetail {
+        val cleanProfile = profile.trim()
+        val cleanId = id.trim()
+        require(cleanProfile.isNotEmpty() && cleanProfile.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid Hermes profile is required"
+        }
+        require(cleanId.isNotEmpty() && cleanId.length <= MAX_LEARNING_NODE_ID_CHARACTERS) {
+            "A valid learning node is required"
+        }
+        return boundedGet(
+            config,
+            token,
+            "/api/learning/node?id=${encodePathSegment(cleanId)}&profile=${encodePathSegment(cleanProfile)}",
+            MAX_LEARNING_NODE_RESPONSE_BYTES,
+            LearningNodeDetail.serializer(),
+        )
+    }
+
+    suspend fun updateLearningNode(
+        config: BackendConfig,
+        token: String,
+        profile: String,
+        id: String,
+        content: String,
+    ) {
+        val payload = learningNodePayload(profile, id, content)
+        val result = json.decodeFromJsonElement(
+            LearningMutationResponse.serializer(),
+            request(config, token, "/api/learning/node", method = "PUT", body = payload),
+        )
+        require(result.ok) { result.message.ifBlank { "Hermes did not confirm the learning update" } }
+    }
+
+    suspend fun deleteLearningNode(config: BackendConfig, token: String, profile: String, id: String) {
+        val payload = learningNodePayload(profile, id)
+        val result = json.decodeFromJsonElement(
+            LearningMutationResponse.serializer(),
+            request(config, token, "/api/learning/node", method = "DELETE", body = payload),
+        )
+        require(result.ok) { result.message.ifBlank { "Hermes did not confirm the learning deletion" } }
+    }
+
+    private fun learningNodePayload(profile: String, id: String, content: String? = null): JsonObject {
+        val cleanProfile = profile.trim()
+        val cleanId = id.trim()
+        require(cleanProfile.isNotEmpty() && cleanProfile.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid Hermes profile is required"
+        }
+        require(cleanId.isNotEmpty() && cleanId.length <= MAX_LEARNING_NODE_ID_CHARACTERS) {
+            "A valid learning node is required"
+        }
+        require(content == null || content.length <= MAX_LEARNING_NODE_CONTENT_CHARACTERS) {
+            "Learning node content is too large to edit on Android"
+        }
+        return buildJsonObject {
+            put("id", cleanId)
+            put("profile", cleanProfile)
+            content?.let { put("content", it) }
+        }
+    }
+
     suspend fun runDoctor(config: BackendConfig, token: String): ActionResponse =
         startAction(config, token, "/api/ops/doctor")
 
     suspend fun runSecurityAudit(config: BackendConfig, token: String): ActionResponse =
         startAction(config, token, "/api/ops/security-audit")
+
+    suspend fun hostLogs(config: BackendConfig, token: String): HostLogsResponse = boundedGet(
+        config,
+        token,
+        "/api/logs?file=agent&lines=200",
+        MAX_HOST_LOG_RESPONSE_BYTES,
+        HostLogsResponse.serializer(),
+    )
+
+    suspend fun hermesUpdateCheck(
+        config: BackendConfig,
+        token: String,
+        force: Boolean = false,
+    ): BackendUpdateCheck = boundedGet(
+        config,
+        token,
+        "/api/hermes/update/check?force=${if (force) "true" else "false"}",
+        MAX_UPDATE_CHECK_RESPONSE_BYTES,
+        BackendUpdateCheck.serializer(),
+    )
+
+    suspend fun startBackup(config: BackendConfig, token: String): BackupActionResponse =
+        json.decodeFromJsonElement(
+            BackupActionResponse.serializer(),
+            request(config, token, "/api/ops/backup", method = "POST", body = buildJsonObject { }),
+        ).also { started ->
+            require(started.ok && started.name == "backup" && started.pid > 0 && started.archive.isNotBlank()) {
+                "Hermes did not return a usable backup receipt"
+            }
+        }
+
+    suspend fun downloadBackup(
+        config: BackendConfig,
+        token: String,
+        archive: String,
+        output: OutputStream,
+        onProgress: (bytesCopied: Long, totalBytes: Long?) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        val cleanArchive = archive.trim()
+        require(cleanArchive.isNotEmpty() && cleanArchive.length <= MAX_BACKUP_ARCHIVE_PATH_CHARACTERS) {
+            "Hermes returned an invalid backup archive"
+        }
+        val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+        val request = Request.Builder()
+            .url("$base/api/ops/backup/download?archive=${encodePathSegment(cleanArchive)}")
+            .get()
+            .header("Accept", "application/zip")
+            .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == AuthMode.DASHBOARD_SESSION) header("Cookie", token)
+                else header("Authorization", "Bearer $token")
+            }
+            .build()
+        val noRedirectClient = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+        val call = noRedirectClient.newCall(request)
+        val cancellation = currentCoroutineContext()[Job]?.invokeOnCompletion { cause -> if (cause != null) call.cancel() }
+        try {
+            call.execute().use { response ->
+                if (response.request.url != request.url) throw IOException("Hermes redirected an authenticated backup")
+                if (!response.isSuccessful) {
+                    val detail = response.body?.use { readBounded(it.byteStream(), MAX_ERROR_RESPONSE_BYTES) }.orEmpty()
+                    throw HermesHttpException(response.code, detail.ifBlank { response.message })
+                }
+                updateStoredSession(config, token, response.headers.values("Set-Cookie"))
+                val body = response.body ?: throw IOException("Hermes returned an empty backup")
+                val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase()
+                require(mime == "application/zip" || mime == "application/octet-stream") {
+                    "Hermes returned a non-ZIP backup"
+                }
+                val total = body.contentLength().takeIf { it >= 0 }
+                require(total == null || total <= MAX_BACKUP_DOWNLOAD_BYTES) { "Hermes backup exceeds the Android export limit" }
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                    var copied = 0L
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        copied += read
+                        require(copied <= MAX_BACKUP_DOWNLOAD_BYTES) { "Hermes backup exceeds the Android export limit" }
+                        output.write(buffer, 0, read)
+                        onProgress(copied, total)
+                    }
+                    output.flush()
+                }
+            }
+        } finally {
+            cancellation?.dispose()
+        }
+    }
 
     suspend fun actionStatus(
         config: BackendConfig,
@@ -913,12 +1193,71 @@ class HermesRestClient(
         serializer: DeserializationStrategy<T>,
     ): T = json.decodeFromJsonElement(serializer, request(config, token, path))
 
+    private suspend fun <T> boundedGet(
+        config: BackendConfig,
+        token: String,
+        path: String,
+        maximumResponseBytes: Long,
+        serializer: DeserializationStrategy<T>,
+    ): T = withContext(Dispatchers.IO) {
+        val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+        require(path.startsWith('/')) { "Hermes API paths must be absolute" }
+        val request = Request.Builder()
+            .url(base + path)
+            .get()
+            .header("Accept", "application/json")
+            .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == AuthMode.DASHBOARD_SESSION) {
+                    header("Cookie", token)
+                } else {
+                    header("Authorization", "Bearer $token")
+                }
+            }
+            .build()
+        val noRedirectClient = client.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+        val call = noRedirectClient.newCall(request)
+        val cancellation = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
+            if (cause != null) call.cancel()
+        }
+        try {
+            call.execute().use { response ->
+                if (response.request.url != request.url) {
+                    throw IOException("Hermes redirected an authenticated file request")
+                }
+                val raw = response.body?.use { body ->
+                    body.contentLength().takeIf { it >= 0 }?.let { length ->
+                        if (length > maximumResponseBytes) {
+                            throw IOException("Hermes response exceeds the Android safety limit")
+                        }
+                    }
+                    readBounded(body.byteStream(), maximumResponseBytes)
+                }.orEmpty()
+                if (!response.isSuccessful) {
+                    val detail = runCatching {
+                        json.parseToJsonElement(raw).toString().take(500)
+                    }.getOrDefault(raw.take(500))
+                    throw HermesHttpException(response.code, detail.ifBlank { response.message })
+                }
+                updateStoredSession(config, token, response.headers.values("Set-Cookie"))
+                if (raw.isBlank()) throw IOException("Hermes returned an empty file response")
+                json.decodeFromString(serializer, raw)
+            }
+        } finally {
+            cancellation?.dispose()
+        }
+    }
+
     private suspend fun request(
         config: BackendConfig,
         token: String?,
         path: String,
         method: String = "GET",
         body: JsonElement? = null,
+        sessionCookie: DashboardSessionCredential? = null,
     ): JsonElement = withContext(Dispatchers.IO) {
         val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
         require(path.startsWith('/')) { "Hermes API paths must be absolute" }
@@ -949,20 +1288,62 @@ class HermesRestClient(
                 }.getOrDefault(raw.take(500))
                 throw HermesHttpException(response.code, detail.ifBlank { response.message })
             }
+            val setCookies = response.headers.values("Set-Cookie")
+            if (sessionCookie != null) {
+                sessionCookie.mergeSetCookieHeaders(setCookies)
+            } else if (token != null) {
+                updateStoredSession(config, token, setCookies)
+            }
             if (raw.isBlank()) buildJsonObject { put("ok", true) } else json.parseToJsonElement(raw)
         }
+    }
+
+    private fun updateStoredSession(config: BackendConfig, sentHeader: String, setCookieHeaders: List<String>) {
+        if (config.authMode != AuthMode.DASHBOARD_SESSION || setCookieHeaders.isEmpty()) return
+        val current = credentials?.get(config.id) ?: return
+        if (current.headerValue != sentHeader || !current.mergeSetCookieHeaders(setCookieHeaders)) return
+        credentials.put(config.id, current)
     }
 
     private fun encodePathSegment(value: String): String =
         okhttp3.HttpUrl.Builder().scheme("https").host("placeholder.invalid").addPathSegment(value)
             .build().encodedPath.removePrefix("/")
 
+    private fun readBounded(input: java.io.InputStream, maximumBytes: Long): String {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > maximumBytes) throw IOException("Hermes response exceeds the Android safety limit")
+            output.write(buffer, 0, read)
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+
     private companion object {
-        val ALLOWED_ACTIONS = setOf("doctor", "security-audit", "gateway-restart")
+        val ALLOWED_ACTIONS = setOf("backup", "doctor", "security-audit", "gateway-restart")
         val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
         val MCP_INSTALL_ACTION = Regex("mcp-install-[a-z0-9-]{1,48}-[a-f0-9]{8}")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
+        const val MAX_ERROR_RESPONSE_BYTES = 8L * 1024L
+        const val MAX_FS_DATA_URL_RESPONSE_BYTES = 23L * 1024L * 1024L
+        const val MAX_FS_TEXT_RESPONSE_BYTES = 1L * 1024L * 1024L
+        const val MAX_PROFILE_SOUL_CHARACTERS = 128 * 1024
+        const val MAX_PROFILE_TEXT_RESPONSE_BYTES = 192L * 1024L
+        const val MAX_PROFILE_SETUP_RESPONSE_BYTES = 16L * 1024L
+        const val MAX_PROFILE_MODEL_CHARACTERS = 200
+        const val MAX_LEARNING_NODE_ID_CHARACTERS = 512
+        const val MAX_LEARNING_NODE_CONTENT_CHARACTERS = 256 * 1024
+        const val MAX_STARMAP_RESPONSE_BYTES = 2L * 1024L * 1024L
+        const val MAX_LEARNING_NODE_RESPONSE_BYTES = 384L * 1024L
+        const val MAX_HOST_LOG_RESPONSE_BYTES = 512L * 1024L
+        const val MAX_UPDATE_CHECK_RESPONSE_BYTES = 192L * 1024L
+        const val MAX_BACKUP_ARCHIVE_PATH_CHARACTERS = 4_096
+        const val MAX_BACKUP_DOWNLOAD_BYTES = 1L * 1024L * 1024L * 1024L
     }
 }
 

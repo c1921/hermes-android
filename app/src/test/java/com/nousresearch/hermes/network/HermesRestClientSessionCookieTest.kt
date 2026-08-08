@@ -2,6 +2,7 @@ package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.SessionCredentialStore
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -19,11 +20,42 @@ class HermesRestClientSessionCookieTest {
             server.start()
             val client = HermesRestClient(OkHttpClient(), Json { ignoreUnknownKeys = true })
 
-            client.status(config(server), DashboardSessionCookie("hermes_session_at", "session-value"))
+            client.status(config(server), DashboardSessionCredential("hermes_session_at", "session-value"))
 
             val request = server.takeRequest()
             assertEquals("hermes_session_at=session-value", request.getHeader("Cookie"))
             assertNull(request.getHeader("Authorization"))
+        }
+    }
+
+    @Test
+    fun `authenticated response persists rotated session cookies`() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse()
+                    .addHeader("Set-Cookie", "hermes_session_at=access-2; Path=/; HttpOnly")
+                    .addHeader("Set-Cookie", "hermes_session_rt=refresh-2; Path=/; HttpOnly")
+                    .setBody("""{"sessions":[]}"""),
+            )
+            server.start()
+            val original = checkNotNull(
+                DashboardSessionCredential.fromSetCookieHeaders(
+                    listOf(
+                        "hermes_session_at=access-1",
+                        "hermes_session_rt=refresh-1",
+                        "hermes_session_provider=testpw",
+                    ),
+                ),
+            )
+            val credentials = RecordingCredentialStore(original)
+            val client = HermesRestClient(OkHttpClient(), Json { ignoreUnknownKeys = true }, credentials)
+
+            client.sessions(config(server), original.headerValue)
+
+            assertEquals(
+                "hermes_session_at=access-2; hermes_session_rt=refresh-2; hermes_session_provider=testpw",
+                credentials.saved?.headerValue,
+            )
         }
     }
 
@@ -34,4 +66,11 @@ class HermesRestClientSessionCookieTest {
         authMode = AuthMode.DASHBOARD_SESSION,
         allowInsecurePrivateNetwork = true,
     )
+}
+
+private class RecordingCredentialStore(initial: DashboardSessionCredential) : SessionCredentialStore {
+    var saved: DashboardSessionCredential? = initial
+    override fun put(backendId: String, cookie: DashboardSessionCredential) { saved = cookie }
+    override fun get(backendId: String): DashboardSessionCredential? = saved
+    override fun remove(backendId: String) { saved = null }
 }

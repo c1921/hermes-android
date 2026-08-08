@@ -66,6 +66,74 @@ Post-fix evidence: `/tmp/hermes-android-qa-qxuQgq/hermes-position-fixed.png`. Th
 
 ## Implementation checklist
 
+### Native hierarchy verification — 2026-08-07
+
+Issue #16 was verified on an isolated Android 16 / API 36 emulator. The existing
+`emulator-5554` instance and its app data were not modified.
+
+- Durable visual evidence: `docs/design/evidence/issue16-app-settings-api36.png`
+  (130% text, RTL-forced, animations disabled).
+
+- Canonical Chats → conversation → Artifacts back-stack, completed/cancelled
+  predictive back, saved-state recreation, and durable conversation identity:
+  `HermesNavigationTest`, 5/5 passed.
+- Device-local App settings separation, remote Diagnostics separation, and
+  stable scoped-resource rendering: `SettingsSeparationTest`, 3/3 passed.
+- A cold `hermes://app-settings` launch with no authenticated backend remained
+  on the device-local settings route instead of being replaced by onboarding;
+  verified both by `AppSettingsDeepLinkTest` and an adb/UI Automator smoke test.
+- Collapsed-by-default tool disclosure and expanded beautified transcript:
+  `ToolBlockTest`, 1/1 passed.
+- The App settings/scoped-resource/tool suite was repeated with Android
+  `font_scale=1.3`, `debug.force_rtl=1`, and all animation scales set to `0`:
+  4/4 passed with all required semantic targets present.
+- Both app and instrumentation APKs compiled for the phone layout; lint passed
+  against minSdk 28 after the deep-link codec was changed to API-safe URL
+  encoding overloads.
+
+The compact Chats surface uses a modal navigation drawer; expanded layouts keep
+the session rail and detail pane. Manage section containers are flat, avoiding
+nested card hierarchies.
+
+### Adaptive product shell verification — 2026-08-08
+
+Issue #17's production shell components were exercised on an isolated Android
+16 / API 36 emulator at
+360×800, 1280×800, and 1200×800 pixels at 160 dpi, with 130% text, forced RTL,
+and animations disabled. The task-owned emulator was stopped after the matrix.
+This evidence does not substitute for a live authenticated backend session on
+a physical foldable or tablet.
+
+- Material 3 Adaptive 1.2.0 now supplies the current window size and posture.
+  The canonical expanded breakpoint replaces the former fixed local `840.dp`
+  branch. Wide book postures place the persistent rail and detail on opposite
+  sides of the hinge; smaller or tabletop postures constrain content to the
+  larger non-occluded region.
+- Compact and expanded modes call the same exhaustive production destination
+  renderer. Expanded mode uses a true persistent rail rather than wrapping it
+  in a modal drawer, and the shared expanded boundary consumes system-bar
+  insets.
+- `AdaptiveWorkspaceShell` owns the production compact/list-detail transition,
+  destination-keyed saveable state, and a stable-resource-keyed supporting
+  pane. On large windows, expanding a real timeline tool keeps its beautified
+  inline disclosure and also opens the production transcript pane beside chat.
+- `AdaptiveWorkspaceStateTest` calls that production shell, moves a focused,
+  populated composer compact → expanded → compact, then emulates saved-instance
+  restoration. It verifies the typed backend/profile/session route, draft,
+  focus, and supporting-pane visibility: 1/1 passed.
+- `AdaptiveWorkspaceLayoutTest` verifies compact, medium, expanded, large, and
+  hinge-safe partition and physical-region fallback policy in both LTR and RTL,
+  including crossing hinges and scoped tool identity: 6/6 passed.
+- `ToolBlockTest` verifies collapsed-by-default disclosure, the beautified
+  transcript, synchronized inline/supporting-pane state, and close behavior:
+  2/2 passed.
+- `AdaptiveWorkspaceScreenshotTest` compares packaged deterministic goldens for
+  compact, expanded supporting-pane, and RTL book-fold layouts: 3/3 passed.
+  Fresh evidence is stored in `docs/design/evidence/issue17-shell-*-api36.png`.
+- The final focused batch (`AdaptiveWorkspaceStateTest`, `ToolBlockTest`,
+  `AppSettingsDeepLinkTest`, `HermesNavigationTest`, and
+  `SettingsSeparationTest`) passed 12/12 after the final saved-state fix.
+
 - [x] Exact live-site palette tokens
 - [x] Real first-party hero and badge assets
 - [x] Official Desktop launcher icon

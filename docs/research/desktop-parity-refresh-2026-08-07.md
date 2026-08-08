@@ -1,0 +1,60 @@
+# Hermes Desktop parity refresh — 2026-08-07
+
+## Scope and attribution
+
+This is a bounded comparison of the shipped Hermes Desktop application with the
+Hermes Android `dev` branch. It deliberately excludes Android/mobile issues,
+proposals, and third-party clients. The report that prompted this work is most
+likely GitHub issue [#2, “Connect Hermes Android to a secured Dashboard”](https://github.com/luinbytes/hermes-android/issues/2), which implements the
+parent [#1, “Spec: authenticate Hermes Android through Dashboard sign-in”](https://github.com/luinbytes/hermes-android/issues/1).
+
+Issue #2’s acceptance criteria are: collect dashboard URL/username/password;
+sign in and persist only `hermes_session_at`; save only after authenticated HTTP
+and WebSocket checks; expose reconnect-required failures without saving bad
+state; keep credentials out of UI/backup/diagnostics/logs; prove the complete
+connect-and-save flow against a fake dashboard; and pass focused and full tests.
+Its parent spec explicitly makes OAuth and multi-account identity flows out of
+scope. That is a valid narrow feature request, but it is not a 1:1 Desktop
+parity specification.
+
+The current upstream Desktop source was checked at Hermes Agent commit
+[`f15a38ee73631b3cd5f7d30765c37d5f0245d403`](https://github.com/NousResearch/hermes-agent/commit/f15a38ee73631b3cd5f7d30765c37d5f0245d403), dated 2026-08-07. The Android
+checkout was `dev` at [`f562904da792e1d5706d5dcede1cb9b6870a64ae`](https://github.com/luinbytes/hermes-android/commit/f562904da792e1d5706d5dcede1cb9b6870a64ae).
+This auth path's oldest verified Hermes Agent version is `0.20.0`; Hermes Desktop remains `0.17.0` at that source pin.
+The older [`desktop-parity-matrix.md`](./desktop-parity-matrix.md) is pinned to
+upstream `5122ddd` (2026-07-17), so its “implemented” password-auth row is not
+evidence against today’s Desktop contract.
+
+## What Desktop actually ships
+
+| Desktop behavior | Primary source |
+| --- | --- |
+| Remote settings probe `/api/status`, inspect advertised providers, and distinguish OAuth/password-capable gateways from static-token gateways. Password-capable gateways use the same sign-in button and downstream session path; Desktop does not expose a separate native password form in settings. | [`gateway-settings.tsx`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/src/app/settings/gateway-settings.tsx#L360-L371), [`gateway-settings.tsx`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/src/app/settings/gateway-settings.tsx#L523-L579), [`gateway-settings.tsx`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/src/app/settings/gateway-settings.tsx#L1282-L1337) |
+| The OAuth login window uses a persistent Electron session partition. REST requests are sent with that partition’s cookies, and a WebSocket uses a single-use ticket minted by `POST /api/auth/ws-ticket`; the WS URL carries `?ticket=`, not a browser cookie. | [`main.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/main.ts#L5815-L5842), [`main.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/main.ts#L6009-L6162) |
+| Current Desktop can select a native OAuth flow from the server’s `auth_flows` capability, opening the system browser and completing loopback + PKCE. The fallback is the embedded cookie login window. | [`native-oauth.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth.ts#L22-L27), [`native-oauth.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth.ts#L71-L129), [`native-oauth-login.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth-login.ts#L69-L77) |
+| The server contract that Desktop calls accepts `provider`, username, and password, sets access and refresh session cookies, and mints a short-lived single-use WS ticket. The status response advertises `auth_providers` and `auth_flows`; native PKCE is advertised for non-password providers. | [`routes.py`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/hermes_cli/dashboard_auth/routes.py#L650-L739), [`routes.py`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/hermes_cli/dashboard_auth/routes.py#L799-L828), [`web_server.py`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/hermes_cli/web_server.py#L3173-L3204) |
+
+## Concrete parity deltas
+
+| Priority | Shipped Android behavior | Desktop parity gap | Evidence / consequence |
+| --- | --- | --- | --- |
+| P0 | Login hard-codes `provider: "basic"` and parses only the first accepted access-cookie name; the credential store is one `DashboardSessionCookie`. | Desktop/server sessions include both access and refresh cookies and let the server refresh an expired access token transparently. | [`DashboardAuthClient.kt`](../../app/src/main/java/com/nousresearch/hermes/network/DashboardAuthClient.kt#L16-L80), [`SecureTokenStore.kt`](../../app/src/main/java/com/nousresearch/hermes/security/SecureTokenStore.kt#L20-L53). Current upstream’s password-login tests cover access-cookie expiry and refresh-cookie recovery: [`test_dashboard_auth_password_login.py`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/tests/hermes_cli/test_dashboard_auth_password_login.py#L234-L314). Android therefore falls to reconnect once its access cookie expires instead of matching Desktop’s durable session behavior. |
+| P0 | Android validates status with the cookie, asks for a WS ticket, then opens `/api/ws?ticket=` without a Cookie header. | This is the correct current Desktop/server transport, but issue #2’s wording says the WS handshake itself must reuse the cookie. The report’s acceptance criterion is stale/misleading relative to shipped Desktop behavior; the red test must assert cookie on ticket mint and ticket-only WS upgrade. | [`DashboardBackendConnector.kt`](../../app/src/main/java/com/nousresearch/hermes/data/DashboardBackendConnector.kt#L26-L65), [`DashboardAuthClient.kt`](../../app/src/main/java/com/nousresearch/hermes/network/DashboardAuthClient.kt#L83-L110), [`OkHttpHermesGatewayClient.kt`](../../app/src/main/java/com/nousresearch/hermes/protocol/OkHttpHermesGatewayClient.kt#L48-L56), [`OkHttpHermesGatewayClient.kt`](../../app/src/main/java/com/nousresearch/hermes/protocol/OkHttpHermesGatewayClient.kt#L165-L171). Existing fake-dashboard assertions already encode this ticket seam: [`DashboardBackendConnectorTest.kt`](../../app/src/test/java/com/nousresearch/hermes/data/DashboardBackendConnectorTest.kt#L25-L43). |
+| P1 | Android has no provider discovery and no capability-driven auth selection. | Desktop probes status and uses advertised password providers/auth flows; Android cannot connect to a deployment whose password provider is not named `basic`, nor choose native OAuth. | Desktop provider/capability handling: [`gateway-settings.tsx`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/src/app/settings/gateway-settings.tsx#L211-L371). Android hard-code: [`DashboardAuthClient.kt`](../../app/src/main/java/com/nousresearch/hermes/network/DashboardAuthClient.kt#L49-L60). |
+| P1 | Android’s `AuthMode.OAUTH` is an enum value, but the shipped onboarding path only accepts `DASHBOARD_SESSION`; there is no Android native browser/loopback/PKCE implementation. | Current Desktop supports `native_pkce` where advertised and persists/refreshes bearer tokens for that flow. This is the largest user-visible Desktop auth feature absent from Android, although issue #1 explicitly marked OAuth out of scope. | Desktop flow: [`native-oauth.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth.ts#L71-L129), [`native-oauth-login.ts`](https://github.com/NousResearch/hermes-agent/blob/f15a38ee73631b3cd5f7d30765c37d5f0245d403/apps/desktop/electron/native-oauth-login.ts#L69-L77). Android gate: [`DashboardBackendConnector.kt`](../../app/src/main/java/com/nousresearch/hermes/data/DashboardBackendConnector.kt#L26-L32). |
+
+The audit found two report-level corrections: retain the renewable cookie bundle while keeping the ticket-only WebSocket upgrade, and discover the advertised password provider instead of assuming `basic`. The `dev` implementation now includes both corrections. Native PKCE remains a separate parity ticket because issue #1 excludes OAuth.
+
+## Development result on `dev`
+
+The current `dev` implementation applies the report-related correction in this repository. Android now discovers the public provider catalogue instead of assuming `basic`, accepts a sole advertised password provider, retains the bounded access, rotating-refresh, and provider-routing cookie bundle, merges successful REST and WebSocket-ticket cookie rotations back into encrypted storage, and keeps the WebSocket upgrade ticket-only. The connector and shared REST seams have fake-Dashboard coverage for the complete login → refresh → ticket → WebSocket → save path.
+
+This does not make the entire app 1:1 with every Desktop authentication mode. A native selector is still required when a Dashboard advertises multiple password providers, and Desktop's system-browser native-PKCE backend login remains separate work. Those are not part of issue #2's password connect-and-save acceptance criteria.
+
+## Verification result
+
+The `DashboardBackendConnector.loginValidateAndSave` fake-Dashboard seam now matches the current Desktop/server contract. It proves provider discovery, an expired access cookie with a valid refresh cookie, exact cookie-bundle reuse, access and refresh rotation, fresh ticket minting, and a ticket-only WebSocket upgrade. Negative coverage rejects invalid login, malformed cookies and tickets, failed REST and WebSocket validation, legacy token records, and expired saved sessions without persisting bad state.
+
+The CI artifact for `dev` commit `015b0a1` passed unit tests, Android lint, debug APK/AAB builds, signing, and signature verification. A headless Android 16 Google Play emulator then completed the full onboarding flow against a bounded fake Dashboard. The server observed the expected provider and login fields, exact rotated cookies on REST and ticket requests, and no Cookie header on each WebSocket upgrade. Force-stop and relaunch restored the encrypted renewable session without another login. Resetting the fake server invalidated the saved session, and Android displayed the reconnect-required backend screen without crashing.
+
+Native PKCE requires its own capability seam with state and PKCE challenge verification, loopback code exchange, token refresh, and token-authenticated REST and ticket calls. A multiple-password-provider implementation also needs a native provider selector. Issue #1 excludes both flows.

@@ -52,4 +52,22 @@ class PrivacyPreferencesTest {
         )
         scope.cancel()
     }
+
+    @Test
+    fun `biometric re-entry is opt-in and durable`() = runTest {
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val file = File(temporaryFolder.root, "biometric.preferences_pb")
+        val store = PreferenceDataStoreFactory.create(scope = scope) { file }
+        val preferences = PrivacyPreferences(store)
+
+        assertFalse(preferences.biometricReentry.first())
+        preferences.setBiometricReentry(true)
+        assertTrue(preferences.biometricReentry.first())
+
+        val recreated = PrivacyPreferences(store)
+        assertTrue(recreated.biometricReentry.first())
+        recreated.setBiometricReentry(false)
+        assertFalse(preferences.biometricReentry.first())
+        scope.cancel()
+    }
 }

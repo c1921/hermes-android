@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,7 +47,7 @@ internal fun SessionActions(
 ) {
     var menuOpen by rememberSaveable { mutableStateOf(false) }
     var dialog by rememberSaveable { mutableStateOf<SessionDialog?>(null) }
-    var input by rememberSaveable { mutableStateOf("") }
+    var input by remember { mutableStateOf("") }
     val running = state.runtimeInfo.running || state.sending
     val hasHistory = state.timeline.items.isNotEmpty()
 

@@ -1,0 +1,96 @@
+{
+  "status": "ready",
+  "hermes_version": "0.20.0",
+  "capabilities": {
+    "schema_version": 1,
+    "contract_version": 1,
+    "authorized": true,
+    "resolved_profile": "work",
+    "profiles": ["work"],
+    "audience": "hermes-android",
+    "scopes": ["session.read", "session.write", "device.manage", "admin.write"],
+    "future_field": {"ignored": true},
+    "capabilities": {
+      "full_client_boundary_v1": {"advertised": true, "scopes": ["session.read", "session.write"]},
+      "native_pkce_v1": {
+        "advertised": true,
+        "methods": {
+          "auth.native.start": {"parameters": ["redirect_uri", "code_challenge", "state"]},
+          "auth.native.exchange": {"parameters": ["code", "code_verifier", "redirect_uri"]},
+          "auth.native.refresh": {"parameters": ["refresh_token"]},
+          "auth.native.revoke": {"parameters": ["refresh_token"]}
+        }
+      },
+      "profile_scoping_v1": {"advertised": true, "profile_scope": "profile", "profiles": ["work"]},
+      "event_replay_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "scopes": ["session.read"],
+        "methods": {
+          "session.events.resume": {"parameters": ["session_id", "profile", "cursor"], "scopes": ["session.read"]}
+        },
+        "events": ["message.delta", "message.complete", "resync.required"]
+      },
+      "multi_client_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "methods": {"session.control": {"parameters": ["session_id", "profile", "mode"], "scopes": ["session.write"]}}
+      },
+      "client_devices_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "scopes": ["device.manage", "session.write"],
+        "methods": {
+          "client.devices.register": {"parameters": ["installation_key", "push_token"]},
+          "client.devices.revoke": {"parameters": ["device_id"]},
+          "notifications.ack": {"parameters": ["event_id"]},
+          "approval.action": {"parameters": ["action_token", "decision"]}
+        }
+      },
+      "artifacts_uploads_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "scopes": ["session.read", "session.write"],
+        "methods": {
+          "artifact.list": {"parameters": ["profile"]},
+          "artifact.read": {"parameters": ["artifact_id", "profile"]},
+          "artifact.download": {"parameters": ["artifact_id", "profile"]},
+          "upload.start": {"parameters": ["profile", "name", "mime", "size", "digest"]},
+          "upload.complete": {"parameters": ["profile", "upload_id", "digest"]}
+        }
+      },
+      "mcp_patch_oauth_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "scopes": ["admin.write"],
+        "methods": {
+          "mcp.server.patch": {"parameters": ["profile", "name", "patch", "revision"]},
+          "mcp.oauth.start": {"parameters": ["profile", "name"]},
+          "mcp.oauth.status": {"parameters": ["profile", "name", "transaction_id"]},
+          "mcp.oauth.cancel": {"parameters": ["profile", "name", "transaction_id"]}
+        }
+      },
+      "rollback_precondition_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "scopes": ["session.write"],
+        "methods": {
+          "rollback.diff": {"parameters": ["session_id", "checkpoint"]},
+          "rollback.restore": {"parameters": ["session_id", "checkpoint", "expected_preview_id"]}
+        }
+      },
+      "tool_lifecycle_v1": {
+        "advertised": true,
+        "profile_scope": "profile",
+        "profiles": ["work"],
+        "events": ["tool.start", "tool.update", "tool.complete"]
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ package com.nousresearch.hermes.platform
 
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nousresearch.hermes.data.AttachmentReader
+import java.io.File
 import java.util.Base64
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -21,5 +22,20 @@ class CameraCaptureTest {
         assertEquals("image/jpeg", payload.mimeType)
         assertEquals(bytes.toList(), Base64.getDecoder().decode(payload.base64).toList())
         assertTrue(runCatching { context.contentResolver.openInputStream(uri)!!.close() }.isFailure)
+    }
+
+    @Test
+    fun abandonedCameraFilesArePrunedOnTheNextCapture() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val old = File(context.cacheDir, "camera/hermes-camera-abandoned.jpg").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1))
+            setLastModified(System.currentTimeMillis() - 25 * 60 * 60 * 1_000L)
+        }
+
+        val fresh = newCameraCaptureUri(context)
+
+        assertTrue(!old.exists())
+        context.contentResolver.delete(fresh, null, null)
     }
 }

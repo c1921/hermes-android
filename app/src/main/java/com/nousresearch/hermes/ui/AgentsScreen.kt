@@ -68,8 +68,8 @@ internal fun AgentsScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var pendingInterrupt by rememberSaveable { mutableStateOf<String?>(null) }
-    var pendingProcessStop by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingInterrupt by remember { mutableStateOf<String?>(null) }
+    var pendingProcessStop by remember { mutableStateOf<String?>(null) }
     val activeIds = state.activeSubagents.mapTo(mutableSetOf(), SubagentProgress::id)
     val recent = state.subagentsBySession.entries.flatMap { (sessionId, agents) ->
         agents.filterNot { it.id in activeIds }.map { sessionId to it }

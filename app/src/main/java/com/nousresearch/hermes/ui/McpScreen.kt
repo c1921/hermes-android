@@ -67,10 +67,10 @@ internal fun McpScreen(
     modifier: Modifier = Modifier,
 ) {
     var view by rememberSaveable { mutableStateOf(McpView.CONFIGURED) }
-    var query by rememberSaveable { mutableStateOf("") }
-    var pendingToggleName by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var pendingToggleName by remember { mutableStateOf<String?>(null) }
     var pendingToggleEnabled by rememberSaveable { mutableStateOf(false) }
-    var pendingRemoveName by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingRemoveName by remember { mutableStateOf<String?>(null) }
     var pendingInstall by remember { mutableStateOf<McpCatalogEntry?>(null) }
     var installEnv by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(Unit) { onRefresh() }

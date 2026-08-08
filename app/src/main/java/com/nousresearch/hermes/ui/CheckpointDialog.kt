@@ -22,6 +22,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,7 +40,7 @@ internal fun CheckpointDialog(
     onRestore: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var pendingRestore by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingRestore by remember { mutableStateOf<String?>(null) }
     val preview = state.checkpointPreview
     val running = state.runtimeInfo.running || state.sending
 

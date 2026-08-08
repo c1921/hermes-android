@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -44,6 +45,22 @@ class BackendRegistry @Inject constructor(
         context.backendDataStore.edit { it[ACTIVE] = id }
     }
 
+    suspend fun sessionTarget(backendId: String): SessionTarget? {
+        val raw = context.backendDataStore.data.first()[sessionTargetKey(backendId)] ?: return null
+        return runCatching { json.decodeFromString(SessionTarget.serializer(), raw) }.getOrNull()
+    }
+
+    suspend fun saveSessionTarget(target: SessionTarget) {
+        context.backendDataStore.edit { preferences ->
+            preferences[sessionTargetKey(target.backendId)] =
+                json.encodeToString(SessionTarget.serializer(), target)
+        }
+    }
+
+    suspend fun clearSessionTarget(backendId: String) {
+        context.backendDataStore.edit { it.remove(sessionTargetKey(backendId)) }
+    }
+
     suspend fun remove(id: String) {
         context.backendDataStore.edit { preferences ->
             val current = preferences[BACKENDS]?.let { raw ->
@@ -55,11 +72,14 @@ class BackendRegistry @Inject constructor(
                 current.filterNot { it.id == id },
             )
             if (preferences[ACTIVE] == id) preferences.remove(ACTIVE)
+            preferences.remove(sessionTargetKey(id))
         }
     }
 
     private companion object {
         val BACKENDS = stringPreferencesKey("backends.v1")
         val ACTIVE = stringPreferencesKey("active_backend.v1")
+
+        fun sessionTargetKey(backendId: String) = stringPreferencesKey("session_target.v1.$backendId")
     }
 }

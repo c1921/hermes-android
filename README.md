@@ -29,16 +29,16 @@ The screenshots were captured on a Samsung SM-S906E running Android 16 in dark m
 
 ## Project status
 
-Last verified: 19 July 2026.
+Last verified: 7 August 2026.
 
-The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly locally with JDK 17. Pushes to `dev` publish artifacts under one stable debug certificate. Successful pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly. Pushes to `dev` publish artifacts under one stable debug certificate. Successful pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The 7 August CI artifact completed provider discovery, password login, access/refresh/provider cookie rotation, ticket-only WebSocket validation, encrypted session restoration after process death, and expired-session recovery on a headless Android 16 Google Play emulator. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 See [Android signing and branch flow](docs/release-signing.md) for the public certificate fingerprints, artifact names, and promotion contract.
 
 ### Implemented
 
 - [x] Dashboard username/password onboarding through `POST /auth/password-login`
-- [x] Required `hermes_session_at` session-cookie extraction and validation
+- [x] Advertised password-provider discovery plus bounded access, rotating-refresh, and provider-routing session-cookie validation
 - [x] Authenticated `/api/status` REST validation using the Dashboard cookie
 - [x] Cookie-authenticated `POST /api/auth/ws-ticket` followed by authenticated `/api/ws?ticket=` JSON-RPC WebSocket handshake
 - [x] Save only after login, REST, ticket minting, and WebSocket validation all succeed
@@ -88,7 +88,7 @@ See [Android signing and branch flow](docs/release-signing.md) for the public ce
 - [ ] **Partial:** tool activity is structured and expandable; specialised renderers and canonical inline media for every Hermes tool are not complete.
 - [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews/actions work; upload progress, large streamed uploads, and canonical generated-artifact delivery are not complete.
 - [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
-- [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report. Release checksums are published; SBOM and signed provenance remain.
+- [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report. Generated build provenance and release checksums are published; SBOM and attestation-based reproducibility remain.
 
 ### Correctness fixes
 
@@ -130,7 +130,7 @@ In **Backend Link**, enter:
 3. The existing Dashboard username.
 4. The existing Dashboard password.
 
-The app submits the credentials to the Dashboard login endpoint, requires its secure Hermes session cookie, validates authenticated REST, mints a fresh single-use WebSocket ticket, then validates `/api/ws?ticket=`. It saves the backend and encrypted cookie only after every step succeeds. The password exists only long enough to submit the login request and is cleared from the transient input state; it is not written to DataStore, preferences, backups, diagnostics, or logs.
+The app first reads the Dashboard's public authentication-provider catalogue and uses its sole advertised password provider; it never assumes the provider is named `basic`. It submits the credentials to the Dashboard login endpoint, requires a bounded access-cookie bundle, retains rotating refresh and provider-routing cookies when returned, validates authenticated REST, mints a fresh single-use WebSocket ticket, then validates `/api/ws?ticket=`. It saves the backend and encrypted session only after every step succeeds. Successful authenticated responses merge rotated cookies back into encrypted storage so an expired access token can renew without restoring the password. The password exists only long enough to submit the login request and is cleared from the transient input state; it is not written to DataStore, preferences, backups, diagnostics, or logs.
 
 ### Normal HTTPS
 
@@ -169,13 +169,13 @@ Public hostnames over cleartext HTTP remain rejected. Private DNS names should u
 
 ### Existing token-only records
 
-Records created by earlier builds are not migrated or reinterpreted. They display **Reconnect** and require the Dashboard username and password. A successful reconnect replaces the old encrypted token entry with the new Dashboard session cookie.
+Legacy token records are not migrated or reinterpreted. They display **Reconnect** and require the Dashboard username and password. Existing encrypted access-cookie records remain readable, while a successful reconnect replaces a legacy token with the complete renewable Dashboard session bundle.
 
 If the Dashboard expires or rejects a saved cookie, the app removes it, disconnects the socket, and presents a reconnect-required state for that backend.
 
 ## Security model
 
-- Dashboard session cookies are encrypted with AES-GCM using a non-exportable Android Keystore key.
+- Dashboard access, refresh, and provider-routing session cookies are bounded and encrypted together with AES-GCM using a non-exportable Android Keystore key.
 - `android:allowBackup` is disabled and the secret preferences file is excluded from device transfer.
 - Session-cookie string representations are redacted.
 - REST authentication uses the `Cookie` header; Dashboard sessions are not converted into bearer tokens.
@@ -192,15 +192,15 @@ See [`docs/security/threat-model.md`](docs/security/threat-model.md) for the bro
 Requirements:
 
 - JDK 17
-- Android SDK Platform 35
-- Android SDK Build Tools 35.0.0
+- Android SDK Platform 36
+- Android SDK Build Tools 36.0.0
 
 JDK 26 is not supported by the current Gradle/Android Gradle Plugin toolchain and can fail before project configuration. Point `JAVA_HOME` at JDK 17 when necessary.
 
 Run the same project gate used by CI:
 
 ```bash
-./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:bundleDebug
+./gradlew --no-daemon -Phermes.provenance.channel=debug :app:testDebugUnitTest :app:lintDebug :app:writeBuildProvenance :app:assembleDebug :app:bundleDebug
 ```
 
 Run only the Dashboard-authentication contract tests:
@@ -268,7 +268,7 @@ Unimplemented items that do not depend on an upstream change remain local engine
 
 The client uses Hermes REST APIs for backend-owned management data and the TUI Gateway JSON-RPC/WebSocket protocol for interactive sessions. It is not a WebView wrapper, an OpenAI-compatible chat-only client, or a messaging-platform adapter.
 
-The source audit is pinned to Hermes Agent commit `5122ddd478143a6901bb752cf8ebcd1c5154b6da` (Hermes Agent `0.18.2`, Desktop `0.17.0`) from 18 July 2026. That exact commit is the verified source contract; version strings alone are insufficient because it is 120 commits ahead of the previous baseline without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
+The current source audit is pinned to Hermes Agent commit `b9aa9289a8083f2e9d248ad6837b2938f5ee92d7` (Hermes Agent `0.20.0`, Desktop `0.17.0`) from 8 August 2026. That exact commit is the verified source contract; version strings alone are insufficient because the backend can change without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
 
 Upstream Hermes remains read-only from this repository. Proposed general protocol changes are documented locally for owner-led upstream review.
 
@@ -276,6 +276,7 @@ Upstream Hermes remains read-only from this repository. Proposed general protoco
 
 - [`docs/research/upstream-baseline.md`](docs/research/upstream-baseline.md) — audited source baseline and protocol entry points
 - [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md) — detailed Desktop capability audit
+- [`docs/release-provenance.md`](docs/release-provenance.md) — generated build identity and release metadata contract
 - [`docs/architecture/android-client-rfc.md`](docs/architecture/android-client-rfc.md) — architecture alternatives and chosen hybrid client
 - [`docs/design/mobile-product-spec.md`](docs/design/mobile-product-spec.md) — mobile information architecture, states, motion, and accessibility intent
 - [`docs/security/threat-model.md`](docs/security/threat-model.md) — Android and remote-client threats and release gates

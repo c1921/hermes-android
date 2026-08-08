@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, dev]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -13,6 +17,7 @@ jobs:
   quality:
     name: Tests and lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -21,7 +26,7 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug
 
   dev-artifacts:
@@ -29,6 +34,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -37,7 +43,7 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Restore stable debug keystore
         env:
           HERMES_DEBUG_KEYSTORE_BASE64: ${{ secrets.HERMES_DEBUG_KEYSTORE_BASE64 }}
@@ -54,7 +60,7 @@ jobs:
           HERMES_DEBUG_KEY_ALIAS: hermes-debug
           HERMES_DEBUG_KEY_PASSWORD: ${{ secrets.HERMES_DEBUG_KEYSTORE_PASSWORD }}
           HERMES_REQUIRE_DEBUG_SIGNING: "true"
-        run: ./gradlew --no-daemon :app:assembleDebug :app:bundleDebug
+        run: ./gradlew --no-daemon -Phermes.provenance.channel=debug :app:writeBuildProvenance :app:assembleDebug :app:bundleDebug
       - name: Sign debug app bundle
         env:
           HERMES_DEBUG_KEYSTORE_PATH: ${{ runner.temp }}/hermes-signing/debug.p12
@@ -74,8 +80,8 @@ jobs:
         run: |
           set -euo pipefail
           debug_fingerprint="2a46d00222f6d6faf30b86b9fc0647998b25a82a2ba1531c70a84a91bbb1650c"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -F "$debug_fingerprint"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -F "$debug_fingerprint"
           keytool -printcert -jarfile app/build/outputs/bundle/debug/app-debug.aab | tr -d ': ' | grep -iF "$debug_fingerprint"
       - uses: actions/upload-artifact@v4
         with:
@@ -83,13 +89,16 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/bundle/debug/app-debug.aab
+            app/build/generated/provenance/hermes-android-debug.properties
           if-no-files-found: error
+          retention-days: 3
 
   release-artifacts:
     name: Main release APK and AAB
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release
     permissions:
       contents: write
@@ -101,7 +110,7 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Restore release keystore
         env:
           HERMES_RELEASE_KEYSTORE_BASE64: ${{ secrets.HERMES_RELEASE_KEYSTORE_BASE64 }}
@@ -118,13 +127,13 @@ jobs:
           HERMES_RELEASE_KEY_ALIAS: hermes-release
           HERMES_RELEASE_KEY_PASSWORD: ${{ secrets.HERMES_RELEASE_KEYSTORE_PASSWORD }}
           HERMES_REQUIRE_RELEASE_SIGNING: "true"
-        run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+        run: ./gradlew --no-daemon -Phermes.provenance.channel=release :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease
       - name: Verify release signatures
         run: |
           set -euo pipefail
           release_fingerprint="3138e711ef881291c1c39495c7b55fe816b4155a97735116bc36a72097dc202d"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -F "$release_fingerprint"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -F "$release_fingerprint"
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | tr -d ': ' | grep -iF "$release_fingerprint"
       - name: Stage release downloads
         run: |
@@ -133,17 +142,9 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/hermes-release/hermes-android-release.apk"
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-release/hermes-android-release.aab"
           cp app/build/outputs/mapping/release/mapping.txt "$RUNNER_TEMP/hermes-release/hermes-android-release-mapping.txt"
+          cp app/build/generated/provenance/hermes-android-release.properties "$RUNNER_TEMP/hermes-release/hermes-android-release.provenance.properties"
           cd "$RUNNER_TEMP/hermes-release"
-          sha256sum hermes-android-release.apk hermes-android-release.aab hermes-android-release-mapping.txt > hermes-android-release.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hermes-android-release
-          path: |
-            ${{ runner.temp }}/hermes-release/hermes-android-release.apk
-            ${{ runner.temp }}/hermes-release/hermes-android-release.aab
-            ${{ runner.temp }}/hermes-release/hermes-android-release-mapping.txt
-            ${{ runner.temp }}/hermes-release/hermes-android-release.sha256
-          if-no-files-found: error
+          sha256sum hermes-android-release.apk hermes-android-release.aab hermes-android-release-mapping.txt hermes-android-release.provenance.properties > hermes-android-release.sha256
       - name: Publish latest release downloads
         env:
           GH_TOKEN: ${{ github.token }}
@@ -155,17 +156,30 @@ jobs:
             "$release_dir/hermes-android-release.apk"
             "$release_dir/hermes-android-release.aab"
             "$release_dir/hermes-android-release-mapping.txt"
+            "$release_dir/hermes-android-release.provenance.properties"
             "$release_dir/hermes-android-release.sha256"
           )
 
+          notes_file="$release_dir/hermes-android-release-notes.md"
+          {
+            echo "Signed Android release built from main at $GITHUB_SHA."
+            echo
+            echo "Build provenance:"
+            echo
+            echo '```properties'
+            cat "$release_dir/hermes-android-release.provenance.properties"
+            echo '```'
+          } > "$notes_file"
+
           if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$release_tag" "${release_files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$release_tag" --notes-file "$notes_file" --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$release_tag" "${release_files[@]}" \
               --draft \
               --target "$GITHUB_SHA" \
               --title "Hermes Android ${GITHUB_SHA::12}" \
-              --notes "Signed Android release built from main at $GITHUB_SHA." \
+              --notes-file "$notes_file" \
               --repo "$GITHUB_REPOSITORY"
           fi
 

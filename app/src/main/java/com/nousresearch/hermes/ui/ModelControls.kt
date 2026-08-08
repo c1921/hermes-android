@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -195,7 +196,7 @@ private fun ModelPickerDialog(
     onRefresh: () -> Unit,
     onSelect: (String, String) -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     val filtered = providers.mapNotNull { provider ->
         val models = provider.models.filter { model ->
             query.isBlank() || model.contains(query, ignoreCase = true) || provider.name.contains(query, ignoreCase = true)

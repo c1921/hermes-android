@@ -1,5 +1,7 @@
 package com.nousresearch.hermes.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Pause
@@ -42,10 +45,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -55,27 +60,32 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.ProfileIdentityDraft
+import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.SkillHubResult
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.ToolsetInfo
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 private enum class CapabilityView { SKILLS, HUB, TOOLSETS }
 
 @Composable
 internal fun BackendsScreen(
     state: HermesState,
-    onConnect: (String, String, String, String, Boolean) -> Unit,
+    onDiscoverPasswordProviders: suspend (String, Boolean) -> List<DashboardAuthProvider>,
+    onConnect: (String, String, String, String, Boolean, String) -> Unit,
     onSelect: (String) -> Unit,
     onForget: (String) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var adding by rememberSaveable { mutableStateOf(false) }
-    var reconnectId by rememberSaveable { mutableStateOf<String?>(null) }
-    var forgetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var reconnectId by remember { mutableStateOf<String?>(null) }
+    var forgetId by remember { mutableStateOf<String?>(null) }
     val forgetBackend = state.savedBackends.firstOrNull { it.id == forgetId }
     Column(modifier.fillMaxSize()) {
         ManagementHeader("BACKENDS", "Saved Hermes installations", state.loading, null, onBack)
@@ -145,11 +155,12 @@ internal fun BackendsScreen(
     if (adding) {
         BackendConnectionDialog(
             initial = state.savedBackends.firstOrNull { it.id == reconnectId },
+            onDiscoverPasswordProviders = onDiscoverPasswordProviders,
             onDismiss = { adding = false; reconnectId = null },
-            onConnect = { label, url, username, password, allowPrivate ->
+            onConnect = { label, url, username, password, allowPrivate, provider ->
                 adding = false
                 reconnectId = null
-                onConnect(label, url, username, password, allowPrivate)
+                onConnect(label, url, username, password, allowPrivate, provider)
             },
         )
     }
@@ -174,21 +185,44 @@ internal fun BackendsScreen(
 @Composable
 private fun BackendConnectionDialog(
     initial: BackendConfig?,
+    onDiscoverPasswordProviders: suspend (String, Boolean) -> List<DashboardAuthProvider>,
     onDismiss: () -> Unit,
-    onConnect: (String, String, String, String, Boolean) -> Unit,
+    onConnect: (String, String, String, String, Boolean, String) -> Unit,
 ) {
-    var label by rememberSaveable(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
-    var url by rememberSaveable(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
-    var username by rememberSaveable { mutableStateOf("") }
+    var label by remember(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
+    var url by remember(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
+    var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var allowPrivate by rememberSaveable(initial?.id) { mutableStateOf(initial?.allowInsecurePrivateNetwork == true) }
+    var passwordProviders by remember { mutableStateOf(emptyList<DashboardAuthProvider>()) }
+    var selectedProvider by remember { mutableStateOf<String?>(null) }
+    var providerSource by remember { mutableStateOf<String?>(null) }
+    var providerError by remember { mutableStateOf<String?>(null) }
+    var discoveringProviders by remember { mutableStateOf(false) }
+    val providerDiscoveryGate = remember { DashboardProviderDiscoveryGate() }
+    val providerScope = rememberCoroutineScope()
+    val providerKey = "${url.trim().trimEnd('/')}|$allowPrivate"
+
+    fun clearProviderSelection() {
+        providerDiscoveryGate.invalidate()
+        discoveringProviders = false
+        passwordProviders = emptyList()
+        selectedProvider = null
+        providerSource = null
+        providerError = null
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "ADD HERMES BACKEND" else "RECONNECT HERMES BACKEND") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
-                OutlinedTextField(url, { url = it }, label = { Text("HTTPS URL") }, singleLine = true)
+                OutlinedTextField(
+                    url,
+                    { value -> url = value; clearProviderSelection() },
+                    label = { Text("HTTPS URL") },
+                    singleLine = true,
+                )
                 OutlinedTextField(
                     username,
                     { username = it },
@@ -209,21 +243,72 @@ private fun BackendConnectionDialog(
                     }
                     Switch(
                         checked = allowPrivate,
-                        onCheckedChange = { allowPrivate = it },
+                        onCheckedChange = { allowPrivate = it; clearProviderSelection() },
                         modifier = Modifier.semantics { contentDescription = "Allow private-network HTTP" },
                     )
                 }
+                if (passwordProviders.size > 1 && providerSource == providerKey) {
+                    DashboardPasswordProviderSelector(
+                        providers = passwordProviders,
+                        selectedProvider = selectedProvider,
+                        onSelected = { selectedProvider = it; providerError = null },
+                    )
+                }
+                DashboardOAuthAvailabilityNotice()
+                providerError?.let { ManagementError(it) }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    val submittedPassword = password
-                    password = ""
-                    onConnect(label, url, username, submittedPassword, allowPrivate)
+                    val submit: (String) -> Unit = { provider ->
+                        val submittedPassword = password
+                        password = ""
+                        onConnect(label, url, username, submittedPassword, allowPrivate, provider)
+                    }
+                    if (providerSource == providerKey) {
+                        selectedProvider?.let(submit)
+                    } else {
+                        val requestToken = providerDiscoveryGate.begin()
+                        if (requestToken != null) {
+                            val requestedUrl = url
+                            val requestedAllowPrivate = allowPrivate
+                            discoveringProviders = true
+                            providerError = null
+                            providerScope.launch {
+                                try {
+                                    val providers = onDiscoverPasswordProviders(requestedUrl, requestedAllowPrivate)
+                                    if (providerDiscoveryGate.isCurrent(requestToken)) {
+                                        providerSource = "${requestedUrl.trim().trimEnd('/')}|$requestedAllowPrivate"
+                                        passwordProviders = providers
+                                        selectedProvider = providers.singleOrNull()?.name
+                                        if (providers.size == 1) submit(providers.single().name)
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (failure: Throwable) {
+                                    if (providerDiscoveryGate.isCurrent(requestToken)) {
+                                        clearProviderSelection()
+                                        providerError = failure.message ?: "Could not load Dashboard sign-in providers."
+                                    }
+                                } finally {
+                                    val current = providerDiscoveryGate.isCurrent(requestToken)
+                                    providerDiscoveryGate.finish(requestToken)
+                                    if (current) discoveringProviders = false
+                                }
+                            }
+                        }
+                    }
                 },
-                enabled = url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
-            ) { Text("Test and save") }
+                enabled = !discoveringProviders && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty() &&
+                    (providerSource != providerKey || passwordProviders.size == 1 || selectedProvider != null),
+            ) {
+                if (discoveringProviders) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(if (providerSource == providerKey) "Test and save" else "Check sign-in options")
+                }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
@@ -245,9 +330,9 @@ internal fun SkillsScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }
     var view by rememberSaveable { mutableStateOf(CapabilityView.SKILLS) }
-    var uninstallName by rememberSaveable { mutableStateOf<String?>(null) }
+    var uninstallName by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { onRefresh() }
     val visible = state.skills.filter {
         query.isBlank() || it.name.contains(query, true) || it.description.contains(query, true) || it.category.orEmpty().contains(query, true)
@@ -435,10 +520,12 @@ internal fun CronScreen(
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var editorJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editorJobId by remember { mutableStateOf<String?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
-    var deleteJobId by rememberSaveable { mutableStateOf<String?>(null) }
-    var expandedJobId by rememberSaveable { mutableStateOf<String?>(null) }
+    var deleteJobId by remember { mutableStateOf<String?>(null) }
+    var expandedJobId by remember { mutableStateOf<String?>(null) }
+    var pendingToggle by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var pendingRunJobId by remember { mutableStateOf<String?>(null) }
     val editorJob = state.cronJobs.firstOrNull { it.id == editorJobId }
     val deleteJob = state.cronJobs.firstOrNull { it.id == deleteJobId }
     LaunchedEffect(Unit) { onRefresh() }
@@ -468,8 +555,8 @@ internal fun CronScreen(
                 items(state.cronJobs, key = CronJob::id) { job ->
                     CronRow(
                         job,
-                        onSetEnabled,
-                        onTrigger,
+                        onSetEnabled = { id, enabled -> pendingToggle = id to enabled },
+                        onTrigger = { pendingRunJobId = it },
                         runs = state.cronRuns[job.id],
                         expanded = expandedJobId == job.id,
                         onHistory = {
@@ -523,6 +610,42 @@ internal fun CronScreen(
             dismissButton = { TextButton(onClick = { deleteJobId = null }) { Text("Cancel") } },
         )
     }
+    pendingToggle?.let { (jobId, enabled) ->
+        val job = state.cronJobs.firstOrNull { it.id == jobId }
+        AlertDialog(
+            onDismissRequest = { pendingToggle = null },
+            title = { Text(if (enabled) "RESUME CRON JOB?" else "PAUSE CRON JOB?") },
+            text = {
+                Text(
+                    "${if (enabled) "Resume" else "Pause"} ${job?.name?.takeIf(String::isNotBlank) ?: jobId} " +
+                        "for profile ${state.activeProfile}? ${if (enabled) "Future scheduled runs will resume." else "Future scheduled runs will stop until resumed."}",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingToggle = null; onSetEnabled(jobId, enabled) }) {
+                    Text(if (enabled) "Resume" else "Pause")
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingToggle = null }) { Text("Cancel") } },
+        )
+    }
+    pendingRunJobId?.let { jobId ->
+        val job = state.cronJobs.firstOrNull { it.id == jobId }
+        AlertDialog(
+            onDismissRequest = { pendingRunJobId = null },
+            title = { Text("RUN CRON JOB NOW?") },
+            text = {
+                Text(
+                    "Run ${job?.name?.takeIf(String::isNotBlank) ?: jobId} now for profile ${state.activeProfile}? " +
+                        "Hermes will start backend work immediately and may deliver the configured result.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingRunJobId = null; onTrigger(jobId) }) { Text("Run now") }
+            },
+            dismissButton = { TextButton(onClick = { pendingRunJobId = null }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
@@ -534,15 +657,82 @@ internal fun ProfilesScreen(
     onRename: (String, String) -> Unit,
     onSetActive: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onLoadIdentity: suspend (String) -> ProfileIdentityDraft,
+    onSaveSoul: suspend (String, String) -> Unit,
+    onSaveModel: suspend (String, String, String) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var creating by rememberSaveable { mutableStateOf(false) }
-    var renameProfileName by rememberSaveable { mutableStateOf<String?>(null) }
-    var deleteProfileName by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameProfileName by remember { mutableStateOf<String?>(null) }
+    var deleteProfileName by remember { mutableStateOf<String?>(null) }
+    var identityName by remember { mutableStateOf<String?>(null) }
+    var identityLoaded by rememberSaveable { mutableStateOf(false) }
+    var identityLoading by remember { mutableStateOf(false) }
+    var originalSoul by remember { mutableStateOf("") }
+    var soulDraft by remember { mutableStateOf("") }
+    var setupCommand by remember { mutableStateOf("") }
+    var originalProvider by remember { mutableStateOf("") }
+    var providerDraft by remember { mutableStateOf("") }
+    var originalModel by remember { mutableStateOf("") }
+    var modelDraft by remember { mutableStateOf("") }
+    var identityError by remember { mutableStateOf<String?>(null) }
+    var identityNotice by remember { mutableStateOf<String?>(null) }
+    var confirmDiscardIdentity by rememberSaveable { mutableStateOf(false) }
     val renameProfile = state.profiles.firstOrNull { it.name == renameProfileName }
     val deleteProfile = state.profiles.firstOrNull { it.name == deleteProfileName }
     LaunchedEffect(Unit) { onRefresh() }
+    LaunchedEffect(identityName, identityLoaded) {
+        val name = identityName ?: return@LaunchedEffect
+        if (identityLoaded) return@LaunchedEffect
+        identityLoading = true
+        identityError = null
+        try {
+            val identity = onLoadIdentity(name)
+            if (identityName == name) {
+                originalSoul = identity.soul
+                soulDraft = identity.soul
+                setupCommand = identity.setupCommand
+                originalProvider = identity.provider
+                providerDraft = identity.provider
+                originalModel = identity.model
+                modelDraft = identity.model
+                identityLoaded = true
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            identityError = error.message ?: "Hermes could not load this profile identity"
+        } finally {
+            identityLoading = false
+        }
+    }
+
+    fun closeIdentity() {
+        identityName = null
+        identityLoaded = false
+        identityLoading = false
+        originalSoul = ""
+        soulDraft = ""
+        setupCommand = ""
+        originalProvider = ""
+        providerDraft = ""
+        originalModel = ""
+        modelDraft = ""
+        identityError = null
+        identityNotice = null
+        confirmDiscardIdentity = false
+    }
+
+    fun requestCloseIdentity() {
+        if (profileIdentityDirty(originalSoul, soulDraft, originalProvider, providerDraft, originalModel, modelDraft)) {
+            confirmDiscardIdentity = true
+        } else {
+            closeIdentity()
+        }
+    }
     Column(modifier.fillMaxSize()) {
         ManagementHeader("PROFILES", "Isolated Hermes workspaces", state.managementLoading, onRefresh, onBack)
         Surface(
@@ -573,6 +763,12 @@ internal fun ProfilesScreen(
                         isCurrent = profile.name == state.currentProfile,
                         onStartSession = { onStartSession(profile.name) },
                         onRename = { renameProfileName = profile.name },
+                        onEditIdentity = {
+                            identityName = profile.name
+                            identityLoaded = false
+                            identityError = null
+                            identityNotice = null
+                        },
                         onSetActive = { onSetActive(profile.name) },
                         onDelete = { deleteProfileName = profile.name },
                         modifier = Modifier.padding(horizontal = 12.dp),
@@ -617,7 +813,133 @@ internal fun ProfilesScreen(
             dismissButton = { TextButton(onClick = { deleteProfileName = null }) { Text("Cancel") } },
         )
     }
+    identityName?.let { name ->
+        AlertDialog(
+            onDismissRequest = ::requestCloseIdentity,
+            title = { Text("PROFILE IDENTITY / $name") },
+            text = {
+                if (identityLoading && !identityLoaded) {
+                    CircularProgressIndicator()
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Stored on ${state.backend?.label.orEmpty()} for profile $name.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (setupCommand.isNotBlank()) {
+                            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+                                Column(Modifier.padding(10.dp)) {
+                                    Text("HOST SETUP COMMAND", style = MaterialTheme.typography.labelMedium)
+                                    Text(setupCommand, style = MaterialTheme.typography.bodySmall)
+                                    TextButton(
+                                        onClick = {
+                                            context.getSystemService(ClipboardManager::class.java)
+                                                .setPrimaryClip(ClipData.newPlainText("Hermes profile setup command", setupCommand))
+                                            identityNotice = "Setup command copied. Run it only on the Hermes host."
+                                        },
+                                    ) { Text("Copy command") }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = soulDraft,
+                            onValueChange = { soulDraft = it.take(131_072); identityNotice = null },
+                            label = { Text("SOUL.md") },
+                            minLines = 7,
+                            maxLines = 14,
+                            enabled = identityLoaded && !identityLoading,
+                            supportingText = { Text("Full profile persona; ${soulDraft.length}/131072 characters") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = providerDraft,
+                                onValueChange = { providerDraft = it.take(200); identityNotice = null },
+                                label = { Text("Provider") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedTextField(
+                                value = modelDraft,
+                                onValueChange = { modelDraft = it.take(200); identityNotice = null },
+                                label = { Text("Model") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    identityLoading = true
+                                    identityError = null
+                                    scope.launch {
+                                        try {
+                                            onSaveSoul(name, soulDraft)
+                                            originalSoul = soulDraft
+                                            identityNotice = "SOUL.md saved"
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (error: Throwable) {
+                                            identityError = error.message ?: "Hermes could not save SOUL.md"
+                                        } finally {
+                                            identityLoading = false
+                                        }
+                                    }
+                                },
+                                enabled = identityLoaded && !identityLoading && soulDraft != originalSoul,
+                            ) { Text("Save SOUL") }
+                            Button(
+                                onClick = {
+                                    identityLoading = true
+                                    identityError = null
+                                    scope.launch {
+                                        try {
+                                            onSaveModel(name, providerDraft, modelDraft)
+                                            originalProvider = providerDraft.trim()
+                                            originalModel = modelDraft.trim()
+                                            providerDraft = originalProvider
+                                            modelDraft = originalModel
+                                            identityNotice = "Profile model saved"
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (error: Throwable) {
+                                            identityError = error.message ?: "Hermes could not save the profile model"
+                                        } finally {
+                                            identityLoading = false
+                                        }
+                                    }
+                                },
+                                enabled = identityLoaded && !identityLoading && providerDraft.isNotBlank() && modelDraft.isNotBlank() &&
+                                    (providerDraft != originalProvider || modelDraft != originalModel),
+                            ) { Text("Save model") }
+                        }
+                        identityNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+                        identityError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = ::requestCloseIdentity) { Text("Close") } },
+        )
+    }
+    if (confirmDiscardIdentity) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardIdentity = false },
+            title = { Text("DISCARD PROFILE CHANGES?") },
+            text = { Text("Unsaved SOUL, provider, or model edits will be lost.") },
+            confirmButton = { TextButton(onClick = ::closeIdentity) { Text("Discard") } },
+            dismissButton = { TextButton(onClick = { confirmDiscardIdentity = false }) { Text("Keep editing") } },
+        )
+    }
 }
+
+internal fun profileIdentityDirty(
+    originalSoul: String,
+    soul: String,
+    originalProvider: String,
+    provider: String,
+    originalModel: String,
+    model: String,
+): Boolean = soul != originalSoul || provider != originalProvider || model != originalModel
 
 @Composable
 private fun ProfileRow(
@@ -626,6 +948,7 @@ private fun ProfileRow(
     isCurrent: Boolean,
     onStartSession: () -> Unit,
     onRename: () -> Unit,
+    onEditIdentity: () -> Unit,
     onSetActive: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
@@ -644,6 +967,7 @@ private fun ProfileRow(
                     )
                 }
                 IconButton(onClick = onStartSession) { Icon(Icons.Outlined.PlayArrow, "Start session in ${profile.name}") }
+                IconButton(onClick = onEditIdentity) { Icon(Icons.Outlined.Description, "Edit identity for ${profile.name}") }
                 if (!profile.isDefault) IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, "Rename ${profile.name}") }
                 if (!protected) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Delete ${profile.name}") }
             }
@@ -670,8 +994,8 @@ private fun ProfileCreateDialog(
     onDismiss: () -> Unit,
     onCreate: (String, String, Boolean, Boolean) -> Unit,
 ) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var cloneFrom by rememberSaveable { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var cloneFrom by remember { mutableStateOf("") }
     var cloneAll by rememberSaveable { mutableStateOf(false) }
     var noSkills by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
@@ -716,7 +1040,7 @@ private fun ProfileRenameDialog(
     onDismiss: () -> Unit,
     onRename: (String) -> Unit,
 ) {
-    var name by rememberSaveable(profile.name) { mutableStateOf(profile.name) }
+    var name by remember(profile.name) { mutableStateOf(profile.name) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("RENAME PROFILE") },
@@ -920,12 +1244,12 @@ private fun CronEditorDialog(
     onDismiss: () -> Unit,
     onSave: (String, String, String, String) -> Unit,
 ) {
-    var name by rememberSaveable(job?.id) { mutableStateOf(job?.name.orEmpty()) }
-    var prompt by rememberSaveable(job?.id) { mutableStateOf(job?.prompt.orEmpty()) }
-    var schedule by rememberSaveable(job?.id) {
+    var name by remember(job?.id) { mutableStateOf(job?.name.orEmpty()) }
+    var prompt by remember(job?.id) { mutableStateOf(job?.prompt.orEmpty()) }
+    var schedule by remember(job?.id) {
         mutableStateOf(job?.schedule?.expr ?: job?.scheduleDisplay.orEmpty())
     }
-    var deliver by rememberSaveable(job?.id) { mutableStateOf(job?.deliver.orEmpty()) }
+    var deliver by remember(job?.id) { mutableStateOf(job?.deliver.orEmpty()) }
     val valid = prompt.isNotBlank() && schedule.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
