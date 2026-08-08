@@ -14,7 +14,7 @@ class BuildProvenanceTest {
         assertEquals("0.2.0-debug", provenance.androidVersion)
         assertEquals(2, provenance.versionCode)
         assertEquals("debug", provenance.channel)
-        assertEquals("eaa53de4eb00ac2686438f4d5e4c674158059ba9", provenance.auditedHermesCommit)
+        assertEquals("b9aa9289a8083f2e9d248ad6837b2938f5ee92d7", provenance.auditedHermesCommit)
         assertEquals("0.20.0", provenance.hermesAgentVersion)
         assertEquals("0.17.0", provenance.hermesDesktopVersion)
         assertEquals("luinbytes", provenance.author)

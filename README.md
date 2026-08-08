@@ -268,7 +268,7 @@ Unimplemented items that do not depend on an upstream change remain local engine
 
 The client uses Hermes REST APIs for backend-owned management data and the TUI Gateway JSON-RPC/WebSocket protocol for interactive sessions. It is not a WebView wrapper, an OpenAI-compatible chat-only client, or a messaging-platform adapter.
 
-The current source audit is pinned to Hermes Agent commit `eaa53de4eb00ac2686438f4d5e4c674158059ba9` (Hermes Agent `0.20.0`, Desktop `0.17.0`) from 7 August 2026. That exact commit is the verified source contract; version strings alone are insufficient because the backend can change without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
+The current source audit is pinned to Hermes Agent commit `b9aa9289a8083f2e9d248ad6837b2938f5ee92d7` (Hermes Agent `0.20.0`, Desktop `0.17.0`) from 8 August 2026. That exact commit is the verified source contract; version strings alone are insufficient because the backend can change without a package-version change. Older Hermes versions have not yet completed a compatibility matrix; capability and unknown-event handling are designed to degrade safely, but unsupported controls may be absent.
 
 Upstream Hermes remains read-only from this repository. Proposed general protocol changes are documented locally for owner-led upstream review.
 

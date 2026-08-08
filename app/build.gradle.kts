@@ -68,7 +68,7 @@ val appVersionName = "0.2.0"
 require(Regex("\\d+\\.\\d+\\.\\d+").matches(appVersionName)) {
     "Hermes versionName must be semantic major.minor.patch."
 }
-val auditedHermesCommit = "eaa53de4eb00ac2686438f4d5e4c674158059ba9"
+val auditedHermesCommit = "b9aa9289a8083f2e9d248ad6837b2938f5ee92d7"
 val hermesAgentVersion = "0.20.0"
 val hermesDesktopVersion = "0.17.0"
 val androidCommit = environmentOrFallback(
