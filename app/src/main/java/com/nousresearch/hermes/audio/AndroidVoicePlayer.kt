@@ -272,6 +272,7 @@ class AndroidVoicePlayer @Inject constructor(
         private val generation: Long,
     ) : PcmAudioSink {
         private val lifecycle = PcmStreamLifecycle()
+        private var writtenFrames = 0L
 
         @Synchronized
         override fun write(pcm: ByteArray) {
@@ -300,6 +301,7 @@ class AndroidVoicePlayer @Inject constructor(
                 }
                 throw failure
             }
+            writtenFrames += pcm.size / 2L
             synchronized(this@AndroidVoicePlayer) {
                 if (shouldStart && pcmTrack === track && playbackGeneration == generation) {
                     notifyStatus(
@@ -318,12 +320,38 @@ class AndroidVoicePlayer @Inject constructor(
             lifecycle.end()
             synchronized(this@AndroidVoicePlayer) {
                 ensurePcmCurrent(track, generation)
-                runCatching { track.stop() }
                 val callback = completionCallback
-                finish()
-                callback?.invoke()
+                if (writtenFrames == 0L) {
+                    finish()
+                    callback?.invoke()
+                } else {
+                    drainPcm(track, generation, writtenFrames, callback)
+                }
             }
         }
+    }
+
+    private fun drainPcm(
+        track: AudioTrack,
+        generation: Long,
+        targetFrames: Long,
+        callback: (() -> Unit)?,
+    ) {
+        val drain = object : Runnable {
+            override fun run() {
+                synchronized(this@AndroidVoicePlayer) {
+                    if (pcmTrack !== track || playbackGeneration != generation) return
+                    val playedFrames = track.playbackHeadPosition.toLong() and UINT32_MASK
+                    if (playedFrames >= targetFrames) {
+                        finish()
+                        callback?.invoke()
+                    } else {
+                        mainHandler.postDelayed(this, PCM_DRAIN_POLL_MILLIS)
+                    }
+                }
+            }
+        }
+        mainHandler.post(drain)
     }
 
     private fun ensurePcmCurrent(track: AudioTrack, generation: Long) {
@@ -545,5 +573,7 @@ class AndroidVoicePlayer @Inject constructor(
         const val CHANNEL_ID = "hermes_read_aloud"
         const val NOTIFICATION_ID = 3101
         const val SPEECH_FILE_PREFIX = "hermes-speech-"
+        const val PCM_DRAIN_POLL_MILLIS = 20L
+        const val UINT32_MASK = 0xffff_ffffL
     }
 }

@@ -77,7 +77,7 @@ class PrivacyPreferencesTest {
     }
 
     @Test
-    fun `biometric re-entry stays disabled when preferences cannot be read`() = runTest {
+    fun `biometric re-entry fails closed when preferences cannot be read`() = runTest {
         val failingStore = object : DataStore<Preferences> {
             override val data: Flow<Preferences> = flow {
                 throw IOException("privacy preferences unavailable")
@@ -87,6 +87,6 @@ class PrivacyPreferencesTest {
                 error("not used")
         }
 
-        assertFalse(PrivacyPreferences(failingStore).biometricReentry.first())
+        assertTrue(PrivacyPreferences(failingStore).biometricReentry.first())
     }
 }

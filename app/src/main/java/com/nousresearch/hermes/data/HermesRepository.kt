@@ -1920,11 +1920,11 @@ class HermesRepository @Inject constructor(
 
     suspend fun setActiveProfile(name: String) {
         val (backend, token) = activeCredentials()
-        val attachmentProfile = mutableState.value.activeStoredSession?.profile
-            ?: mutableState.value.activeProfile
+        val hasActiveSession = mutableState.value.activeStoredSession != null
+        val attachmentProfile = mutableState.value.activeProfile
         val result = runCatching { restClient.setActiveProfile(backend, token, name) }
         if (result.isSuccess) {
-            if (attachmentProfile != name.trim()) invalidatePendingAttachments()
+            if (!hasActiveSession && attachmentProfile != name.trim()) invalidatePendingAttachments()
             providerOAuthPollJob?.cancel()
             providerOAuthPollJob = null
             mutableState.value = mutableState.value.copy(

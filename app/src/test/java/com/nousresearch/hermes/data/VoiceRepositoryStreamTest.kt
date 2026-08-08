@@ -20,6 +20,18 @@ import org.junit.Test
 
 class VoiceRepositoryStreamTest {
     @Test
+    fun `pre-audio stream connection failure falls back to one-shot speech`() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            val result = repository(server).streamSpeech(config(server), "default", "Read this") {
+                error("A failed stream must not open a PCM sink")
+            }
+
+            assertEquals(StreamedSpeechResult.FALLBACK, result)
+        }
+    }
+
+    @Test
     fun `streamed speech writes aligned pcm and completes its sink`() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {

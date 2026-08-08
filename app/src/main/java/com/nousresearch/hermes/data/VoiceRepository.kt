@@ -63,44 +63,53 @@ class VoiceRepository @Inject constructor(
         val terminal = CompletableDeferred<StreamedSpeechResult>()
         val sink = AtomicReference<PcmAudioSink?>()
         val receivedAudio = AtomicBoolean(false)
-        val session = stream.open(
-            config = config,
-            profile = profile,
-            token = credential.takeUnless { config.authMode == AuthMode.DASHBOARD_SESSION }
-                ?.headerValue
-                ?.substringAfter('=', missingDelimiterValue = ""),
-            sessionCookie = credential.takeIf { config.authMode == AuthMode.DASHBOARD_SESSION },
-        ) { event ->
-            runCatching {
-                when (event) {
-                    is VoiceStreamEvent.Started -> check(sink.compareAndSet(null, openSink(event.format))) {
-                        "Hermes voice stream started more than once"
+        val session = try {
+            stream.open(
+                config = config,
+                profile = profile,
+                token = credential.takeUnless { config.authMode == AuthMode.DASHBOARD_SESSION }
+                    ?.headerValue
+                    ?.substringAfter('=', missingDelimiterValue = ""),
+                sessionCookie = credential.takeIf { config.authMode == AuthMode.DASHBOARD_SESSION },
+            ) { event ->
+                runCatching {
+                    when (event) {
+                        is VoiceStreamEvent.Started -> check(sink.compareAndSet(null, openSink(event.format))) {
+                            "Hermes voice stream started more than once"
+                        }
+                        is VoiceStreamEvent.Audio -> {
+                            receivedAudio.set(true)
+                            checkNotNull(sink.get()) { "Hermes voice audio arrived before its format" }.write(event.pcm)
+                        }
+                        VoiceStreamEvent.Ended -> {
+                            checkNotNull(sink.get()) { "Hermes voice stream ended before it started" }.end()
+                            terminal.complete(StreamedSpeechResult.COMPLETED)
+                        }
+                        VoiceStreamEvent.Fallback -> {
+                            check(!receivedAudio.get()) { "Hermes requested fallback after streaming audio" }
+                            terminal.complete(StreamedSpeechResult.FALLBACK)
+                        }
+                        VoiceStreamEvent.Stopped -> terminal.completeExceptionally(IOException("Hermes voice stream stopped"))
+                        is VoiceStreamEvent.Disconnected -> terminal.completeExceptionally(
+                            IOException("Hermes voice stream disconnected (${event.code})"),
+                        )
+                        is VoiceStreamEvent.Failed -> terminal.completeExceptionally(VoiceStreamException(event.reason))
                     }
-                    is VoiceStreamEvent.Audio -> {
-                        receivedAudio.set(true)
-                        checkNotNull(sink.get()) { "Hermes voice audio arrived before its format" }.write(event.pcm)
-                    }
-                    VoiceStreamEvent.Ended -> {
-                        checkNotNull(sink.get()) { "Hermes voice stream ended before it started" }.end()
-                        terminal.complete(StreamedSpeechResult.COMPLETED)
-                    }
-                    VoiceStreamEvent.Fallback -> {
-                        check(!receivedAudio.get()) { "Hermes requested fallback after streaming audio" }
-                        terminal.complete(StreamedSpeechResult.FALLBACK)
-                    }
-                    VoiceStreamEvent.Stopped -> terminal.completeExceptionally(IOException("Hermes voice stream stopped"))
-                    is VoiceStreamEvent.Disconnected -> terminal.completeExceptionally(
-                        IOException("Hermes voice stream disconnected (${event.code})"),
-                    )
-                    is VoiceStreamEvent.Failed -> terminal.completeExceptionally(VoiceStreamException(event.reason))
-                }
-            }.onFailure(terminal::completeExceptionally)
+                }.onFailure(terminal::completeExceptionally)
+            }
+        } catch (_: IOException) {
+            return StreamedSpeechResult.FALLBACK
         }
         var completedNormally = false
         try {
             if (!session.append(text) && !terminal.isCompleted) throw IOException("Hermes rejected spoken text")
             if (!session.finish() && !terminal.isCompleted) throw IOException("Hermes rejected spoken completion")
             return withTimeout(STREAM_TIMEOUT_MILLIS) { terminal.await() }.also { completedNormally = true }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: IOException) {
+            if (!receivedAudio.get()) return StreamedSpeechResult.FALLBACK
+            throw error
         } finally {
             if (!completedNormally) session.stop()
         }

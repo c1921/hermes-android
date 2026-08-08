@@ -198,7 +198,7 @@ class HermesRestClient(
         request(
             config,
             token,
-            "/api/audio/transcribe?profile=${encodePathSegment(profile)}",
+            "/api/audio/transcribe?${encodeQueryParameter("profile", profile)}",
             method = "POST",
             body = buildJsonObject {
                 put("data_url", dataUrl)
@@ -217,7 +217,7 @@ class HermesRestClient(
         request(
             config,
             token,
-            "/api/audio/speak?profile=${encodePathSegment(profile)}",
+            "/api/audio/speak?${encodeQueryParameter("profile", profile)}",
             method = "POST",
             body = buildJsonObject { put("text", text) },
         ),
@@ -1310,6 +1310,10 @@ class HermesRestClient(
     private fun encodePathSegment(value: String): String =
         okhttp3.HttpUrl.Builder().scheme("https").host("placeholder.invalid").addPathSegment(value)
             .build().encodedPath.removePrefix("/")
+
+    private fun encodeQueryParameter(name: String, value: String): String =
+        okhttp3.HttpUrl.Builder().scheme("https").host("placeholder.invalid").addQueryParameter(name, value)
+            .build().encodedQuery.orEmpty()
 
     private fun readBounded(input: java.io.InputStream, maximumBytes: Long): String {
         val output = ByteArrayOutputStream()

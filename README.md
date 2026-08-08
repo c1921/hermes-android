@@ -107,7 +107,8 @@ See [Android signing and branch flow](docs/release-signing.md) for the public ce
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, and per-tool filters
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
-- [x] Opt-in biometric re-entry, deep links, shortcuts, widgets, MediaSession controls, and purposeful voice haptics
+- [x] Opt-in biometric re-entry, deep links, shortcuts, MediaSession controls, and purposeful voice haptics
+- [ ] Android home-screen widget provider; widget-safe entry parsing exists, but no provider is shipped yet
 - [ ] Play App Signing handoff and owner physical-device evidence; reproducibility, SBOM/provenance, API 36 macrobenchmarks, deterministic stress fixtures, Baseline Profile automation, and accepted-baseline comparison are implemented in CI
 
 The detailed, current source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md).

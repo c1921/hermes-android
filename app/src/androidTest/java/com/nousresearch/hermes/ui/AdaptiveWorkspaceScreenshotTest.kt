@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +30,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.window.core.layout.WindowSizeClass
 import com.nousresearch.hermes.domain.TimelineItem
@@ -40,7 +41,6 @@ import java.io.FileOutputStream
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -52,6 +52,11 @@ class AdaptiveWorkspaceScreenshotTest {
     fun captureProductionShellMatrixFrame() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val mode = InstrumentationRegistry.getArguments().getString("shellLayout") ?: "compact"
+        val goldenSize = when (mode) {
+            "expanded" -> 1280 to 800
+            "fold" -> 1200 to 800
+            else -> 360 to 800
+        }
         val configuration = when (mode) {
             "expanded" -> adaptiveWorkspaceConfiguration(WindowSizeClass(1200, 800))
             "fold" -> adaptiveWorkspaceConfiguration(
@@ -74,7 +79,10 @@ class AdaptiveWorkspaceScreenshotTest {
                     LocalDensity provides Density(density = 1f, fontScale = 2f),
                     LocalLayoutDirection provides LayoutDirection.Rtl,
                 ) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Surface(
+                        Modifier.size(goldenSize.first.dp, goldenSize.second.dp).testTag("golden-root"),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
                         AdaptiveWorkspaceShell(
                             configuration = configuration,
                             destination = "conversation/session-42",
@@ -126,7 +134,7 @@ class AdaptiveWorkspaceScreenshotTest {
         val outputDir = File(instrumentation.targetContext.getExternalFilesDir(null), "issue17")
         assertTrue(outputDir.mkdirs() || outputDir.isDirectory)
         val output = File(outputDir, "issue17-shell-$mode.png")
-        val actual = compose.onRoot().captureToImage().asAndroidBitmap()
+        val actual = compose.onNodeWithTag("golden-root").captureToImage().asAndroidBitmap()
         FileOutputStream(output).use { stream ->
             assertTrue(actual.compress(Bitmap.CompressFormat.PNG, 100, stream))
         }
@@ -144,7 +152,8 @@ class AdaptiveWorkspaceScreenshotTest {
     }
 
     private fun assertScreenshotsMatch(expected: Bitmap, actual: Bitmap) {
-        assumeTrue("Managed devices may use a physical resolution different from the golden", expected.width == actual.width && expected.height == actual.height)
+        assertEquals(expected.width, actual.width)
+        assertEquals(expected.height, actual.height)
         val expectedPixels = IntArray(expected.width * expected.height)
         val actualPixels = IntArray(actual.width * actual.height)
         expected.getPixels(expectedPixels, 0, expected.width, 0, 0, expected.width, expected.height)

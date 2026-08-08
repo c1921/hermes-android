@@ -44,7 +44,7 @@ class PrivacyPreferences internal constructor(
 
     val biometricReentry: Flow<Boolean> = store.data
         .map { it[BIOMETRIC_REENTRY] ?: false }
-        .catch { emit(false) }
+        .catch { emit(true) }
 
     val skin: Flow<HermesSkin> = store.data
         .map { HermesSkin.fromId(it[SKIN]) }

@@ -135,6 +135,7 @@ class VoiceViewModel @Inject constructor(
                     mutableState.value = VoiceUiState(transcript = VoiceTranscript(UUID.randomUUID().toString(), transcript))
                 }
             } catch (cancelled: CancellationException) {
+                if (generation == speechGeneration) player.stop()
                 throw cancelled
             } catch (error: Throwable) {
                 recorder.cancel()

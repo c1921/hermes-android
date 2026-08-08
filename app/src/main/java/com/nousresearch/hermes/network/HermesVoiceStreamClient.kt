@@ -163,6 +163,7 @@ class HermesVoiceStreamClient @Inject constructor(
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (terminal.get()) return
             val frame = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
                 ?: return fail(VoiceStreamFailure.UNEXPECTED_SERVER_FRAME)
             when (runCatching { frame["type"]?.jsonPrimitive?.content }.getOrNull()) {
@@ -174,6 +175,7 @@ class HermesVoiceStreamClient @Inject constructor(
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            if (terminal.get()) return
             val output = try {
                 val active = assembler ?: throw IllegalArgumentException("PCM arrived before start")
                 active.append(bytes.toByteArray())

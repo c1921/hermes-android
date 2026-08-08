@@ -13,7 +13,7 @@ app reports full display) for cold startup and `FrameTimingMetric` for cold and
 warm startup.
 `HermesSurfaceJourneyBenchmark` provides named Atlas/chat, continuous-stream
 transcript scroll, composer, Files/Artifacts, and Manage frame journeys. The
-non-minified release-only fixture activity renders the production Compose
+non-minified-release-only fixture activity renders the production Compose
 surfaces with deterministic local data and no credentials or network access.
 
 `BaselineProfileGenerator` exercises startup and the primary fixture surfaces

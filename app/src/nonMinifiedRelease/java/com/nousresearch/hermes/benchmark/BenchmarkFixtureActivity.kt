@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.benchmark
 
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -53,13 +54,27 @@ import com.nousresearch.hermes.ui.Timeline
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import kotlinx.coroutines.delay
 
+private const val FIXTURE_RESET_EXTRA = "hermes.benchmark.fixture_reset"
+
 class BenchmarkFixtureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { HermesTheme { BenchmarkFixture() } }
+        setBenchmarkContent(intent.fixtureResetKey())
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        setBenchmarkContent(intent.fixtureResetKey())
+    }
+
+    private fun setBenchmarkContent(resetKey: Long) {
+        setContent { HermesTheme { BenchmarkFixture(resetKey) } }
     }
 }
+
+private fun Intent.fixtureResetKey(): Long = getLongExtra(FIXTURE_RESET_EXTRA, 0L)
 
 private enum class FixtureSurface(val label: String) {
     ATLAS("Atlas"),
@@ -70,9 +85,9 @@ private enum class FixtureSurface(val label: String) {
 }
 
 @Composable
-private fun BenchmarkFixture() {
-    var surface by rememberSaveable { mutableStateOf(FixtureSurface.CHATS) }
-    var streamText by rememberSaveable { mutableStateOf("") }
+private fun BenchmarkFixture(resetKey: Long) {
+    var surface by remember(resetKey) { mutableStateOf(FixtureSurface.CHATS) }
+    var streamText by remember(resetKey) { mutableStateOf("") }
 
     LaunchedEffect(surface) {
         if (surface == FixtureSurface.CHATS) {

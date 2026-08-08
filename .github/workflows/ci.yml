@@ -238,7 +238,11 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;x86_64"
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Generate release Baseline Profile
+        run: ./gradlew --no-daemon --no-parallel --max-workers=1 :app:generateBaselineProfile
       - name: Restore release keystore
         env:
           HERMES_RELEASE_KEYSTORE_BASE64: ${{ secrets.HERMES_RELEASE_KEYSTORE_BASE64 }}

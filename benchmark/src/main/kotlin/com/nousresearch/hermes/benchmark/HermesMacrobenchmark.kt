@@ -12,12 +12,14 @@ import androidx.benchmark.macro.StartupTimingMetric
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 private const val TARGET_PACKAGE_NAME = "com.nousresearch.hermes"
 private const val FIXTURE_ACTIVITY_NAME = "com.nousresearch.hermes.benchmark.BenchmarkFixtureActivity"
+private const val FIXTURE_RESET_EXTRA = "hermes.benchmark.fixture_reset"
 
 @RunWith(AndroidJUnit4::class)
 class HermesStartupBenchmark {
@@ -47,7 +49,10 @@ class HermesStartupBenchmark {
             startupMode = StartupMode.WARM,
             setupBlock = { pressHome() },
         ) {
-            startActivityAndWait(Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME)))
+            startActivityAndWait(
+                Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME))
+                    .putExtra(FIXTURE_RESET_EXTRA, System.nanoTime()),
+            )
             device.waitForIdle()
         }
     }
@@ -105,8 +110,11 @@ class HermesSurfaceJourneyBenchmark {
             startupMode = StartupMode.WARM,
             setupBlock = { pressHome() },
         ) {
-            startActivityAndWait(Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME)))
-            if (label != "Chats") device.clickTextIfVisible(label)
+            startActivityAndWait(
+                Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME))
+                    .putExtra(FIXTURE_RESET_EXTRA, System.nanoTime()),
+            )
+            if (label != "Chats") device.clickText(label)
             if (waitForIdleBeforeJourney) device.waitForIdle() else SystemClock.sleep(100)
             device.journey()
             device.waitForIdle()
@@ -114,7 +122,9 @@ class HermesSurfaceJourneyBenchmark {
     }
 }
 
-private fun UiDevice.clickTextIfVisible(text: String) {
-    findObject(By.textContains(text))?.click()
+private fun UiDevice.clickText(text: String) {
+    requireNotNull(wait(Until.findObject(By.textContains(text)), 5_000L)) {
+        "Benchmark fixture surface not found: $text"
+    }.click()
     waitForIdle()
 }
