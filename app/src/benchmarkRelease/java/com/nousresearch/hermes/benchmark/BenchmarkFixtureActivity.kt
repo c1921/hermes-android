@@ -114,7 +114,7 @@ private fun BenchmarkFixture(resetKey: Long) {
         HorizontalDivider()
         when (surface) {
             FixtureSurface.ATLAS -> FixtureAtlas()
-            FixtureSurface.CHATS -> FixtureChats(streamText)
+            FixtureSurface.CHATS -> FixtureChats(streamText, resetKey)
             FixtureSurface.FILES -> FixtureFiles()
             FixtureSurface.ARTIFACTS -> FixtureArtifacts()
             FixtureSurface.MANAGE -> FixtureManage()
@@ -137,7 +137,7 @@ private fun FixtureAtlas() {
 }
 
 @Composable
-private fun FixtureChats(streamText: String) {
+private fun FixtureChats(streamText: String, resetKey: Long) {
     val items = remember(streamText) { fixtureTranscript(streamText) }
     Column(Modifier.fillMaxSize()) {
         Text("Chats", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).semantics { heading() })
