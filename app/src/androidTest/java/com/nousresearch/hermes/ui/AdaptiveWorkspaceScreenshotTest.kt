@@ -2,6 +2,7 @@ package com.nousresearch.hermes.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -32,7 +33,6 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.filters.SdkSuppress
 import androidx.window.core.layout.WindowSizeClass
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
@@ -42,10 +42,10 @@ import java.io.FileOutputStream
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
-@SdkSuppress(minSdkVersion = 29)
 class AdaptiveWorkspaceScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
@@ -60,6 +60,9 @@ class AdaptiveWorkspaceScreenshotTest {
     fun captureFoldProductionShellFrame() = captureProductionShellMatrixFrame("fold")
 
     private fun captureProductionShellMatrixFrame(mode: String) {
+        // Wide adaptive goldens run on the API 36 Pixel Tablet managed device;
+        // API 28 keeps the app matrix but cannot render these full-width frames.
+        assumeTrue("Adaptive shell goldens require the API 36 wide device", Build.VERSION.SDK_INT >= 29)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val goldenSize = when (mode) {
             "expanded" -> 1280 to 800
