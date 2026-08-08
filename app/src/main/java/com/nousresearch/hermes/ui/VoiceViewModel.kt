@@ -7,8 +7,10 @@ import com.nousresearch.hermes.audio.AndroidVoiceHaptics
 import com.nousresearch.hermes.audio.AndroidVoicePlayer
 import com.nousresearch.hermes.audio.VoiceHaptic
 import com.nousresearch.hermes.audio.VoicePlaybackPhase
+import com.nousresearch.hermes.audio.VoicePlaybackStatus
 import com.nousresearch.hermes.audio.sanitizeTextForSpeech
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.StreamedSpeechResult
 import com.nousresearch.hermes.data.VoiceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
@@ -178,29 +180,38 @@ class VoiceViewModel @Inject constructor(
             try {
                 val config = backend ?: throw IllegalStateException("Reconnect Hermes before playing spoken replies")
                 val profile = profile ?: throw IllegalStateException("Reopen the Hermes profile before playing spoken replies")
+                val status: (VoicePlaybackStatus) -> Unit = { playback ->
+                    if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
+                        mutableSpeechState.value = SpeechUiState(
+                            phase = if (playback.phase == VoicePlaybackPhase.PLAYING) SpeechPhase.PLAYING else SpeechPhase.PAUSED,
+                            messageId = messageId,
+                            outputName = playback.outputName,
+                        )
+                    }
+                }
+                val playbackError: (String) -> Unit = { message ->
+                    if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
+                        mutableSpeechState.value = SpeechUiState(error = message)
+                    }
+                }
+                val playbackComplete: () -> Unit = {
+                    if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
+                        mutableSpeechState.value = SpeechUiState()
+                    }
+                }
+                val streamed = voice.streamSpeech(config, profile, speakableText) { format ->
+                    player.beginPcmStream(format, status, playbackError, playbackComplete)
+                }
+                if (generation != speechGeneration) return@launch
+                if (streamed == StreamedSpeechResult.COMPLETED) return@launch
+                player.stop()
                 val audio = voice.speak(config, profile, speakableText)
                 if (generation != speechGeneration) return@launch
                 player.play(
                     audio = audio,
-                    onStatus = { status ->
-                        if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
-                            mutableSpeechState.value = SpeechUiState(
-                                phase = if (status.phase == VoicePlaybackPhase.PLAYING) SpeechPhase.PLAYING else SpeechPhase.PAUSED,
-                                messageId = messageId,
-                                outputName = status.outputName,
-                            )
-                        }
-                    },
-                    onError = { message ->
-                        if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
-                            mutableSpeechState.value = SpeechUiState(error = message)
-                        }
-                    },
-                    onComplete = {
-                        if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
-                            mutableSpeechState.value = SpeechUiState()
-                        }
-                    },
+                    onStatus = status,
+                    onError = playbackError,
+                    onComplete = playbackComplete,
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled

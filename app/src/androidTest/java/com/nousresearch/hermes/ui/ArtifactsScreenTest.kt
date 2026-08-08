@@ -108,4 +108,37 @@ class ArtifactsScreenTest {
         compose.onNodeWithText("Share").assertExists()
         compose.onNodeWithText("Open with").assertExists()
     }
+
+    @Test
+    fun openChatUsesArtifactOriginScopeAndMessage() {
+        var opened: DetectedArtifactIndexEntry? = null
+        compose.setContent {
+            HermesTheme {
+                ArtifactsScreen(
+                    backend = backend,
+                    profileId = "default",
+                    indexState = index,
+                    preferences = ArtifactBrowserPreferences(scope = "backend\u0000default"),
+                    selectedArtifactId = "artifact-1",
+                    expanded = true,
+                    onRefresh = {},
+                    onQueryChange = {},
+                    onFilterChange = {},
+                    onSelect = {},
+                    onOpenChat = { opened = it },
+                    onBack = {},
+                    loadPreview = { ArtifactPreviewContent.External(it.artifact.label, it.artifact.value) },
+                )
+            }
+        }
+
+        compose.onNodeWithText("Open chat").performClick()
+        compose.runOnIdle {
+            val origin = requireNotNull(opened).artifact.origin
+            assertEquals("backend", origin.backendId)
+            assertEquals("default", origin.profileId)
+            assertEquals("session-1", origin.sessionId)
+            assertEquals("message-9", origin.messageId)
+        }
+    }
 }

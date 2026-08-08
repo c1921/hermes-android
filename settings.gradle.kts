@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "HermesAndroid"
 include(":app")
-
+include(":benchmark")

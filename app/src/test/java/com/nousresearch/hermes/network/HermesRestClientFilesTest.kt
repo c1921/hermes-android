@@ -11,6 +11,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,6 +46,30 @@ class HermesRestClientFilesTest {
             assertEquals("/api/files/read?path=%2Ftmp%2Ftest%20space%2Fnotes.md", readRequest.path)
             assertEquals("Bearer secret", listRequest.getHeader("Authorization"))
             assertEquals("Bearer secret", readRequest.getHeader("Authorization"))
+        }
+    }
+
+    @Test
+    fun `Users listing does not walk to server root or request VolumeIcon`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"path":"/Users","parent":"/","can_change_path":true,"entries":[{"name":"Documents","path":"/Users/Documents","is_directory":true}]}""",
+                ),
+            )
+
+            val listing = HermesRestClient(OkHttpClient(), json).managedFiles(
+                config(server),
+                "secret",
+                "/Users",
+            )
+
+            assertEquals("/Users", listing.path)
+            val request = server.takeRequest()
+            assertEquals("/api/files?path=%2FUsers", request.path)
+            assertEquals(1, server.requestCount)
+            assertFalse(request.path.orEmpty().contains("VolumeIcon"))
         }
     }
 

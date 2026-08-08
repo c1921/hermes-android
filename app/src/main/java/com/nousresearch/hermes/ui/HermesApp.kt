@@ -2335,7 +2335,7 @@ private fun ChatHeader(
 }
 
 @Composable
-private fun Timeline(
+internal fun Timeline(
     items: List<TimelineItem>,
     speechState: SpeechUiState,
     onSpeak: (String, String) -> Unit,
@@ -2760,6 +2760,16 @@ internal fun StatusBlock(status: TimelineItem.Status) {
     }
 }
 
+internal enum class ComposerKeyAction { NONE, ESCAPE, HISTORY_BACK, HISTORY_FORWARD }
+
+internal fun composerKeyAction(type: KeyEventType, key: Key, ctrlPressed: Boolean): ComposerKeyAction = when {
+    type != KeyEventType.KeyDown -> ComposerKeyAction.NONE
+    key == Key.Escape -> ComposerKeyAction.ESCAPE
+    ctrlPressed && key == Key.DirectionUp -> ComposerKeyAction.HISTORY_BACK
+    ctrlPressed && key == Key.DirectionDown -> ComposerKeyAction.HISTORY_FORWARD
+    else -> ComposerKeyAction.NONE
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
@@ -3057,14 +3067,17 @@ private fun Composer(
                     .weight(1f)
                     .preserveFocusAcrossAdaptiveMove(compactLayout, adaptiveFocusState)
                     .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) {
-                            false
-                        } else {
-                            when (event.key) {
-                                Key.DirectionUp -> browseHistory(backward = true)
-                                Key.DirectionDown -> browseHistory(backward = false)
-                                else -> false
+                        when (composerKeyAction(event.type, event.key, event.isCtrlPressed)) {
+                            ComposerKeyAction.ESCAPE -> {
+                                historyMenuOpen = false
+                                resetHistoryBrowse()
+                                focus.clearFocus(force = true)
+                                softwareKeyboard?.hide()
+                                true
                             }
+                            ComposerKeyAction.HISTORY_BACK -> browseHistory(backward = true)
+                            ComposerKeyAction.HISTORY_FORWARD -> browseHistory(backward = false)
+                            ComposerKeyAction.NONE -> false
                         }
                     },
                 enabled = connected,
@@ -3564,7 +3577,10 @@ private fun ApprovalDialog(command: String, description: String?, choices: List<
         icon = { Icon(Icons.Outlined.Terminal, null, tint = MaterialTheme.colorScheme.error) },
         title = { Text("COMMAND APPROVAL") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(description ?: "Hermes is waiting for permission to execute a potentially dangerous command.")
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(6.dp)) {
                     Text(command.ifBlank { "Command details were redacted by Hermes." }, Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodySmall)
@@ -3590,7 +3606,10 @@ private fun ClarificationDialog(question: String, choices: List<String>, onAnswe
         onDismissRequest = { },
         title = { Text("HERMES NEEDS INPUT") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(question)
                 if (choices.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -3623,7 +3642,10 @@ internal fun SensitiveInputDialog(
         icon = { Icon(Icons.Outlined.Key, null, tint = WarningColor) },
         title = { Text(if (sudo) "SUDO PASSWORD REQUIRED" else "SECRET REQUIRED") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(prompt)
                 environmentVariable?.let {
                     Text("ENVIRONMENT VARIABLE / $it", style = MaterialTheme.typography.labelMedium)

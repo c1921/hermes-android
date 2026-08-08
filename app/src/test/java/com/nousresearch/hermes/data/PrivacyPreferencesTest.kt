@@ -1,14 +1,19 @@
 package com.nousresearch.hermes.data
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.nousresearch.hermes.protocol.ModelCapabilities
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -69,5 +74,19 @@ class PrivacyPreferencesTest {
         recreated.setBiometricReentry(false)
         assertFalse(preferences.biometricReentry.first())
         scope.cancel()
+    }
+
+    @Test
+    fun `biometric re-entry stays disabled when preferences cannot be read`() = runTest {
+        val failingStore = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = flow {
+                throw IOException("privacy preferences unavailable")
+            }
+
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("not used")
+        }
+
+        assertFalse(PrivacyPreferences(failingStore).biometricReentry.first())
     }
 }

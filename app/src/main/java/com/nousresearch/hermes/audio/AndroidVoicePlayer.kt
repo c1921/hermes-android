@@ -9,8 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.media.AudioAttributes
+import android.media.AudioFormat
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.media.MediaMetadata
 import android.media.MediaPlayer
 import android.media.MediaRouter2
@@ -72,6 +74,7 @@ class AndroidVoicePlayer @Inject constructor(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var player: MediaPlayer? = null
+    private var pcmTrack: AudioTrack? = null
     private var sourceFile: File? = null
     private var focusRequest: AudioFocusRequest? = null
     private var statusCallback: ((VoicePlaybackStatus) -> Unit)? = null
@@ -162,7 +165,49 @@ class AndroidVoicePlayer @Inject constructor(
     }
 
     @Synchronized
+    fun beginPcmStream(
+        format: VoicePcmFormat,
+        onStatus: (VoicePlaybackStatus) -> Unit,
+        onError: (String) -> Unit,
+        onComplete: () -> Unit,
+    ): PcmAudioSink {
+        stop()
+        val generation = playbackGeneration
+        if (!requestAudioFocus()) throw IOException("Android could not reserve the speech audio session")
+
+        return try {
+            val track = createPcmTrack(format)
+            pcmTrack = track
+            statusCallback = onStatus
+            errorCallback = onError
+            completionCallback = onComplete
+            prepareMediaSession()
+            publishMediaState(PlaybackState.STATE_BUFFERING)
+            track.addOnRoutingChangedListener(
+                {
+                    synchronized(this) {
+                        if (pcmTrack === track && playbackGeneration == generation) notifyCurrentStatus()
+                    }
+                },
+                mainHandler,
+            )
+            AudioTrackPcmSink(track, generation)
+        } catch (error: Throwable) {
+            finish()
+            throw IOException("Android could not prepare the Hermes PCM stream", error)
+        }
+    }
+
+    @Synchronized
     fun pause() {
+        val activePcm = pcmTrack
+        if (activePcm != null) {
+            if (activePcm.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                activePcm.pause()
+                notifyStatus(VoicePlaybackPhase.PAUSED)
+            }
+            return
+        }
         val active = player ?: return finish()
         if (active.isPlaying) {
             active.pause()
@@ -172,6 +217,17 @@ class AndroidVoicePlayer @Inject constructor(
 
     @Synchronized
     fun resume() {
+        val activePcm = pcmTrack
+        if (activePcm != null) {
+            if (!requestAudioFocus()) {
+                fail("Android could not resume the speech audio session")
+                return
+            }
+            runCatching { activePcm.play() }
+                .onSuccess { notifyStatus(VoicePlaybackPhase.PLAYING) }
+                .onFailure { fail("Android could not resume the Hermes PCM stream") }
+            return
+        }
         val active = player ?: return finish()
         if (!requestAudioFocus()) {
             fail("Android could not resume the speech audio session")
@@ -184,6 +240,97 @@ class AndroidVoicePlayer @Inject constructor(
 
     @Synchronized
     fun stop() = finish()
+
+    private fun createPcmTrack(format: VoicePcmFormat): AudioTrack {
+        val minimumBufferSize = AudioTrack.getMinBufferSize(
+            format.sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+        )
+        require(minimumBufferSize > 0) { "Android rejected the Hermes PCM format" }
+        return AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setSampleRate(format.sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .build(),
+            )
+            .setBufferSizeInBytes(minimumBufferSize)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
+    }
+
+    private inner class AudioTrackPcmSink(
+        private val track: AudioTrack,
+        private val generation: Long,
+    ) : PcmAudioSink {
+        private val lifecycle = PcmStreamLifecycle()
+
+        @Synchronized
+        override fun write(pcm: ByteArray) {
+            lifecycle.requireWritable()
+            validatePcmChunk(pcm)
+            val shouldStart: Boolean
+            try {
+                shouldStart = synchronized(this@AndroidVoicePlayer) {
+                    ensurePcmCurrent(track, generation)
+                    val start = track.playState == AudioTrack.PLAYSTATE_STOPPED
+                    if (start) track.play()
+                    start
+                }
+                var offset = 0
+                while (offset < pcm.size) {
+                    val written = track.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
+                    if (written <= 0) throw IOException("Android rejected a Hermes PCM write")
+                    offset += written
+                }
+            } catch (error: Throwable) {
+                val failure = if (error is IOException) error else IOException("Android could not write the Hermes PCM stream", error)
+                synchronized(this@AndroidVoicePlayer) {
+                    if (pcmTrack === track && playbackGeneration == generation) {
+                        fail("Android could not write the Hermes PCM stream")
+                    }
+                }
+                throw failure
+            }
+            synchronized(this@AndroidVoicePlayer) {
+                if (shouldStart && pcmTrack === track && playbackGeneration == generation) {
+                    notifyStatus(
+                        if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                            VoicePlaybackPhase.PLAYING
+                        } else {
+                            VoicePlaybackPhase.PAUSED
+                        },
+                    )
+                }
+            }
+        }
+
+        @Synchronized
+        override fun end() {
+            lifecycle.end()
+            synchronized(this@AndroidVoicePlayer) {
+                ensurePcmCurrent(track, generation)
+                runCatching { track.stop() }
+                val callback = completionCallback
+                finish()
+                callback?.invoke()
+            }
+        }
+    }
+
+    private fun ensurePcmCurrent(track: AudioTrack, generation: Long) {
+        check(pcmTrack === track && playbackGeneration == generation) {
+            "PCM stream is no longer active"
+        }
+    }
 
     fun showOutputSwitcher() {
         val shown = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -220,7 +367,7 @@ class AndroidVoicePlayer @Inject constructor(
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK,
             -> synchronized(this) {
-                resumeAfterFocusGain = player?.isPlaying == true
+                resumeAfterFocusGain = player?.isPlaying == true || pcmTrack?.playState == AudioTrack.PLAYSTATE_PLAYING
                 pause()
             }
             AudioManager.AUDIOFOCUS_GAIN -> synchronized(this) {
@@ -234,13 +381,19 @@ class AndroidVoicePlayer @Inject constructor(
 
     @Synchronized
     private fun notifyCurrentStatus() {
-        val active = player ?: return
-        notifyStatus(if (active.isPlaying) VoicePlaybackPhase.PLAYING else VoicePlaybackPhase.PAUSED)
+        player?.let { active ->
+            notifyStatus(if (active.isPlaying) VoicePlaybackPhase.PLAYING else VoicePlaybackPhase.PAUSED)
+            return
+        }
+        pcmTrack?.let { active ->
+            notifyStatus(if (active.playState == AudioTrack.PLAYSTATE_PLAYING) VoicePlaybackPhase.PLAYING else VoicePlaybackPhase.PAUSED)
+        }
     }
 
     @Synchronized
     private fun notifyStatus(phase: VoicePlaybackPhase) {
-        val route = player?.routedDevice?.productName?.toString()?.takeIf(String::isNotBlank) ?: "Android media output"
+        val route = (player?.routedDevice ?: pcmTrack?.routedDevice)?.productName?.toString()?.takeIf(String::isNotBlank)
+            ?: "Android media output"
         publishMediaState(
             if (phase == VoicePlaybackPhase.PLAYING) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
         )
@@ -260,6 +413,10 @@ class AndroidVoicePlayer @Inject constructor(
         val active = player
         player = null
         runCatching { active?.release() }
+        val activePcm = pcmTrack
+        pcmTrack = null
+        runCatching { activePcm?.stop() }
+        runCatching { activePcm?.release() }
         sourceFile?.delete()
         sourceFile = null
         statusCallback = null

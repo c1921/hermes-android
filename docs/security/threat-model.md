@@ -50,7 +50,7 @@ Assets include backend credentials, provider secrets reachable through Hermes, c
 | Replay/duplicate events | Stable tool/request IDs; reducer upsert; authoritative rehydrate | Partial; stream cursor upstream gap |
 | Cross-profile/session confusion | Cache/navigation identity includes backend, profile, durable ID and runtime ID; events filtered by runtime | Implemented baseline, more tests required |
 | Diagnostic leakage | Export only an allowlisted, bounded report through an explicit SAF destination; flatten and bound attacker-controlled metadata; apply defense-in-depth redaction to endpoint, connection, capability and diagnostic text; never include cookies, passwords, conversations, provider settings or raw config | Implemented baseline; real document-provider, cancellation, storage-full and exported-file review deferred |
-| Dependency compromise | Version catalogue, dependency locking, Dependabot/review, secret scan, SBOM and release provenance | CI foundation planned |
+| Dependency compromise | Version catalogue, dependency locking, Dependabot/review, secret scan, release SBOM, checksum manifest, two-clean-build payload comparison, and GitHub provenance attestation | Implemented in release-candidate CI; owner certificate and artifact review remain promotion gates |
 | Android backup extraction | `allowBackup=false`, cloud/file exclusions | Implemented |
 
 ## Release gates
