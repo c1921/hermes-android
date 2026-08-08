@@ -88,7 +88,7 @@ class HermesSurfaceJourneyBenchmark {
         val expectedText = "Deterministic benchmark composer input"
         composer.click()
         composer.text = expectedText
-        requireNotNull(wait(Until.findObject(By.textContains(expectedText)), 5_000L)) {
+        requireNotNull(wait(Until.findObject(By.desc("benchmark-composer-value")), 5_000L)) {
             "Benchmark composer field did not accept deterministic input"
         }
         waitForIdle()
@@ -128,7 +128,10 @@ class HermesSurfaceJourneyBenchmark {
 }
 
 private fun UiDevice.clickText(text: String) {
-    requireNotNull(wait(Until.findObject(By.desc(text)), 5_000L)) {
+    requireNotNull(
+        wait(Until.findObject(By.desc(text)), 1_000L)
+            ?: wait(Until.findObject(By.text(text)), 4_000L),
+    ) {
         "Benchmark fixture surface not found: $text"
     }.click()
     waitForIdle()

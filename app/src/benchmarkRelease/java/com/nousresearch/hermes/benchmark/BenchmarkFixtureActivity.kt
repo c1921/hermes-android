@@ -167,6 +167,10 @@ private fun FixtureChats(streamText: String) {
             )
             Button(onClick = { draft = "" }, enabled = draft.isNotBlank()) { Text("Send") }
         }
+        Text(
+            text = "Draft: $draft",
+            modifier = Modifier.semantics { contentDescription = "benchmark-composer-value" },
+        )
     }
 }
 
