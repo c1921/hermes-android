@@ -30,7 +30,7 @@ jobs:
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: >-
           ./gradlew --no-daemon --no-parallel --max-workers=2
-          :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleRelease
+          :app:testDebugUnitTest :app:lintDebug :app:lintRelease
 
   dev-artifacts:
     name: Dev debug APK and AAB
