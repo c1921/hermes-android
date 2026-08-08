@@ -33,6 +33,10 @@ class HermesRestClientProfilesTest {
             server.enqueue(MockResponse().setBody("""{"ok":true,"name":"engineering","path":"/profiles/engineering"}"""))
             server.enqueue(MockResponse().setBody("""{"ok":true,"active":"engineering"}"""))
             server.enqueue(MockResponse().setBody("""{"ok":true,"path":"/profiles/engineering"}"""))
+            server.enqueue(MockResponse().setBody("""{"content":"# Researcher\n\nBe precise.","exists":true}"""))
+            server.enqueue(MockResponse().setBody("""{"command":"hermes --profile engineering"}"""))
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            server.enqueue(MockResponse().setBody("""{"ok":true,"provider":"nous","model":"hermes-4"}"""))
 
             val profiles = client.profiles(config, "secret")
             val active = client.activeProfile(config, "secret")
@@ -44,13 +48,20 @@ class HermesRestClientProfilesTest {
             client.renameProfile(config, "secret", "research", "engineering")
             client.setActiveProfile(config, "secret", "engineering")
             client.deleteProfile(config, "secret", "engineering")
+            val soul = client.profileSoul(config, "secret", "engineering")
+            val setup = client.profileSetupCommand(config, "secret", "engineering")
+            client.updateProfileSoul(config, "secret", "engineering", "# Researcher\n\nBe precise.")
+            client.updateProfileModel(config, "secret", "engineering", "nous", "hermes-4")
 
             assertTrue(profiles.profiles.first().isDefault)
             assertEquals("hermes-4", profiles.profiles.last().model)
             assertEquals("coder", active.active)
             assertEquals("default", active.current)
+            assertEquals("# Researcher\n\nBe precise.", soul.content)
+            assertTrue(soul.exists)
+            assertEquals("hermes --profile engineering", setup.command)
 
-            val requests = List(6) { server.takeRequest() }
+            val requests = List(10) { server.takeRequest() }
             assertEquals("/api/profiles", requests[0].path)
             assertEquals("/api/profiles/active", requests[1].path)
             assertEquals("POST", requests[2].method)
@@ -62,7 +73,39 @@ class HermesRestClientProfilesTest {
             assertEquals("/api/profiles/active", requests[4].path)
             assertEquals("DELETE", requests[5].method)
             assertEquals("/api/profiles/engineering", requests[5].path)
+            assertEquals("/api/profiles/engineering/soul", requests[6].path)
+            assertEquals("/api/profiles/engineering/setup-command", requests[7].path)
+            assertEquals("PUT", requests[8].method)
+            assertEquals("/api/profiles/engineering/soul", requests[8].path)
+            assertTrue(requests[8].body.readUtf8().contains("Be precise."))
+            assertEquals("PUT", requests[9].method)
+            assertEquals("/api/profiles/engineering/model", requests[9].path)
+            assertEquals("{\"provider\":\"nous\",\"model\":\"hermes-4\"}", requests[9].body.readUtf8())
             assertTrue(requests.all { it.getHeader("Authorization") == "Bearer secret" })
+        }
+    }
+
+    @Test
+    fun `profile mutations reject missing acknowledgements and oversized soul content`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            val config = BackendConfig(
+                id = "fake",
+                label = "Fake Hermes",
+                baseUrl = server.url("/").toString().trimEnd('/'),
+                authMode = AuthMode.TOKEN,
+                allowInsecurePrivateNetwork = true,
+            )
+            val client = HermesRestClient(OkHttpClient(), json)
+            server.enqueue(MockResponse().setBody("""{"ok":false}"""))
+
+            assertTrue(runCatching {
+                client.updateProfileSoul(config, "secret", "coder", "content")
+            }.isFailure)
+            assertTrue(runCatching {
+                client.updateProfileSoul(config, "secret", "coder", "x".repeat(131_073))
+            }.isFailure)
+            assertEquals(1, server.requestCount)
         }
     }
 }

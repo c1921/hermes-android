@@ -18,6 +18,8 @@ import com.nousresearch.hermes.protocol.CronJobUpdates
 import com.nousresearch.hermes.protocol.CronRunPage
 import com.nousresearch.hermes.protocol.ActiveProfileResponse
 import com.nousresearch.hermes.protocol.ProfileCreatePayload
+import com.nousresearch.hermes.protocol.ProfileSetupCommandResponse
+import com.nousresearch.hermes.protocol.ProfileSoulResponse
 import com.nousresearch.hermes.protocol.ProfilesResponse
 import com.nousresearch.hermes.protocol.ProviderValidationResult
 import com.nousresearch.hermes.protocol.OAuthProvider
@@ -692,6 +694,73 @@ class HermesRestClient(
         )
     }
 
+    suspend fun profileSoul(config: BackendConfig, token: String, name: String): ProfileSoulResponse =
+        boundedGet(
+            config,
+            token,
+            "/api/profiles/${encodePathSegment(name)}/soul",
+            MAX_PROFILE_TEXT_RESPONSE_BYTES,
+            ProfileSoulResponse.serializer(),
+        )
+
+    suspend fun profileSetupCommand(
+        config: BackendConfig,
+        token: String,
+        name: String,
+    ): ProfileSetupCommandResponse = boundedGet(
+        config,
+        token,
+        "/api/profiles/${encodePathSegment(name)}/setup-command",
+        MAX_PROFILE_SETUP_RESPONSE_BYTES,
+        ProfileSetupCommandResponse.serializer(),
+    )
+
+    suspend fun updateProfileSoul(config: BackendConfig, token: String, name: String, content: String) {
+        require(content.length <= MAX_PROFILE_SOUL_CHARACTERS) { "SOUL.md is too large to edit on Android" }
+        val result = json.decodeFromJsonElement(
+            ServerConfigMutationResponse.serializer(),
+            request(
+                config,
+                token,
+                "/api/profiles/${encodePathSegment(name)}/soul",
+                method = "PUT",
+                body = buildJsonObject { put("content", content) },
+            ),
+        )
+        require(result.ok) { "Hermes did not confirm the SOUL.md update" }
+    }
+
+    suspend fun updateProfileModel(
+        config: BackendConfig,
+        token: String,
+        name: String,
+        provider: String,
+        model: String,
+    ) {
+        val cleanProvider = provider.trim()
+        val cleanModel = model.trim()
+        require(cleanProvider.isNotEmpty() && cleanProvider.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid profile provider is required"
+        }
+        require(cleanModel.isNotEmpty() && cleanModel.length <= MAX_PROFILE_MODEL_CHARACTERS) {
+            "A valid profile model is required"
+        }
+        val result = json.decodeFromJsonElement(
+            ServerConfigMutationResponse.serializer(),
+            request(
+                config,
+                token,
+                "/api/profiles/${encodePathSegment(name)}/model",
+                method = "PUT",
+                body = buildJsonObject {
+                    put("provider", cleanProvider)
+                    put("model", cleanModel)
+                },
+            ),
+        )
+        require(result.ok) { "Hermes did not confirm the profile model update" }
+    }
+
     suspend fun runDoctor(config: BackendConfig, token: String): ActionResponse =
         startAction(config, token, "/api/ops/doctor")
 
@@ -986,7 +1055,7 @@ class HermesRestClient(
                 val raw = response.body?.use { body ->
                     body.contentLength().takeIf { it >= 0 }?.let { length ->
                         if (length > maximumResponseBytes) {
-                            throw IOException("Hermes file response exceeds the Android safety limit")
+                            throw IOException("Hermes response exceeds the Android safety limit")
                         }
                     }
                     readBounded(body.byteStream(), maximumResponseBytes)
@@ -1072,7 +1141,7 @@ class HermesRestClient(
             val read = input.read(buffer)
             if (read < 0) break
             total += read
-            if (total > maximumBytes) throw IOException("Hermes file response exceeds the Android safety limit")
+            if (total > maximumBytes) throw IOException("Hermes response exceeds the Android safety limit")
             output.write(buffer, 0, read)
         }
         return output.toString(Charsets.UTF_8.name())
@@ -1086,6 +1155,10 @@ class HermesRestClient(
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
         const val MAX_FS_DATA_URL_RESPONSE_BYTES = 23L * 1024L * 1024L
         const val MAX_FS_TEXT_RESPONSE_BYTES = 1L * 1024L * 1024L
+        const val MAX_PROFILE_SOUL_CHARACTERS = 128 * 1024
+        const val MAX_PROFILE_TEXT_RESPONSE_BYTES = 192L * 1024L
+        const val MAX_PROFILE_SETUP_RESPONSE_BYTES = 16L * 1024L
+        const val MAX_PROFILE_MODEL_CHARACTERS = 200
     }
 }
 

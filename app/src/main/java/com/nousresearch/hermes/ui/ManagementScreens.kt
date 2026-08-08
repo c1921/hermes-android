@@ -1,5 +1,7 @@
 package com.nousresearch.hermes.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Pause
@@ -47,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.ProfileIdentityDraft
 import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.ProfileInfo
@@ -614,15 +619,82 @@ internal fun ProfilesScreen(
     onRename: (String, String) -> Unit,
     onSetActive: (String) -> Unit,
     onDelete: (String) -> Unit,
+    onLoadIdentity: suspend (String) -> ProfileIdentityDraft,
+    onSaveSoul: suspend (String, String) -> Unit,
+    onSaveModel: suspend (String, String, String) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var creating by rememberSaveable { mutableStateOf(false) }
     var renameProfileName by rememberSaveable { mutableStateOf<String?>(null) }
     var deleteProfileName by rememberSaveable { mutableStateOf<String?>(null) }
+    var identityName by rememberSaveable { mutableStateOf<String?>(null) }
+    var identityLoaded by rememberSaveable { mutableStateOf(false) }
+    var identityLoading by remember { mutableStateOf(false) }
+    var originalSoul by rememberSaveable { mutableStateOf("") }
+    var soulDraft by rememberSaveable { mutableStateOf("") }
+    var setupCommand by rememberSaveable { mutableStateOf("") }
+    var originalProvider by rememberSaveable { mutableStateOf("") }
+    var providerDraft by rememberSaveable { mutableStateOf("") }
+    var originalModel by rememberSaveable { mutableStateOf("") }
+    var modelDraft by rememberSaveable { mutableStateOf("") }
+    var identityError by rememberSaveable { mutableStateOf<String?>(null) }
+    var identityNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmDiscardIdentity by rememberSaveable { mutableStateOf(false) }
     val renameProfile = state.profiles.firstOrNull { it.name == renameProfileName }
     val deleteProfile = state.profiles.firstOrNull { it.name == deleteProfileName }
     LaunchedEffect(Unit) { onRefresh() }
+    LaunchedEffect(identityName, identityLoaded) {
+        val name = identityName ?: return@LaunchedEffect
+        if (identityLoaded) return@LaunchedEffect
+        identityLoading = true
+        identityError = null
+        try {
+            val identity = onLoadIdentity(name)
+            if (identityName == name) {
+                originalSoul = identity.soul
+                soulDraft = identity.soul
+                setupCommand = identity.setupCommand
+                originalProvider = identity.provider
+                providerDraft = identity.provider
+                originalModel = identity.model
+                modelDraft = identity.model
+                identityLoaded = true
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            identityError = error.message ?: "Hermes could not load this profile identity"
+        } finally {
+            identityLoading = false
+        }
+    }
+
+    fun closeIdentity() {
+        identityName = null
+        identityLoaded = false
+        identityLoading = false
+        originalSoul = ""
+        soulDraft = ""
+        setupCommand = ""
+        originalProvider = ""
+        providerDraft = ""
+        originalModel = ""
+        modelDraft = ""
+        identityError = null
+        identityNotice = null
+        confirmDiscardIdentity = false
+    }
+
+    fun requestCloseIdentity() {
+        if (profileIdentityDirty(originalSoul, soulDraft, originalProvider, providerDraft, originalModel, modelDraft)) {
+            confirmDiscardIdentity = true
+        } else {
+            closeIdentity()
+        }
+    }
     Column(modifier.fillMaxSize()) {
         ManagementHeader("PROFILES", "Isolated Hermes workspaces", state.managementLoading, onRefresh, onBack)
         Surface(
@@ -653,6 +725,12 @@ internal fun ProfilesScreen(
                         isCurrent = profile.name == state.currentProfile,
                         onStartSession = { onStartSession(profile.name) },
                         onRename = { renameProfileName = profile.name },
+                        onEditIdentity = {
+                            identityName = profile.name
+                            identityLoaded = false
+                            identityError = null
+                            identityNotice = null
+                        },
                         onSetActive = { onSetActive(profile.name) },
                         onDelete = { deleteProfileName = profile.name },
                         modifier = Modifier.padding(horizontal = 12.dp),
@@ -697,7 +775,133 @@ internal fun ProfilesScreen(
             dismissButton = { TextButton(onClick = { deleteProfileName = null }) { Text("Cancel") } },
         )
     }
+    identityName?.let { name ->
+        AlertDialog(
+            onDismissRequest = ::requestCloseIdentity,
+            title = { Text("PROFILE IDENTITY / $name") },
+            text = {
+                if (identityLoading && !identityLoaded) {
+                    CircularProgressIndicator()
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Stored on ${state.backend?.label.orEmpty()} for profile $name.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (setupCommand.isNotBlank()) {
+                            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+                                Column(Modifier.padding(10.dp)) {
+                                    Text("HOST SETUP COMMAND", style = MaterialTheme.typography.labelMedium)
+                                    Text(setupCommand, style = MaterialTheme.typography.bodySmall)
+                                    TextButton(
+                                        onClick = {
+                                            context.getSystemService(ClipboardManager::class.java)
+                                                .setPrimaryClip(ClipData.newPlainText("Hermes profile setup command", setupCommand))
+                                            identityNotice = "Setup command copied. Run it only on the Hermes host."
+                                        },
+                                    ) { Text("Copy command") }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = soulDraft,
+                            onValueChange = { soulDraft = it.take(131_072); identityNotice = null },
+                            label = { Text("SOUL.md") },
+                            minLines = 7,
+                            maxLines = 14,
+                            enabled = identityLoaded && !identityLoading,
+                            supportingText = { Text("Full profile persona; ${soulDraft.length}/131072 characters") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = providerDraft,
+                                onValueChange = { providerDraft = it.take(200); identityNotice = null },
+                                label = { Text("Provider") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedTextField(
+                                value = modelDraft,
+                                onValueChange = { modelDraft = it.take(200); identityNotice = null },
+                                label = { Text("Model") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    identityLoading = true
+                                    identityError = null
+                                    scope.launch {
+                                        try {
+                                            onSaveSoul(name, soulDraft)
+                                            originalSoul = soulDraft
+                                            identityNotice = "SOUL.md saved"
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (error: Throwable) {
+                                            identityError = error.message ?: "Hermes could not save SOUL.md"
+                                        } finally {
+                                            identityLoading = false
+                                        }
+                                    }
+                                },
+                                enabled = identityLoaded && !identityLoading && soulDraft != originalSoul,
+                            ) { Text("Save SOUL") }
+                            Button(
+                                onClick = {
+                                    identityLoading = true
+                                    identityError = null
+                                    scope.launch {
+                                        try {
+                                            onSaveModel(name, providerDraft, modelDraft)
+                                            originalProvider = providerDraft.trim()
+                                            originalModel = modelDraft.trim()
+                                            providerDraft = originalProvider
+                                            modelDraft = originalModel
+                                            identityNotice = "Profile model saved"
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (error: Throwable) {
+                                            identityError = error.message ?: "Hermes could not save the profile model"
+                                        } finally {
+                                            identityLoading = false
+                                        }
+                                    }
+                                },
+                                enabled = identityLoaded && !identityLoading && providerDraft.isNotBlank() && modelDraft.isNotBlank() &&
+                                    (providerDraft != originalProvider || modelDraft != originalModel),
+                            ) { Text("Save model") }
+                        }
+                        identityNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+                        identityError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = ::requestCloseIdentity) { Text("Close") } },
+        )
+    }
+    if (confirmDiscardIdentity) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscardIdentity = false },
+            title = { Text("DISCARD PROFILE CHANGES?") },
+            text = { Text("Unsaved SOUL, provider, or model edits will be lost.") },
+            confirmButton = { TextButton(onClick = ::closeIdentity) { Text("Discard") } },
+            dismissButton = { TextButton(onClick = { confirmDiscardIdentity = false }) { Text("Keep editing") } },
+        )
+    }
 }
+
+internal fun profileIdentityDirty(
+    originalSoul: String,
+    soul: String,
+    originalProvider: String,
+    provider: String,
+    originalModel: String,
+    model: String,
+): Boolean = soul != originalSoul || provider != originalProvider || model != originalModel
 
 @Composable
 private fun ProfileRow(
@@ -706,6 +910,7 @@ private fun ProfileRow(
     isCurrent: Boolean,
     onStartSession: () -> Unit,
     onRename: () -> Unit,
+    onEditIdentity: () -> Unit,
     onSetActive: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
@@ -724,6 +929,7 @@ private fun ProfileRow(
                     )
                 }
                 IconButton(onClick = onStartSession) { Icon(Icons.Outlined.PlayArrow, "Start session in ${profile.name}") }
+                IconButton(onClick = onEditIdentity) { Icon(Icons.Outlined.Description, "Edit identity for ${profile.name}") }
                 if (!profile.isDefault) IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, "Rename ${profile.name}") }
                 if (!protected) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Delete ${profile.name}") }
             }

@@ -170,6 +170,45 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `interim assistant turns remain ordered before the following final stream`() {
+        var state = TimelineReducer.appendUserMessage(TimelineState(), "local:1", "Question")
+        state = TimelineReducer.reduce(state, GatewayEvent("message.start", "runtime-1"))
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Checking"))
+        state = TimelineReducer.reduce(state, event("message.interim", "runtime-1", "text", "Checking files"))
+        val replayed = TimelineReducer.reduce(state, event("message.interim", "runtime-1", "text", "Checking files"))
+        assertEquals(state, replayed)
+        state = replayed
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Final answer"))
+        state = TimelineReducer.reduce(state, event("message.complete", "runtime-1", "text", "Final answer"))
+
+        val assistants = state.items.filterIsInstance<TimelineItem.Message>()
+            .filter { it.role == MessageRole.ASSISTANT }
+        assertEquals(listOf("Checking files", "Final answer"), assistants.map { it.text })
+        assertFalse(assistants[0].streaming)
+        assertFalse(assistants[1].streaming)
+    }
+
+    @Test
+    fun `matching interim text in a later turn is not mistaken for a replay`() {
+        var state = TimelineReducer.appendUserMessage(TimelineState(), "local:1", "First")
+        state = TimelineReducer.reduce(state, GatewayEvent("message.start", "runtime-1"))
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Checking"))
+        state = TimelineReducer.reduce(state, event("message.interim", "runtime-1", "text", "Checking"))
+        state = TimelineReducer.reduce(state, event("message.complete", "runtime-1", "text", "First answer"))
+        state = TimelineReducer.appendUserMessage(state, "local:2", "Second")
+        state = TimelineReducer.reduce(state, GatewayEvent("message.start", "runtime-1"))
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Checking"))
+        state = TimelineReducer.reduce(state, event("message.interim", "runtime-1", "text", "Checking"))
+
+        assertEquals(
+            listOf("First answer", "Checking"),
+            state.items.filterIsInstance<TimelineItem.Message>()
+                .filter { it.role == MessageRole.ASSISTANT }
+                .map { it.text },
+        )
+    }
+
+    @Test
     fun `tool completion updates stable tool identity`() {
         val start = GatewayEvent(
             "tool.start",
@@ -309,7 +348,7 @@ class TimelineReducerTest {
             listOf(
                 TimelineItem.Message::class,
                 TimelineItem.Reference::class,
-                TimelineItem.Unknown::class,
+                TimelineItem.Artifact::class,
                 TimelineItem.Tool::class,
                 TimelineItem.Error::class,
             ),
@@ -317,7 +356,76 @@ class TimelineReducerTest {
         )
         assertTrue(state.items.all { it.identity.parentServerId == "server-turn-7" })
         assertEquals(TimelineIdentityKind.GENERATED_FALLBACK, state.items.first().identity.kind)
+        val artifact = state.items.filterIsInstance<TimelineItem.Artifact>().single()
+        assertEquals("report.md", artifact.label)
+        assertEquals("text/markdown", artifact.mimeType)
+        assertEquals("artifact-1", artifact.reference)
+        assertEquals(TimelineIdentityKind.SERVER, artifact.identity.kind)
         assertEquals(TimelineIdentityKind.SERVER, state.items.filterIsInstance<TimelineItem.Tool>().single().identity.kind)
+    }
+
+    @Test
+    fun `desktop media content parts retain typed artifact metadata in order`() {
+        val state = TimelineReducer.hydrate(
+            listOf(
+                ProtocolMessage(
+                    id = "message-media",
+                    role = "assistant",
+                    content = buildJsonArray {
+                        add(buildJsonObject {
+                            put("type", "image")
+                            put("image", "data:image/png;base64,AAAA")
+                            put("mimeType", "image/png")
+                            put("filename", "chart.png")
+                        })
+                        add(buildJsonObject {
+                            put("type", "file")
+                            put("data", "https://example.test/report.pdf")
+                            put("mediaType", "application/pdf")
+                            put("filename", "report.pdf")
+                        })
+                        add(buildJsonObject {
+                            put("type", "audio")
+                            put("url", "https://example.test/voice.ogg")
+                            put("mime_type", "audio/ogg")
+                            put("name", "voice.ogg")
+                        })
+                    },
+                ),
+            ),
+        )
+
+        val artifacts = state.items.filterIsInstance<TimelineItem.Artifact>()
+        assertEquals(listOf("chart.png", "report.pdf", "voice.ogg"), artifacts.map { it.label })
+        assertEquals(listOf("image/png", "application/pdf", "audio/ogg"), artifacts.map { it.mimeType })
+        assertEquals(
+            listOf("data:image/png;base64,AAAA", "https://example.test/report.pdf", "https://example.test/voice.ogg"),
+            artifacts.map { it.reference },
+        )
+        assertTrue(artifacts.all { it.identity.parentServerId == "message-media" })
+    }
+
+    @Test
+    fun `desktop source parts remain typed references instead of generic fallbacks`() {
+        val state = TimelineReducer.hydrate(
+            listOf(
+                ProtocolMessage(
+                    id = "message-source",
+                    role = "assistant",
+                    content = buildJsonArray {
+                        add(buildJsonObject {
+                            put("type", "source")
+                            put("title", "Hermes docs")
+                            put("url", "https://example.test/hermes")
+                        })
+                    },
+                ),
+            ),
+        )
+
+        val reference = state.items.single() as TimelineItem.Reference
+        assertEquals("Hermes docs", reference.label)
+        assertEquals("https://example.test/hermes", reference.text)
     }
 
     @Test

@@ -171,6 +171,7 @@ data class TimelineState(
     val sensitiveInput: SensitiveInputRequest? = null,
     val generation: Long = 0,
     val runtimeSessionId: String? = null,
+    val interimBoundary: Boolean = false,
     val sync: TimelineSyncState = TimelineSyncState(),
 )
 
@@ -289,6 +290,7 @@ object TimelineReducer {
                 val id = assistantId(event.sessionId, nextGeneration)
                 state.copy(
                     generation = nextGeneration,
+                    interimBoundary = false,
                     items = state.items + TimelineItem.Message(
                         id = id,
                         role = MessageRole.ASSISTANT,
@@ -303,6 +305,7 @@ object TimelineReducer {
                 )
             }
 
+            "message.interim" -> sealInterimAssistant(state, event.sessionId, payload.text("text"))
             "message.delta" -> appendAssistantDelta(state, event.sessionId, payload.text("text"))
             "message.complete" -> completeAssistant(
                 state,
@@ -476,6 +479,7 @@ object TimelineReducer {
     }
 
     fun appendUserMessage(state: TimelineState, id: String, text: String): TimelineState = state.copy(
+        interimBoundary = false,
         items = state.items + TimelineItem.Message(id, MessageRole.USER, text),
     )
 
@@ -486,9 +490,9 @@ object TimelineReducer {
         }
         val user = TimelineItem.Message(id, MessageRole.USER, text)
         return if (assistantIndex < 0) {
-            state.copy(items = state.items + user)
+            state.copy(interimBoundary = false, items = state.items + user)
         } else {
-            state.copy(items = state.items.toMutableList().apply { add(assistantIndex, user) })
+            state.copy(interimBoundary = false, items = state.items.toMutableList().apply { add(assistantIndex, user) })
         }
     }
 
@@ -530,10 +534,11 @@ object TimelineReducer {
             it is TimelineItem.Message && it.role == MessageRole.ASSISTANT && it.streaming
         }
         if (index < 0) {
-            if (!state.hasUserAfterLastAssistant()) return state
+            if (!state.hasUserAfterLastAssistant() && !state.interimBoundary) return state
             val next = state.generation + 1
             return state.copy(
                 generation = next,
+                interimBoundary = false,
                 items = state.items + TimelineItem.Message(
                     assistantId(sessionId, next),
                     MessageRole.ASSISTANT,
@@ -548,7 +553,56 @@ object TimelineReducer {
             )
         }
         val current = state.items[index] as TimelineItem.Message
-        return state.copy(items = state.items.replaced(index, current.copy(text = current.text.boundedAppend(delta))))
+        return state.copy(
+            interimBoundary = false,
+            items = state.items.replaced(index, current.copy(text = current.text.boundedAppend(delta))),
+        )
+    }
+
+    private fun sealInterimAssistant(
+        state: TimelineState,
+        sessionId: String?,
+        text: String,
+    ): TimelineState {
+        val interimText = text.take(MAX_TIMELINE_TEXT_CHARACTERS)
+        if (interimText.isBlank()) return state
+        if (state.interimBoundary && state.items.any {
+                it is TimelineItem.Message &&
+                    it.role == MessageRole.ASSISTANT &&
+                    it.identity.source == "message.interim" &&
+                    it.text == interimText
+            }) {
+            return state
+        }
+        val streamingIndex = state.items.indexOfLast {
+            it is TimelineItem.Message && it.role == MessageRole.ASSISTANT && it.streaming
+        }
+        if (streamingIndex >= 0) {
+            val current = state.items[streamingIndex] as TimelineItem.Message
+            return state.copy(
+                interimBoundary = true,
+                items = state.items.replaced(
+                    streamingIndex,
+                    current.copy(
+                        text = interimText,
+                        streaming = false,
+                        identity = current.identity.copy(source = "message.interim"),
+                    ),
+                ),
+            )
+        }
+        val nextGeneration = state.generation + 1
+        val id = "${assistantId(sessionId, nextGeneration)}:interim"
+        return state.copy(
+            generation = nextGeneration,
+            interimBoundary = true,
+            items = state.items + TimelineItem.Message(
+                id = id,
+                role = MessageRole.ASSISTANT,
+                text = interimText,
+                identity = TimelineIdentity.fallback(id, sessionId, source = "message.interim"),
+            ),
+        )
     }
 
     private fun completeAssistant(
@@ -585,6 +639,7 @@ object TimelineReducer {
             return state.copy(
                 items = completed.withTerminalError(sessionId, nextGeneration, failed, errorMessage, text, partial, recoverable),
                 generation = nextGeneration,
+                interimBoundary = false,
                 approval = null,
                 clarification = null,
                 sensitiveInput = null,
@@ -610,6 +665,7 @@ object TimelineReducer {
                 partial,
                 recoverable,
             ),
+            interimBoundary = false,
             approval = null,
             clarification = null,
             sensitiveInput = null,
@@ -836,8 +892,13 @@ private fun historyMessageParts(index: Int, message: ProtocolMessage): List<Time
     }
     val parts = buildList<TimelineItem> {
         val content = message.content
-        if (content is JsonArray) {
-            content.forEachIndexed { partIndex, element ->
+        val contentParts = when (content) {
+            is JsonArray -> content
+            is JsonObject -> JsonArray(listOf(content))
+            else -> null
+        }
+        if (contentParts != null) {
+            contentParts.forEachIndexed { partIndex, element ->
                 val part = element as? JsonObject ?: return@forEachIndexed
                 val partType = part.text("type").ifBlank { "text" }
                 val id = "$baseId:part:$partIndex"
@@ -854,14 +915,9 @@ private fun historyMessageParts(index: Int, message: ProtocolMessage): List<Time
                         add(TimelineItem.Reasoning(id, it, streaming = false, identity = identity))
                     }
                     "tool-call", "tool_call", "tool" -> add(historyToolPart(id, part, identity))
-                    "citation", "reference" -> add(
-                        TimelineItem.Reference(
-                            id = id,
-                            label = part.text("label").ifBlank { "Reference" }.take(MAX_TIMELINE_LABEL_CHARACTERS),
-                            text = part.text("text").take(MAX_TIMELINE_SUMMARY_CHARACTERS),
-                            identity = identity,
-                        ),
-                    )
+                    "artifact", "image", "image_url", "file", "audio", "video", "media" ->
+                        add(historyArtifactPart(id, part, identity))
+                    "citation", "reference", "source" -> add(historyReferencePart(id, part, identity))
                     "error" -> add(
                         TimelineItem.Error(
                             id,
@@ -887,6 +943,82 @@ private fun historyMessageParts(index: Int, message: ProtocolMessage): List<Time
         addAll(historyToolCalls(baseId, message.toolCalls, messageId))
     }
     return parts
+}
+
+private fun historyReferencePart(
+    id: String,
+    part: JsonObject,
+    identity: TimelineIdentity,
+): TimelineItem.Reference = TimelineItem.Reference(
+    id = id,
+    label = listOf(part.text("label"), part.text("title"), part.text("name"))
+        .firstOrNull(String::isNotBlank)
+        ?.take(MAX_TIMELINE_LABEL_CHARACTERS)
+        ?: "Reference",
+    text = listOf(part.text("text"), part.text("description"), part.text("snippet"), part.text("url"))
+        .firstOrNull(String::isNotBlank)
+        ?.take(MAX_TIMELINE_SUMMARY_CHARACTERS)
+        .orEmpty(),
+    index = (part["index"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull(),
+    count = (part["count"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull(),
+    identity = identity,
+)
+
+private fun historyArtifactPart(
+    id: String,
+    part: JsonObject,
+    identity: TimelineIdentity,
+): TimelineItem.Artifact {
+    val type = part.text("type").ifBlank { "artifact" }
+    val nestedImage = part["image_url"] as? JsonObject
+    val serverId = part.text("artifact_id")
+        .ifBlank { part.text("artifactId") }
+        .ifBlank { part.text("id") }
+        .takeIf(String::isNotBlank)
+    val reference = listOf(
+        part.text("reference"),
+        part.text("url"),
+        part.text("href"),
+        part.text("src"),
+        nestedImage?.text("url").orEmpty(),
+        part.text("data"),
+        part.text("image"),
+        part.text("file"),
+        part.text("path"),
+        part.text("uri"),
+        serverId.orEmpty(),
+    ).firstOrNull(String::isNotBlank)?.take(MAX_TIMELINE_REFERENCE_CHARACTERS)
+    val label = listOf(
+        part.text("label"),
+        part.text("name"),
+        part.text("filename"),
+        part.text("file_name"),
+        part.text("title"),
+    ).firstOrNull(String::isNotBlank)
+        ?: reference?.substringAfterLast('/')?.substringAfterLast('\\')?.takeIf(String::isNotBlank)
+        ?: type.replaceFirstChar { it.uppercase() }
+    val mimeType = listOf(
+        part.text("mime"),
+        part.text("mimeType"),
+        part.text("mime_type"),
+        part.text("mediaType"),
+        part.text("media_type"),
+        nestedImage?.text("mime_type").orEmpty(),
+    ).firstOrNull(String::isNotBlank)
+        ?: reference?.substringAfter("data:", "")?.substringBefore(';')?.takeIf(String::isNotBlank)
+    val itemId = serverId ?: id
+    return TimelineItem.Artifact(
+        id = itemId,
+        label = label.take(MAX_TIMELINE_LABEL_CHARACTERS),
+        mimeType = mimeType?.take(MAX_TIMELINE_LABEL_CHARACTERS),
+        reference = reference,
+        description = part.text("description").ifBlank { part.text("alt") }
+            .ifBlank { part.text("text") }.ifBlank { null }
+            ?.take(MAX_TIMELINE_SUMMARY_CHARACTERS),
+        identity = serverId?.let {
+            TimelineIdentity.server(it, parentServerId = identity.parentServerId, source = "history:$type")
+        } ?: identity,
+    )
 }
 
 private fun historyToolPart(
@@ -1010,6 +1142,7 @@ private const val MAX_TIMELINE_TEXT_CHARACTERS = 1_048_576
 
 private val TIMELINE_EVENT_TYPES = setOf(
     "message.start",
+    "message.interim",
     "message.delta",
     "message.complete",
     "reasoning.delta",

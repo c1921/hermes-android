@@ -236,6 +236,13 @@ data class SpawnTreeReplay(
     val subagents: List<SubagentProgress>,
 )
 
+data class ProfileIdentityDraft(
+    val soul: String,
+    val setupCommand: String,
+    val provider: String,
+    val model: String,
+)
+
 data class EntryAuthoritySnapshot(
     val profileIds: Set<String>,
     val cronJobIds: Set<String>,
@@ -1931,6 +1938,33 @@ class HermesRepository @Inject constructor(
         } else {
             fail(requireNotNull(result.exceptionOrNull()))
         }
+    }
+
+    suspend fun profileIdentity(name: String): ProfileIdentityDraft {
+        val profile = mutableState.value.profiles.firstOrNull { it.name == name }
+            ?: throw IllegalArgumentException("Unknown Hermes profile")
+        val (backend, token) = activeCredentials()
+        val soul = restClient.profileSoul(backend, token, name)
+        val setup = restClient.profileSetupCommand(backend, token, name)
+        return ProfileIdentityDraft(
+            soul = soul.content,
+            setupCommand = setup.command.take(4_096),
+            provider = profile.provider.orEmpty(),
+            model = profile.model.orEmpty(),
+        )
+    }
+
+    suspend fun saveProfileSoul(name: String, content: String) {
+        require(mutableState.value.profiles.any { it.name == name }) { "Unknown Hermes profile" }
+        val (backend, token) = activeCredentials()
+        restClient.updateProfileSoul(backend, token, name, content)
+    }
+
+    suspend fun saveProfileModel(name: String, provider: String, model: String) {
+        require(mutableState.value.profiles.any { it.name == name }) { "Unknown Hermes profile" }
+        val (backend, token) = activeCredentials()
+        restClient.updateProfileModel(backend, token, name, provider, model)
+        refreshProfiles()
     }
 
     suspend fun runDiagnostic(action: DiagnosticAction) {

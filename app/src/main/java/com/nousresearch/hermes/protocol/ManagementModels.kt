@@ -139,6 +139,17 @@ data class ProfileCreatePayload(
 )
 
 @Serializable
+data class ProfileSoulResponse(
+    val content: String = "",
+    val exists: Boolean = false,
+)
+
+@Serializable
+data class ProfileSetupCommandResponse(
+    val command: String = "",
+)
+
+@Serializable
 data class ActionResponse(
     val name: String,
     val ok: Boolean,

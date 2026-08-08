@@ -78,6 +78,7 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lock
@@ -115,6 +116,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -122,6 +124,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -182,6 +185,7 @@ import com.nousresearch.hermes.data.SessionRestorationStatus
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
+import com.nousresearch.hermes.data.ProfileIdentityDraft
 import com.nousresearch.hermes.data.SlashSuggestion
 import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.ComposerBrowseState
@@ -292,6 +296,9 @@ private data class ManagementActions(
     val renameProfile: (String, String) -> Unit,
     val setActiveProfile: (String) -> Unit,
     val deleteProfile: (String) -> Unit,
+    val profileIdentity: suspend (String) -> ProfileIdentityDraft,
+    val saveProfileSoul: suspend (String, String) -> Unit,
+    val saveProfileModel: suspend (String, String, String) -> Unit,
     val runDiagnostic: (DiagnosticAction) -> Unit,
     val refreshProviders: () -> Unit,
     val startProviderOAuth: (String) -> Unit,
@@ -408,6 +415,9 @@ fun HermesApp(
             renameProfile = viewModel::renameProfile,
             setActiveProfile = viewModel::setActiveProfile,
             deleteProfile = viewModel::deleteProfile,
+            profileIdentity = viewModel::profileIdentity,
+            saveProfileSoul = viewModel::saveProfileSoul,
+            saveProfileModel = viewModel::saveProfileModel,
             runDiagnostic = viewModel::runDiagnostic,
             refreshProviders = viewModel::refreshProviders,
             startProviderOAuth = viewModel::startProviderOAuth,
@@ -1300,6 +1310,9 @@ private fun HermesWorkspace(
                         onRename = managementActions.renameProfile,
                         onSetActive = managementActions.setActiveProfile,
                         onDelete = managementActions.deleteProfile,
+                        onLoadIdentity = managementActions.profileIdentity,
+                        onSaveSoul = managementActions.saveProfileSoul,
+                        onSaveModel = managementActions.saveProfileModel,
                         onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
@@ -2124,16 +2137,18 @@ private fun ChatSurface(
                     Text("Select an existing conversation or create a new one.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                Timeline(
-                    items = state.timeline.items,
-                    speechState = speechState,
-                    onSpeak = voiceViewModel::speak,
-                    onStopSpeaking = voiceViewModel::stopSpeaking,
-                    expandedToolIds = expandedToolIds,
-                    toolDisclosureKey = toolDisclosureKey,
-                    onToolExpandedChange = onToolExpandedChange,
-                    focusMessageId = focusMessageId,
-                )
+                key(state.activeStoredSession?.id ?: state.runtimeSessionId) {
+                    Timeline(
+                        items = state.timeline.items,
+                        speechState = speechState,
+                        onSpeak = voiceViewModel::speak,
+                        onStopSpeaking = voiceViewModel::stopSpeaking,
+                        expandedToolIds = expandedToolIds,
+                        toolDisclosureKey = toolDisclosureKey,
+                        onToolExpandedChange = onToolExpandedChange,
+                        focusMessageId = focusMessageId,
+                    )
+                }
             }
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
         }
@@ -2255,8 +2270,20 @@ private fun Timeline(
     focusMessageId: String?,
 ) {
     val listState = rememberLazyListState()
+    var followLatest by rememberSaveable { mutableStateOf(true) }
     var focusConsumed by rememberSaveable(focusMessageId) { mutableStateOf(false) }
-    LaunchedEffect(items.size, (items.lastOrNull() as? TimelineItem.Message)?.text?.length, focusMessageId) {
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            Triple(
+                listState.isScrollInProgress,
+                listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
+                listState.layoutInfo.totalItemsCount,
+            )
+        }.collect { (scrolling, lastVisibleIndex, totalItems) ->
+            if (scrolling) followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+        }
+    }
+    LaunchedEffect(items.size, items.lastOrNull(), focusMessageId, followLatest) {
         if (focusMessageId != null) {
             if (!focusConsumed) {
                 val target = items.indexOfServerMessage(focusMessageId)
@@ -2265,29 +2292,44 @@ private fun Timeline(
                     focusConsumed = true
                 }
             }
-        } else if (items.isNotEmpty()) {
+        } else if (followLatest && items.isNotEmpty()) {
             listState.animateScrollToItem(items.lastIndex)
         }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        val renderContext = TimelineRenderContext(
-            speechState = speechState,
-            onSpeak = onSpeak,
-            onStopSpeaking = onStopSpeaking,
-            expandedToolIds = expandedToolIds,
-            toolDisclosureKey = toolDisclosureKey,
-            onToolExpandedChange = onToolExpandedChange,
-        )
-        items(items, key = { it.id }) { item ->
-            TimelineRendererRegistry.Render(item, renderContext)
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            val renderContext = TimelineRenderContext(
+                speechState = speechState,
+                onSpeak = onSpeak,
+                onStopSpeaking = onStopSpeaking,
+                expandedToolIds = expandedToolIds,
+                toolDisclosureKey = toolDisclosureKey,
+                onToolExpandedChange = onToolExpandedChange,
+            )
+            items(items, key = { it.id }) { item ->
+                TimelineRendererRegistry.Render(item, renderContext)
+            }
+        }
+        AnimatedVisibility(
+            visible = !followLatest && items.isNotEmpty(),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        ) {
+            SmallFloatingActionButton(
+                onClick = { followLatest = true },
+            ) {
+                Icon(Icons.Outlined.KeyboardArrowDown, "Jump to latest message")
+            }
         }
     }
 }
+
+internal fun timelineIsNearLatest(lastVisibleIndex: Int?, totalItems: Int): Boolean =
+    totalItems == 0 || lastVisibleIndex == null || lastVisibleIndex >= totalItems - 2
 
 @Composable
 internal fun MessageBlock(
