@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,19 +56,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.ProfileInfo
 import com.nousresearch.hermes.protocol.SkillInfo
 import com.nousresearch.hermes.protocol.SkillHubResult
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.ToolsetInfo
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 private enum class CapabilityView { SKILLS, HUB, TOOLSETS }
 
 @Composable
 internal fun BackendsScreen(
     state: HermesState,
-    onConnect: (String, String, String, String, Boolean) -> Unit,
+    onDiscoverPasswordProviders: suspend (String, Boolean) -> List<DashboardAuthProvider>,
+    onConnect: (String, String, String, String, Boolean, String) -> Unit,
     onSelect: (String) -> Unit,
     onForget: (String) -> Unit,
     onBack: (() -> Unit)?,
@@ -145,11 +150,12 @@ internal fun BackendsScreen(
     if (adding) {
         BackendConnectionDialog(
             initial = state.savedBackends.firstOrNull { it.id == reconnectId },
+            onDiscoverPasswordProviders = onDiscoverPasswordProviders,
             onDismiss = { adding = false; reconnectId = null },
-            onConnect = { label, url, username, password, allowPrivate ->
+            onConnect = { label, url, username, password, allowPrivate, provider ->
                 adding = false
                 reconnectId = null
-                onConnect(label, url, username, password, allowPrivate)
+                onConnect(label, url, username, password, allowPrivate, provider)
             },
         )
     }
@@ -174,21 +180,44 @@ internal fun BackendsScreen(
 @Composable
 private fun BackendConnectionDialog(
     initial: BackendConfig?,
+    onDiscoverPasswordProviders: suspend (String, Boolean) -> List<DashboardAuthProvider>,
     onDismiss: () -> Unit,
-    onConnect: (String, String, String, String, Boolean) -> Unit,
+    onConnect: (String, String, String, String, Boolean, String) -> Unit,
 ) {
     var label by rememberSaveable(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
     var url by rememberSaveable(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var allowPrivate by rememberSaveable(initial?.id) { mutableStateOf(initial?.allowInsecurePrivateNetwork == true) }
+    var passwordProviders by remember { mutableStateOf(emptyList<DashboardAuthProvider>()) }
+    var selectedProvider by remember { mutableStateOf<String?>(null) }
+    var providerSource by remember { mutableStateOf<String?>(null) }
+    var providerError by remember { mutableStateOf<String?>(null) }
+    var discoveringProviders by remember { mutableStateOf(false) }
+    val providerDiscoveryGate = remember { DashboardProviderDiscoveryGate() }
+    val providerScope = rememberCoroutineScope()
+    val providerKey = "${url.trim().trimEnd('/')}|$allowPrivate"
+
+    fun clearProviderSelection() {
+        providerDiscoveryGate.invalidate()
+        discoveringProviders = false
+        passwordProviders = emptyList()
+        selectedProvider = null
+        providerSource = null
+        providerError = null
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "ADD HERMES BACKEND" else "RECONNECT HERMES BACKEND") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
-                OutlinedTextField(url, { url = it }, label = { Text("HTTPS URL") }, singleLine = true)
+                OutlinedTextField(
+                    url,
+                    { value -> url = value; clearProviderSelection() },
+                    label = { Text("HTTPS URL") },
+                    singleLine = true,
+                )
                 OutlinedTextField(
                     username,
                     { username = it },
@@ -209,21 +238,72 @@ private fun BackendConnectionDialog(
                     }
                     Switch(
                         checked = allowPrivate,
-                        onCheckedChange = { allowPrivate = it },
+                        onCheckedChange = { allowPrivate = it; clearProviderSelection() },
                         modifier = Modifier.semantics { contentDescription = "Allow private-network HTTP" },
                     )
                 }
+                if (passwordProviders.size > 1 && providerSource == providerKey) {
+                    DashboardPasswordProviderSelector(
+                        providers = passwordProviders,
+                        selectedProvider = selectedProvider,
+                        onSelected = { selectedProvider = it; providerError = null },
+                    )
+                }
+                DashboardOAuthAvailabilityNotice()
+                providerError?.let { ManagementError(it) }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    val submittedPassword = password
-                    password = ""
-                    onConnect(label, url, username, submittedPassword, allowPrivate)
+                    val submit: (String) -> Unit = { provider ->
+                        val submittedPassword = password
+                        password = ""
+                        onConnect(label, url, username, submittedPassword, allowPrivate, provider)
+                    }
+                    if (providerSource == providerKey) {
+                        selectedProvider?.let(submit)
+                    } else {
+                        val requestToken = providerDiscoveryGate.begin()
+                        if (requestToken != null) {
+                            val requestedUrl = url
+                            val requestedAllowPrivate = allowPrivate
+                            discoveringProviders = true
+                            providerError = null
+                            providerScope.launch {
+                                try {
+                                    val providers = onDiscoverPasswordProviders(requestedUrl, requestedAllowPrivate)
+                                    if (providerDiscoveryGate.isCurrent(requestToken)) {
+                                        providerSource = "${requestedUrl.trim().trimEnd('/')}|$requestedAllowPrivate"
+                                        passwordProviders = providers
+                                        selectedProvider = providers.singleOrNull()?.name
+                                        if (providers.size == 1) submit(providers.single().name)
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (failure: Throwable) {
+                                    if (providerDiscoveryGate.isCurrent(requestToken)) {
+                                        clearProviderSelection()
+                                        providerError = failure.message ?: "Could not load Dashboard sign-in providers."
+                                    }
+                                } finally {
+                                    val current = providerDiscoveryGate.isCurrent(requestToken)
+                                    providerDiscoveryGate.finish(requestToken)
+                                    if (current) discoveringProviders = false
+                                }
+                            }
+                        }
+                    }
                 },
-                enabled = url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
-            ) { Text("Test and save") }
+                enabled = !discoveringProviders && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty() &&
+                    (providerSource != providerKey || passwordProviders.size == 1 || selectedProvider != null),
+            ) {
+                if (discoveringProviders) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(if (providerSource == providerKey) "Test and save" else "Check sign-in options")
+                }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

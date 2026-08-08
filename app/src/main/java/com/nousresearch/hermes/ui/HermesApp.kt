@@ -221,6 +221,8 @@ import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import com.mikepenz.markdown.model.markdownAnimations
+import com.nousresearch.hermes.network.DashboardAuthProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -631,6 +633,7 @@ fun HermesApp(
             sessionActions = sessionActions,
             queueActions = queueActions,
             managementActions = managementActions,
+            onDiscoverPasswordProviders = viewModel::discoverDashboardPasswordProviders,
             onConnectBackend = viewModel::connect,
             onSelectBackend = viewModel::selectBackend,
             onForgetBackend = viewModel::forgetBackend,
@@ -650,18 +653,24 @@ fun HermesApp(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     composable<HermesRoute.Onboarding> {
-                        OnboardingScreen(state.loading, state.error) { label, url, token, password, insecure ->
-                            recoveryNotice = null
-                            viewModel.connect(label, url, token, password, insecure)
-                        }
+                        OnboardingScreen(
+                            busy = state.loading,
+                            error = state.error,
+                            onDiscoverPasswordProviders = viewModel::discoverDashboardPasswordProviders,
+                            onConnect = { label, url, username, password, insecure, provider ->
+                                recoveryNotice = null
+                                viewModel.connect(label, url, username, password, insecure, provider)
+                            },
+                        )
                     }
                     composable<HermesRoute.BackendPicker> { entry ->
                         val route = entry.toRoute<HermesRoute.BackendPicker>()
                         BackendsScreen(
                             state = state,
-                            onConnect = { label, url, token, password, insecure ->
+                            onDiscoverPasswordProviders = viewModel::discoverDashboardPasswordProviders,
+                            onConnect = { label, url, username, password, insecure, provider ->
                                 recoveryNotice = null
-                                viewModel.connect(label, url, token, password, insecure)
+                                viewModel.connect(label, url, username, password, insecure, provider)
                             },
                             onSelect = { id ->
                                 recoveryNotice = null
@@ -728,10 +737,11 @@ fun HermesApp(
 }
 
 @Composable
-private fun OnboardingScreen(
+internal fun OnboardingScreen(
     busy: Boolean,
     error: String?,
-    onConnect: (String, String, String, String, Boolean) -> Unit,
+    onDiscoverPasswordProviders: suspend (String, Boolean) -> List<DashboardAuthProvider>,
+    onConnect: (String, String, String, String, Boolean, String) -> Unit,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     var label by rememberSaveable { mutableStateOf("My Hermes") }
@@ -739,6 +749,23 @@ private fun OnboardingScreen(
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var privateHttp by rememberSaveable { mutableStateOf(false) }
+    var passwordProviders by remember { mutableStateOf(emptyList<DashboardAuthProvider>()) }
+    var selectedProvider by remember { mutableStateOf<String?>(null) }
+    var providerSource by remember { mutableStateOf<String?>(null) }
+    var providerError by remember { mutableStateOf<String?>(null) }
+    var discoveringProviders by remember { mutableStateOf(false) }
+    val providerDiscoveryGate = remember { DashboardProviderDiscoveryGate() }
+    val providerScope = rememberCoroutineScope()
+    val providerKey = "${url.trim().trimEnd('/')}|$privateHttp"
+
+    fun clearProviderSelection() {
+        providerDiscoveryGate.invalidate()
+        discoveringProviders = false
+        passwordProviders = emptyList()
+        selectedProvider = null
+        providerSource = null
+        providerError = null
+    }
 
     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         AnimatedContent(
@@ -792,11 +819,17 @@ private fun OnboardingScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { step = 0 }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+                        IconButton(
+                            onClick = {
+                                password = ""
+                                clearProviderSelection()
+                                step = 0
+                            },
+                        ) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
                         Text("BACKEND LINK", style = MaterialTheme.typography.headlineMedium)
                     }
                     HermesField(label, { label = it }, "Connection name")
-                    HermesField(url, { url = it }, "Hermes backend URL", KeyboardType.Uri)
+                    HermesField(url, { value -> url = value; clearProviderSelection() }, "Hermes backend URL", KeyboardType.Uri)
                     HermesField(username, { username = it }, "Dashboard username")
                     HermesField(password, { password = it }, "Dashboard password", KeyboardType.Password, secret = true)
                     Row(
@@ -807,7 +840,7 @@ private fun OnboardingScreen(
                             .toggleable(
                                 value = privateHttp,
                                 role = Role.Switch,
-                                onValueChange = { privateHttp = it },
+                                onValueChange = { privateHttp = it; clearProviderSelection() },
                             )
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -819,17 +852,66 @@ private fun OnboardingScreen(
                         }
                         Switch(checked = privateHttp, onCheckedChange = null)
                     }
-                    error?.let { ErrorBanner(it) }
+                    if (passwordProviders.size > 1 && providerSource == providerKey) {
+                        DashboardPasswordProviderSelector(
+                            providers = passwordProviders,
+                            selectedProvider = selectedProvider,
+                            onSelected = { selectedProvider = it; providerError = null },
+                        )
+                    }
+                    DashboardOAuthAvailabilityNotice()
+                    (providerError ?: error)?.let { ErrorBanner(it) }
                     Button(
-                        enabled = !busy && url.isNotBlank() && username.isNotBlank() && password.isNotEmpty(),
+                        enabled = !busy && !discoveringProviders && url.isNotBlank() && username.isNotBlank() &&
+                            password.isNotEmpty() &&
+                            (providerSource != providerKey || passwordProviders.size == 1 || selectedProvider != null),
                         onClick = {
-                            val submittedPassword = password
-                            password = ""
-                            onConnect(label, url, username, submittedPassword, privateHttp)
+                            val submit: (String) -> Unit = { provider ->
+                                val submittedPassword = password
+                                password = ""
+                                onConnect(label, url, username, submittedPassword, privateHttp, provider)
+                            }
+                            if (providerSource == providerKey) {
+                                selectedProvider?.let(submit)
+                            } else {
+                                val requestToken = providerDiscoveryGate.begin()
+                                if (requestToken != null) {
+                                    val requestedUrl = url
+                                    val requestedPrivateHttp = privateHttp
+                                    discoveringProviders = true
+                                    providerError = null
+                                    providerScope.launch {
+                                        try {
+                                            val providers = onDiscoverPasswordProviders(requestedUrl, requestedPrivateHttp)
+                                            if (providerDiscoveryGate.isCurrent(requestToken)) {
+                                                providerSource = "${requestedUrl.trim().trimEnd('/')}|$requestedPrivateHttp"
+                                                passwordProviders = providers
+                                                selectedProvider = providers.singleOrNull()?.name
+                                                if (providers.size == 1) submit(providers.single().name)
+                                            }
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (failure: Throwable) {
+                                            if (providerDiscoveryGate.isCurrent(requestToken)) {
+                                                clearProviderSelection()
+                                                providerError = failure.message ?: "Could not load Dashboard sign-in providers."
+                                            }
+                                        } finally {
+                                            val current = providerDiscoveryGate.isCurrent(requestToken)
+                                            providerDiscoveryGate.finish(requestToken)
+                                            if (current) discoveringProviders = false
+                                        }
+                                    }
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Test HTTP + WebSocket and save")
+                        if (busy || discoveringProviders) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(if (providerSource == providerKey) "Test HTTP + WebSocket and save" else "Check sign-in options and save")
+                        }
                     }
                     Text(
                         "Only the returned Dashboard session cookies are encrypted with Android Keystore. Your password is never saved or restored as UI state.",
@@ -925,7 +1007,8 @@ private fun HermesWorkspace(
     sessionActions: SessionActionCallbacks,
     queueActions: QueueActions,
     managementActions: ManagementActions,
-    onConnectBackend: (String, String, String, String, Boolean) -> Unit,
+    onDiscoverPasswordProviders: suspend (String, Boolean) -> List<DashboardAuthProvider>,
+    onConnectBackend: (String, String, String, String, Boolean, String) -> Unit,
     onSelectBackend: (String) -> Unit,
     onForgetBackend: (String) -> Unit,
     secureScreen: Boolean,
@@ -1186,6 +1269,7 @@ private fun HermesWorkspace(
                     )
                     WorkspaceContent.BACKENDS -> BackendsScreen(
                         state = state,
+                        onDiscoverPasswordProviders = onDiscoverPasswordProviders,
                         onConnect = onConnectBackend,
                         onSelect = onSelectBackend,
                         onForget = onForgetBackend,

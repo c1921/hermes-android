@@ -139,6 +139,106 @@ class DashboardAuthClientTest {
         }
     }
 
+    @Test
+    fun `discovery exposes only bounded password providers with display names`() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"providers":[{"name":"basic","display_name":"Password","supports_password":true},{"name":"oauth","display_name":"OAuth","supports_password":false}]}""",
+                ),
+            )
+            server.start()
+            val providers = DashboardAuthClient(OkHttpClient(), json).discoverPasswordProviders(config(server))
+
+            assertEquals(1, providers.size)
+            assertEquals("basic", providers.single().name)
+            assertEquals("Password", providers.single().displayName)
+            assertTrue(providers.single().supportsPassword)
+        }
+    }
+
+    @Test
+    fun `explicit provider is validated against fresh discovery and submitted exactly`() = runTest {
+        MockWebServer().use { server ->
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"providers":[{"name":"one","display_name":"One","supports_password":true},{"name":"two","display_name":"Two","supports_password":true}]}""",
+                ),
+            )
+            server.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .addHeader("Set-Cookie", "hermes_session_at=access; Path=/; HttpOnly")
+                    .setBody("{}"),
+            )
+            server.start()
+            DashboardAuthClient(OkHttpClient(), json).login(config(server), "user", "password", "two")
+
+            server.takeRequest()
+            val loginRequest = server.takeRequest()
+            assertTrue(loginRequest.body.readUtf8().contains("\"provider\":\"two\""))
+        }
+    }
+
+    @Test
+    fun `stale non-password malicious and duplicate selections fail closed before login`() = runTest {
+        val cases = listOf(
+            "stale" to """{"providers":[{"name":"actual","display_name":"Actual","supports_password":true}]}""",
+            "oauth" to """{"providers":[{"name":"oauth","display_name":"OAuth","supports_password":false}]}""",
+            "bad\u0000name" to """{"providers":[{"name":"actual","display_name":"Actual","supports_password":true}]}""",
+            "duplicate" to """{"providers":[{"name":"same","display_name":"A","supports_password":true},{"name":"same","display_name":"B","supports_password":true}]}""",
+        )
+        cases.forEach { (selected, providers) ->
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setBody(providers))
+                server.start()
+                val failure = runCatching {
+                    DashboardAuthClient(OkHttpClient(), json).login(config(server), "user", "password", selected)
+                }.exceptionOrNull()
+
+                assertTrue(failure is DashboardAuthenticationException)
+                assertEquals(1, server.requestCount)
+            }
+        }
+    }
+
+    @Test
+    fun `credential requests never follow redirects`() = runTest {
+        MockWebServer().use { target ->
+            MockWebServer().use { dashboard ->
+                target.start()
+                dashboard.enqueue(passwordProviderResponse("basic"))
+                dashboard.enqueue(
+                    MockResponse()
+                        .setResponseCode(307)
+                        .addHeader("Location", target.url("/capture")),
+                )
+                dashboard.enqueue(
+                    MockResponse()
+                        .setResponseCode(307)
+                        .addHeader("Location", target.url("/capture-ticket")),
+                )
+                dashboard.start()
+                val client = DashboardAuthClient(OkHttpClient(), json)
+
+                val loginFailure = runCatching {
+                    client.login(config(dashboard), "private-user", "private-password")
+                }.exceptionOrNull()
+                val ticketFailure = runCatching {
+                    client.mintWebSocketTicket(
+                        config(dashboard),
+                        DashboardSessionCredential("hermes_session_at", "private-session"),
+                    )
+                }.exceptionOrNull()
+
+                assertTrue(loginFailure is DashboardAuthenticationException)
+                assertTrue(ticketFailure is DashboardAuthenticationException)
+                assertEquals(0, target.requestCount)
+                assertEquals(3, dashboard.requestCount)
+            }
+        }
+    }
+
     private fun passwordProviderResponse(name: String? = null) = MockResponse().setBody(
         name?.let { """{"providers":[{"name":"$it","display_name":"Password","supports_password":true}]}""" }
             ?: checkNotNull(javaClass.getResource("/fixtures/dashboard-auth-providers-f15a38ee.json")).readText(),

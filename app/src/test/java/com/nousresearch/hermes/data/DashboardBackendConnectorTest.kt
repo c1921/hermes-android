@@ -55,6 +55,20 @@ class DashboardBackendConnectorTest {
     }
 
     @Test
+    fun `selected password provider is propagated through connector login`() = runBlocking {
+        FakeDashboard(
+            passwordProviders = """{"providers":[{"name":"one","display_name":"One","supports_password":true},{"name":"two","display_name":"Two","supports_password":true}]}""",
+        ).use { dashboard ->
+            dashboard.start()
+            val connector = connector(dashboard, RecordingSessionCredentialStore(), RecordingBackendSaver())
+
+            connector.loginValidateAndSave(config(dashboard), "admin", "password", "two")
+
+            assertEquals("two", dashboard.loginProvider)
+        }
+    }
+
+    @Test
     fun `REST validation failure does not save backend or cookie`() = runBlocking {
         FakeDashboard(statusCode = 500).use { dashboard ->
             dashboard.start()
@@ -200,26 +214,30 @@ private class FakeDashboard(
     private val statusCode: Int = 200,
     private val webSocketAccepted: Boolean = true,
     private val ticketBody: String = """{"ticket":"single-use-ticket","ttl_seconds":30}""",
+    private val passwordProviders: String = """{"providers":[{"name":"basic","display_name":"Password","supports_password":true}]}""",
 ) : AutoCloseable {
     private val server = MockWebServer()
     var statusCookie: String? = null
     var ticketCookie: String? = null
     var webSocketTicket: String? = null
     var webSocketCookie: String? = null
+    var loginProvider: String? = null
     val baseUrl: String get() = server.url("/").toString().replace("localhost", "127.0.0.1").trimEnd('/')
 
     fun start() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
-                "/api/auth/providers" -> MockResponse().setBody(
-                    """{"providers":[{"name":"basic","display_name":"Password","supports_password":true}]}""",
-                )
+                "/api/auth/providers" -> MockResponse().setBody(passwordProviders)
                 "/auth/password-login" -> MockResponse()
                     .setResponseCode(200)
                     .addHeader("Set-Cookie", "hermes_session_at=expired-access; Path=/; HttpOnly")
                     .addHeader("Set-Cookie", "hermes_session_rt=refresh-value; Path=/; HttpOnly")
                     .addHeader("Set-Cookie", "hermes_session_provider=basic; Path=/; HttpOnly")
-                    .setBody("""{"ok":true}""")
+                    .setBody("""{"ok":true}""").also {
+                        loginProvider = request.body.readUtf8()
+                            .substringAfter("\"provider\":\"")
+                            .substringBefore('"')
+                    }
                 "/api/status" -> {
                     statusCookie = request.getHeader("Cookie")
                     val refreshAccepted = statusCookie ==

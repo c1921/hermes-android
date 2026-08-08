@@ -7,6 +7,7 @@ import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.HermesRepository
+import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,19 +25,32 @@ class HermesViewModel @Inject constructor(
     val state = repository.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), repository.state.value)
     val connectionState = repository.connectionState
 
-    fun connect(label: String, baseUrl: String, username: String, password: String, allowPrivateHttp: Boolean) {
+    fun connect(
+        label: String,
+        baseUrl: String,
+        username: String,
+        password: String,
+        allowPrivateHttp: Boolean,
+        passwordProvider: String? = null,
+    ) {
         viewModelScope.launch {
-            val normalized = baseUrl.trim().trimEnd('/')
-            val config = BackendConfig(
-                id = normalized.sha256().take(20),
-                label = label.trim().ifBlank { "Hermes" },
-                baseUrl = normalized,
-                authMode = AuthMode.DASHBOARD_SESSION,
-                allowInsecurePrivateNetwork = allowPrivateHttp,
-            )
-            runCatching { repository.testAndSave(config, username.trim(), password) }
+            runCatching {
+                repository.testAndSave(
+                    dashboardConfig(label, baseUrl, allowPrivateHttp),
+                    username.trim(),
+                    password,
+                    passwordProvider,
+                )
+            }
         }
     }
+
+    suspend fun discoverDashboardPasswordProviders(
+        baseUrl: String,
+        allowPrivateHttp: Boolean,
+    ): List<DashboardAuthProvider> = repository.discoverDashboardPasswordProviders(
+        dashboardConfig("Hermes", baseUrl, allowPrivateHttp),
+    )
 
     fun refresh() = viewModelScope.launch { repository.refreshSessions() }
     fun searchSessions(query: String) = repository.searchSessions(query)
@@ -166,6 +180,17 @@ class HermesViewModel @Inject constructor(
     fun selectBackend(id: String) = viewModelScope.launch { repository.selectBackend(id) }
     fun forgetBackend(id: String) = viewModelScope.launch { repository.forgetBackend(id) }
     fun disconnect() = viewModelScope.launch { repository.disconnectAndForget() }
+}
+
+private fun dashboardConfig(label: String, baseUrl: String, allowPrivateHttp: Boolean): BackendConfig {
+    val normalized = baseUrl.trim().trimEnd('/')
+    return BackendConfig(
+        id = normalized.sha256().take(20),
+        label = label.trim().ifBlank { "Hermes" },
+        baseUrl = normalized,
+        authMode = AuthMode.DASHBOARD_SESSION,
+        allowInsecurePrivateNetwork = allowPrivateHttp,
+    )
 }
 
 private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")

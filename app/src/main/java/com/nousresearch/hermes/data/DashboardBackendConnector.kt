@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.data
 
 import com.nousresearch.hermes.network.DashboardAuthClient
+import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.HermesGatewayClient
@@ -26,9 +27,10 @@ class DashboardBackendConnector @Inject constructor(
         config: BackendConfig,
         username: String,
         password: String,
+        passwordProvider: String? = null,
     ): StatusResponse {
         require(config.authMode == AuthMode.DASHBOARD_SESSION) { "Dashboard session authentication is required" }
-        val cookie = authClient.login(config, username.trim(), password)
+        val cookie = authClient.login(config, username.trim(), password, passwordProvider)
         val status = validate(config, cookie)
         gateway.disconnect()
         credentials.put(config.id, cookie)
@@ -39,6 +41,11 @@ class DashboardBackendConnector @Inject constructor(
             throw error
         }
         return status
+    }
+
+    suspend fun discoverPasswordProviders(config: BackendConfig): List<DashboardAuthProvider> {
+        require(config.authMode == AuthMode.DASHBOARD_SESSION) { "Dashboard session authentication is required" }
+        return authClient.discoverPasswordProviders(config)
     }
 
     suspend fun validateSaved(config: BackendConfig, cookie: DashboardSessionCredential): StatusResponse {

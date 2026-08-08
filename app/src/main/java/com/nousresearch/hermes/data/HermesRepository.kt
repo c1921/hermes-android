@@ -10,6 +10,7 @@ import com.nousresearch.hermes.domain.SubagentReducer
 import com.nousresearch.hermes.domain.TimelineReducer
 import com.nousresearch.hermes.domain.TimelineState
 import com.nousresearch.hermes.domain.lastUserPrompt
+import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.protocol.ConfigSetResult
 import com.nousresearch.hermes.protocol.AnalyticsResponse
@@ -496,7 +497,12 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    suspend fun testAndSave(config: BackendConfig, username: String, password: String): StatusResponse {
+    suspend fun testAndSave(
+        config: BackendConfig,
+        username: String,
+        password: String,
+        passwordProvider: String? = null,
+    ): StatusResponse {
         return billingAccountMutex.withLock {
             requireBackendTransitionSafe(config.id)
             mutableState.value = mutableState.value.copy(
@@ -505,7 +511,7 @@ class HermesRepository @Inject constructor(
                 backendTransitionInProgress = true,
             )
             try {
-                val status = dashboardConnector.loginValidateAndSave(config, username, password)
+                val status = dashboardConnector.loginValidateAndSave(config, username, password, passwordProvider)
                 val saved = config.copy(lastHermesVersion = status.hermesVersion ?: status.version)
                 connect(saved)
                 status
@@ -516,6 +522,9 @@ class HermesRepository @Inject constructor(
             }
         }
     }
+
+    suspend fun discoverDashboardPasswordProviders(config: BackendConfig): List<DashboardAuthProvider> =
+        dashboardConnector.discoverPasswordProviders(config)
 
     suspend fun refreshSessions() {
         val (backend, token) = activeCredentials(allowRecovery = true)

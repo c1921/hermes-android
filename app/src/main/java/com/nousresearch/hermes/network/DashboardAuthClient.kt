@@ -2,7 +2,9 @@ package com.nousresearch.hermes.network
 
 import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.SessionCredentialStore
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -14,6 +16,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+
+data class DashboardAuthProvider(
+    val name: String,
+    val displayName: String,
+    val supportsPassword: Boolean,
+)
 
 class DashboardSessionCredential private constructor(cookies: Map<String, String>) {
     private val values = LinkedHashMap(cookies)
@@ -128,15 +136,25 @@ private data class CookieUpdate(
 )
 
 class DashboardAuthClient(
-    private val client: OkHttpClient,
+    client: OkHttpClient,
     private val json: Json,
     private val credentials: SessionCredentialStore? = null,
 ) {
-    suspend fun login(config: BackendConfig, username: String, password: String): DashboardSessionCredential =
+    private val transport = client.newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+
+    suspend fun login(
+        config: BackendConfig,
+        username: String,
+        password: String,
+        passwordProvider: String? = null,
+    ): DashboardSessionCredential =
         withContext(Dispatchers.IO) {
             val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
             require(username.isNotBlank() && password.isNotEmpty()) { "Dashboard username and password are required" }
-            val provider = discoverPasswordProvider(base)
+            val provider = selectPasswordProvider(discoverPasswordProvidersBlocking(base), passwordProvider)
             val body = json.encodeToString(
                 kotlinx.serialization.json.JsonObject.serializer(),
                 buildJsonObject {
@@ -152,7 +170,7 @@ class DashboardAuthClient(
                 .header("Accept", "application/json")
                 .header("User-Agent", "Hermes-Android/0.1")
                 .build()
-            client.newCall(request).execute().use { response ->
+            transport.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     throw DashboardAuthenticationException(
                         when (response.code) {
@@ -167,33 +185,125 @@ class DashboardAuthClient(
             }
         }
 
-    private fun discoverPasswordProvider(base: String): String {
+    suspend fun discoverPasswordProviders(config: BackendConfig): List<DashboardAuthProvider> =
+        withContext(Dispatchers.IO) {
+            val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+            val providers = discoverPasswordProvidersBlocking(base).filter(DashboardAuthProvider::supportsPassword)
+            if (providers.isEmpty()) {
+                throw DashboardAuthenticationException("Hermes Dashboard does not advertise password sign-in.")
+            }
+            providers
+        }
+
+    private fun discoverPasswordProvidersBlocking(base: String): List<DashboardAuthProvider> {
         val request = Request.Builder()
             .url("$base/api/auth/providers")
             .get()
             .header("Accept", "application/json")
             .header("User-Agent", "Hermes-Android/0.1")
             .build()
-        return client.newCall(request).execute().use { response ->
+        return transport.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 throw DashboardAuthenticationException(
                     "Hermes Dashboard password-provider discovery failed with HTTP ${response.code}.",
                 )
             }
-            val providers = response.body?.string()?.let { raw ->
-                runCatching { json.decodeFromString<DashboardAuthProvidersResponse>(raw) }.getOrNull()
-            }?.providers.orEmpty().filter { provider ->
-                provider.supportsPassword && provider.name.isNotBlank() && provider.name.length <= 128 &&
-                    provider.name.none(Char::isISOControl)
+            val raw = readBoundedBody(response)
+            val advertised = try {
+                json.decodeFromString<DashboardAuthProvidersResponse>(raw)
+            } catch (error: Throwable) {
+                throw DashboardAuthenticationException("Hermes Dashboard returned malformed password-provider discovery data.")
             }
-            when (providers.size) {
-                1 -> providers.single().name
-                0 -> throw DashboardAuthenticationException("Hermes Dashboard does not advertise password sign-in.")
-                else -> throw DashboardAuthenticationException(
-                    "Hermes Dashboard advertises multiple password providers; choose one in Dashboard before connecting Android.",
-                )
+            sanitizeProviders(advertised.providers)
+        }
+    }
+
+    private fun selectPasswordProvider(
+        advertised: List<DashboardAuthProvider>,
+        selectedName: String?,
+    ): String {
+        val passwordProviders = advertised.filter(DashboardAuthProvider::supportsPassword)
+        if (selectedName != null) {
+            requireSafeProviderName(selectedName)
+            val selected = advertised.singleOrNull { it.name == selectedName }
+                ?: throw DashboardAuthenticationException("The selected dashboard password provider is no longer advertised.")
+            if (!selected.supportsPassword) {
+                throw DashboardAuthenticationException("The selected dashboard provider does not support password sign-in.")
+            }
+            return selected.name
+        }
+        return when (passwordProviders.size) {
+            1 -> passwordProviders.single().name
+            0 -> throw DashboardAuthenticationException("Hermes Dashboard does not advertise password sign-in.")
+            else -> throw DashboardAuthenticationException(
+                "Hermes Dashboard advertises multiple password providers; choose one before connecting Android.",
+            )
+        }
+    }
+
+    private fun sanitizeProviders(rawProviders: List<DashboardAuthProviderPayload>): List<DashboardAuthProvider> {
+        if (rawProviders.isEmpty()) return emptyList()
+        if (rawProviders.size > MAX_ADVERTISED_PROVIDERS) {
+            throw DashboardAuthenticationException("Hermes Dashboard advertised too many password providers.")
+        }
+        val names = mutableSetOf<String>()
+        val foldedNames = mutableSetOf<String>()
+        return rawProviders.map { raw ->
+            val name = sanitizeProviderField(raw.name, "name")
+            if (!names.add(name) || !foldedNames.add(name.lowercase(Locale.ROOT))) {
+                throw DashboardAuthenticationException("Hermes Dashboard advertised duplicate password providers.")
+            }
+            val displayName = raw.displayName?.let { sanitizeProviderField(it, "display name") } ?: name
+            DashboardAuthProvider(name, displayName, raw.supportsPassword)
+        }
+    }
+
+    private fun sanitizeProviderField(value: String, field: String): String {
+        val trimmed = value.trim()
+        if (
+            trimmed.isBlank() ||
+            trimmed.length > MAX_PROVIDER_FIELD_LENGTH ||
+            trimmed.any(Char::isISOControl)
+        ) {
+            throw DashboardAuthenticationException("Hermes Dashboard advertised an invalid password-provider $field.")
+        }
+        if (value != trimmed) {
+            throw DashboardAuthenticationException("Hermes Dashboard advertised an invalid password-provider $field.")
+        }
+        return trimmed
+    }
+
+    private fun requireSafeProviderName(value: String) {
+        if (
+            value.isBlank() ||
+            value.length > MAX_PROVIDER_FIELD_LENGTH ||
+            value != value.trim() ||
+            value.any(Char::isISOControl)
+        ) {
+            throw DashboardAuthenticationException("The selected dashboard password provider is invalid.")
+        }
+    }
+
+    private fun readBoundedBody(response: okhttp3.Response): String {
+        val body = response.body ?: throw DashboardAuthenticationException(
+            "Hermes Dashboard returned an empty password-provider discovery response.",
+        )
+        if (body.contentLength() > MAX_PROVIDER_RESPONSE_BYTES) {
+            throw DashboardAuthenticationException("Hermes Dashboard returned an oversized password-provider discovery response.")
+        }
+        val output = ByteArrayOutputStream()
+        body.byteStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (output.size() + count > MAX_PROVIDER_RESPONSE_BYTES) {
+                    throw DashboardAuthenticationException("Hermes Dashboard returned an oversized password-provider discovery response.")
+                }
+                output.write(buffer, 0, count)
             }
         }
+        return output.toString(Charsets.UTF_8.name())
     }
 
     suspend fun mintWebSocketTicket(config: BackendConfig, cookie: DashboardSessionCredential): String =
@@ -207,7 +317,7 @@ class DashboardAuthClient(
                 .header("Cookie", cookie.headerValue)
                 .header("User-Agent", "Hermes-Android/0.1")
                 .build()
-            client.newCall(request).execute().use { response ->
+            transport.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     throw DashboardAuthenticationException(
                         when (response.code) {
@@ -239,12 +349,17 @@ class DashboardAuthClient(
 private data class WebSocketTicketResponse(val ticket: String)
 
 @Serializable
-private data class DashboardAuthProvidersResponse(val providers: List<DashboardAuthProvider> = emptyList())
+private data class DashboardAuthProvidersResponse(val providers: List<DashboardAuthProviderPayload> = emptyList())
 
 @Serializable
-private data class DashboardAuthProvider(
+private data class DashboardAuthProviderPayload(
     val name: String,
+    @SerialName("display_name") val displayName: String? = null,
     @SerialName("supports_password") val supportsPassword: Boolean = false,
 )
 
 class DashboardAuthenticationException(message: String) : IOException(message)
+
+private const val MAX_ADVERTISED_PROVIDERS = 32
+private const val MAX_PROVIDER_FIELD_LENGTH = 128
+private const val MAX_PROVIDER_RESPONSE_BYTES = 256 * 1024
