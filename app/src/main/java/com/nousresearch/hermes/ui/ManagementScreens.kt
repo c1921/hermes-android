@@ -524,6 +524,8 @@ internal fun CronScreen(
     var creating by rememberSaveable { mutableStateOf(false) }
     var deleteJobId by remember { mutableStateOf<String?>(null) }
     var expandedJobId by remember { mutableStateOf<String?>(null) }
+    var pendingToggle by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var pendingRunJobId by remember { mutableStateOf<String?>(null) }
     val editorJob = state.cronJobs.firstOrNull { it.id == editorJobId }
     val deleteJob = state.cronJobs.firstOrNull { it.id == deleteJobId }
     LaunchedEffect(Unit) { onRefresh() }
@@ -553,8 +555,8 @@ internal fun CronScreen(
                 items(state.cronJobs, key = CronJob::id) { job ->
                     CronRow(
                         job,
-                        onSetEnabled,
-                        onTrigger,
+                        onSetEnabled = { id, enabled -> pendingToggle = id to enabled },
+                        onTrigger = { pendingRunJobId = it },
                         runs = state.cronRuns[job.id],
                         expanded = expandedJobId == job.id,
                         onHistory = {
@@ -606,6 +608,42 @@ internal fun CronScreen(
                 ) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { deleteJobId = null }) { Text("Cancel") } },
+        )
+    }
+    pendingToggle?.let { (jobId, enabled) ->
+        val job = state.cronJobs.firstOrNull { it.id == jobId }
+        AlertDialog(
+            onDismissRequest = { pendingToggle = null },
+            title = { Text(if (enabled) "RESUME CRON JOB?" else "PAUSE CRON JOB?") },
+            text = {
+                Text(
+                    "${if (enabled) "Resume" else "Pause"} ${job?.name?.takeIf(String::isNotBlank) ?: jobId} " +
+                        "for profile ${state.activeProfile}? ${if (enabled) "Future scheduled runs will resume." else "Future scheduled runs will stop until resumed."}",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingToggle = null; onSetEnabled(jobId, enabled) }) {
+                    Text(if (enabled) "Resume" else "Pause")
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingToggle = null }) { Text("Cancel") } },
+        )
+    }
+    pendingRunJobId?.let { jobId ->
+        val job = state.cronJobs.firstOrNull { it.id == jobId }
+        AlertDialog(
+            onDismissRequest = { pendingRunJobId = null },
+            title = { Text("RUN CRON JOB NOW?") },
+            text = {
+                Text(
+                    "Run ${job?.name?.takeIf(String::isNotBlank) ?: jobId} now for profile ${state.activeProfile}? " +
+                        "Hermes will start backend work immediately and may deliver the configured result.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingRunJobId = null; onTrigger(jobId) }) { Text("Run now") }
+            },
+            dismissButton = { TextButton(onClick = { pendingRunJobId = null }) { Text("Cancel") } },
         )
     }
 }

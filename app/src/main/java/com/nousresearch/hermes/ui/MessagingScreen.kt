@@ -204,6 +204,7 @@ private fun MessagingDetail(
     // Credentials deliberately never use rememberSaveable. Process recreation and navigation clear every entered value.
     val edits = remember(platform.id) { mutableStateMapOf<String, String>() }
     var pendingClear by remember { mutableStateOf<MessagingEnvVarInfo?>(null) }
+    var pendingEnabled by remember { mutableStateOf<Boolean?>(null) }
     var confirmRestart by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     Column(modifier.fillMaxSize()) {
@@ -228,7 +229,7 @@ private fun MessagingDetail(
                             }
                             Switch(
                                 checked = platform.enabled,
-                                onCheckedChange = { onSetEnabled(platform.id, it) },
+                                onCheckedChange = { pendingEnabled = it },
                                 enabled = !state.messagingLoading && !state.gatewayRestarting,
                                 modifier = Modifier.semantics { contentDescription = "Enable ${platform.id}" },
                             )
@@ -313,6 +314,25 @@ private fun MessagingDetail(
                 TextButton(onClick = { pendingClear = null; onClear(platform.id, field.key) }) { Text("Remove") }
             },
             dismissButton = { TextButton(onClick = { pendingClear = null }) { Text("Cancel") } },
+        )
+    }
+    pendingEnabled?.let { enabled ->
+        AlertDialog(
+            onDismissRequest = { pendingEnabled = null },
+            title = { Text(if (enabled) "ENABLE MESSAGING PLATFORM?" else "DISABLE MESSAGING PLATFORM?") },
+            text = {
+                Text(
+                    "${if (enabled) "Enable" else "Disable"} ${platform.name} for profile ${state.activeProfile}? " +
+                        if (enabled) "Hermes may begin receiving and sending messages through this platform."
+                        else "Hermes will stop handling new messages through this platform.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingEnabled = null; onSetEnabled(platform.id, enabled) }) {
+                    Text(if (enabled) "Enable" else "Disable")
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingEnabled = null }) { Text("Cancel") } },
         )
     }
     if (confirmRestart) {
