@@ -48,6 +48,118 @@ class HermesRepositoryBillingTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     @Test
+    fun `system shared text opens a draft and never submits it`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-share","stored_session_id":"stored-share","messages":[],"info":{"stored_session_id":"stored-share"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            val imported = repository.ingestSharedContent("Review this before sending", emptyList())
+
+            assertTrue(imported)
+            assertEquals("Review this before sending", repository.state.value.draft)
+            assertEquals("stored-share", repository.state.value.activeStoredSession?.durableId)
+            assertFalse(gateway.requests.any { it.method == "prompt.submit" })
+        }
+    }
+
+    @Test
+    fun `failed new session preserves the active session and never closes it first`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-existing","stored_session_id":"stored-existing","messages":[],"info":{"stored_session_id":"stored-existing"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            assertTrue(repository.newSession())
+            gateway.enqueueFailure("session.create", IOException("create failed"))
+
+            assertFalse(repository.newSession())
+
+            assertEquals("live-existing", repository.state.value.runtimeSessionId)
+            assertEquals("stored-existing", repository.state.value.activeStoredSession?.durableId)
+            assertFalse(gateway.requests.any { it.method == "session.close" })
+        }
+    }
+
+    @Test
+    fun `cancelled new session clears its loading state`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("session.create") {
+                started.complete(Unit)
+                release.await()
+                error("cancelled request unexpectedly resumed")
+            }
+
+            val creation = launch { repository.newSession() }
+            withTimeout(5_000L) { started.await() }
+            creation.cancelAndJoin()
+
+            assertFalse(repository.state.value.loading)
+            assertEquals(null, repository.state.value.runtimeSessionId)
+        }
+    }
+
+    @Test
     fun `ambiguous charge retries with the same key until settlement`() = runBlocking {
         MockWebServer().use { server ->
             server.dispatcher = readyDashboardDispatcher()

@@ -22,7 +22,7 @@ data class AttachmentPayload(
 class AttachmentReader @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    suspend fun read(uri: Uri): AttachmentPayload = withContext(Dispatchers.IO) {
+    suspend fun read(uri: Uri, releaseAfterRead: Boolean = true): AttachmentPayload = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         try {
             val displayName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -53,7 +53,13 @@ class AttachmentReader @Inject constructor(
                 byteCount = bytes.size,
             )
         } finally {
-            if (uri.authority == "${context.packageName}.fileprovider") resolver.delete(uri, null, null)
+            if (releaseAfterRead) release(uri)
+        }
+    }
+
+    fun release(uri: Uri) {
+        if (uri.authority == "${context.packageName}.fileprovider") {
+            context.contentResolver.delete(uri, null, null)
         }
     }
 

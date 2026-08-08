@@ -42,6 +42,7 @@ class HermesViewModel @Inject constructor(
     fun searchSessions(query: String) = repository.searchSessions(query)
     fun openSession(session: StoredSession) = viewModelScope.launch { repository.openSession(session) }
     fun newSession(profile: String? = null) = viewModelScope.launch { repository.newSession(profile) }
+    suspend fun newSessionFromEntry(profile: String? = null): Boolean = repository.newSession(profile)
     fun send(text: String) = viewModelScope.launch { repository.send(text) }
     fun steer(text: String) = viewModelScope.launch { repository.steer(text) }
     fun queueDraft() = viewModelScope.launch { repository.queueDraft() }
@@ -51,6 +52,8 @@ class HermesViewModel @Inject constructor(
     fun updateDraft(value: String) = repository.updateDraft(value)
     suspend fun ingestSharedContent(content: SharedContent): Boolean =
         repository.ingestSharedContent(content.text, content.uriStrings.map(Uri::parse))
+    suspend fun discardSharedContent(content: SharedContent) =
+        repository.discardSharedContentUris(content.uriStrings)
     fun completeSlash(text: String) = repository.completeSlash(text)
     fun executeSlash(command: String) = viewModelScope.launch { repository.executeSlash(command) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
@@ -94,6 +97,8 @@ class HermesViewModel @Inject constructor(
     }
     fun deleteCron(jobId: String) = viewModelScope.launch { repository.deleteCron(jobId) }
     fun refreshProfiles() = viewModelScope.launch { repository.refreshProfiles() }
+    suspend fun entryAuthoritySnapshot(includeCronJobs: Boolean) =
+        repository.entryAuthoritySnapshot(includeCronJobs)
     fun createProfile(name: String, cloneFrom: String, cloneAll: Boolean, noSkills: Boolean) = viewModelScope.launch {
         repository.createProfile(name, cloneFrom, cloneAll, noSkills)
     }

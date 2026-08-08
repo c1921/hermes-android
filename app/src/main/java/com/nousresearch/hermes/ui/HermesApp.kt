@@ -194,7 +194,8 @@ import com.nousresearch.hermes.domain.presentation
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.SessionSearchHit
 import com.nousresearch.hermes.protocol.StoredSession
-import com.nousresearch.hermes.platform.SharedContent
+import com.nousresearch.hermes.platform.HermesEntryDelivery
+import com.nousresearch.hermes.platform.HermesEntryRequest
 import com.nousresearch.hermes.platform.newCameraCaptureUri
 import com.nousresearch.hermes.platform.safeExternalUrl
 import com.nousresearch.hermes.platform.textShareIntent
@@ -209,7 +210,9 @@ import com.nousresearch.hermes.ui.navigation.ManageDestination
 import com.nousresearch.hermes.ui.navigation.ManageSection
 import com.nousresearch.hermes.ui.navigation.ManagementDestination
 import com.nousresearch.hermes.ui.navigation.SessionIdentity
+import com.nousresearch.hermes.ui.navigation.AutomationResourceIdentity
 import com.nousresearch.hermes.ui.navigation.conversationMutationsEnabled
+import com.nousresearch.hermes.ui.navigation.resolveEntryDestination
 import com.nousresearch.hermes.ui.navigation.resolveRestoredRoute
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.highlightedCodeBlock
@@ -324,24 +327,18 @@ fun HermesApp(
     onSecureScreenChange: (Boolean) -> Unit = {},
     skin: HermesSkin = HermesSkin.NOUS,
     onSkinChange: (HermesSkin) -> Unit = {},
-    sharedContent: SharedContent? = null,
-    onSharedContentConsumed: (String) -> Unit = {},
-    // Intake-only seam for ACTION_VIEW hermes:// links. Navigation must be
-    // added after backend/profile/session validation; this parameter must not
-    // bypass the recovery gate or execute a route locally.
-    pendingDestination: HermesDestinationRoute? = null,
-    onPendingDestinationConsumed: (HermesDestinationRoute) -> Unit = {},
+    entryDelivery: HermesEntryDelivery? = null,
+    onEntryConsumed: (String) -> Unit = {},
+    onEntryFailed: (String, String) -> Unit = { _, _ -> },
+    onEntryRetry: (String) -> Unit = {},
+    onEntryDiscard: (String) -> Unit = {},
     viewModel: HermesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
-    val latestConnection by rememberUpdatedState(connection)
-    LaunchedEffect(sharedContent?.id, state.backend?.id) {
-        val content = sharedContent ?: return@LaunchedEffect
-        if (state.backend == null) return@LaunchedEffect
-        snapshotFlow { latestConnection }.first { it == GatewayConnectionState.Open }
-        if (viewModel.ingestSharedContent(content)) onSharedContentConsumed(content.id)
-    }
+    val latestConnectionState = rememberUpdatedState(connection)
+    val latestHermesState = rememberUpdatedState(state)
+    val entryRequestScope = rememberCoroutineScope()
     val modelActions = remember(viewModel) {
         ModelActions(
             refresh = viewModel::refreshModels,
@@ -439,42 +436,120 @@ fun HermesApp(
     val currentEntry by appNavController.currentBackStackEntryAsState()
     var recoveryNotice by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(
-        pendingDestination,
+        entryDelivery?.request?.id,
+        entryDelivery?.attempt,
+        entryDelivery?.failureMessage,
         state.backend?.id,
         state.status,
-        state.loading,
-        state.sessions,
     ) {
-        val requested = pendingDestination ?: return@LaunchedEffect
-        if (requested is HermesDestinationRoute.AppSettings) {
-            navigator.openProductRoute(requested)
-            onPendingDestinationConsumed(requested)
-            return@LaunchedEffect
+        val delivery = entryDelivery ?: return@LaunchedEffect
+        if (delivery.failureMessage != null) return@LaunchedEffect
+        when (val request = delivery.request) {
+            is HermesEntryRequest.OpenDestination -> {
+                val requested = request.route
+                if (requested is HermesDestinationRoute.AppSettings) {
+                    navigator.openProductRoute(requested)
+                    onEntryConsumed(request.id)
+                    return@LaunchedEffect
+                }
+                val ready = snapshotFlow { latestHermesState.value }.first {
+                    it.backend != null && it.status != null && !it.loading
+                }
+                val backend = checkNotNull(ready.backend)
+                snapshotFlow { latestConnectionState.value }.first { it == GatewayConnectionState.Open }
+                val authority = viewModel.entryAuthoritySnapshot(
+                    includeCronJobs = requested is HermesDestinationRoute.Automations &&
+                        requested.destination == AutomationDestination.CRON &&
+                        requested.resourceId != null,
+                ) ?: run {
+                    onEntryFailed(
+                        request.id,
+                        viewModel.state.value.error ?: "Hermes could not verify this destination.",
+                    )
+                    return@LaunchedEffect
+                }
+                val authoritativeSessions = ready.sessions.mapTo(mutableSetOf()) { session ->
+                    SessionIdentity(
+                        backendId = backend.id,
+                        profileId = session.profile?.takeIf(String::isNotBlank) ?: ready.currentProfile,
+                        sessionId = session.durableId,
+                    )
+                }
+                val resolution = resolveEntryDestination(
+                    route = requested,
+                    availableBackendIds = (ready.savedBackends.map { it.id } + backend.id).toSet(),
+                    authenticatedBackendId = backend.id,
+                    authoritativeSessions = authoritativeSessions,
+                    authoritativeProfileIds = authority.profileIds,
+                    fallbackProfileId = ready.currentProfile,
+                    authoritativeAutomationResources = authority.cronJobIds.mapTo(mutableSetOf()) {
+                        AutomationResourceIdentity(AutomationDestination.CRON, it)
+                    },
+                )
+                recoveryNotice = resolution.explanation
+                val resolved = resolution.route
+                if (resolved is HermesRoute.BackendPicker && resolved.returnBackendId != null) {
+                    navigator.replace(resolved)
+                    return@LaunchedEffect
+                }
+                if (resolved is HermesDestinationRoute) {
+                    navigator.openProductRoute(resolved)
+                } else {
+                    navigator.replace(resolved)
+                }
+                onEntryConsumed(request.id)
+            }
+            is HermesEntryRequest.ImportDraft -> {
+                snapshotFlow { latestHermesState.value }.first {
+                    it.backend != null && it.status != null && !it.loading
+                }
+                snapshotFlow { latestConnectionState.value }.first { it == GatewayConnectionState.Open }
+                if (!viewModel.ingestSharedContent(request.content)) {
+                    onEntryFailed(
+                        request.id,
+                        viewModel.state.value.error ?: "Hermes could not add this shared content to a draft.",
+                    )
+                    return@LaunchedEffect
+                }
+                val current = viewModel.state.value
+                val backend = current.backend
+                val session = current.activeStoredSession
+                if (backend != null && session != null && session.durableId.isNotBlank()) {
+                    navigator.openConversation(
+                        backendId = backend.id,
+                        profileId = session.profile?.takeIf(String::isNotBlank) ?: current.currentProfile,
+                        sessionId = session.durableId,
+                    )
+                }
+                onEntryConsumed(request.id)
+            }
+            is HermesEntryRequest.NewChat -> {
+                val ready = snapshotFlow { latestHermesState.value }.first {
+                    it.backend != null && it.status != null && !it.loading
+                }
+                snapshotFlow { latestConnectionState.value }.first { it == GatewayConnectionState.Open }
+                if (!viewModel.newSessionFromEntry(ready.currentProfile)) {
+                    onEntryFailed(
+                        request.id,
+                        viewModel.state.value.error ?: "Hermes could not create a new chat.",
+                    )
+                    return@LaunchedEffect
+                }
+                val current = viewModel.state.value
+                val backend = current.backend
+                val session = current.activeStoredSession
+                if (backend != null && session != null && session.durableId.isNotBlank()) {
+                    navigator.openConversation(
+                        backendId = backend.id,
+                        profileId = session.profile?.takeIf(String::isNotBlank) ?: current.currentProfile,
+                        sessionId = session.durableId,
+                    )
+                } else if (backend != null) {
+                    navigator.openChats(backend.id, current.currentProfile)
+                }
+                onEntryConsumed(request.id)
+            }
         }
-        val backend = state.backend ?: return@LaunchedEffect
-        if (state.status == null || state.loading) return@LaunchedEffect
-        val authoritativeSessions = state.sessions.mapTo(mutableSetOf()) { session ->
-            SessionIdentity(
-                backendId = backend.id,
-                profileId = session.profile?.takeIf(String::isNotBlank) ?: state.currentProfile,
-                sessionId = session.durableId,
-            )
-        }
-        val resolution = resolveRestoredRoute(
-            route = requested,
-            availableBackendIds = (state.savedBackends.map { it.id } + backend.id).toSet(),
-            authenticatedBackendId = backend.id,
-            authoritativeSessions = authoritativeSessions,
-        )
-        recoveryNotice = resolution.explanation
-        navigator.openProductRoute(
-            route = resolution.route as? HermesDestinationRoute ?: run {
-                navigator.replace(resolution.route)
-                onPendingDestinationConsumed(requested)
-                return@LaunchedEffect
-            },
-        )
-        onPendingDestinationConsumed(requested)
     }
     LaunchedEffect(
         state.backend?.id,
@@ -563,7 +638,6 @@ fun HermesApp(
             onSecureScreenChange = onSecureScreenChange,
             skin = skin,
             onSkinChange = onSkinChange,
-            sharedContentId = sharedContent?.id,
         )
     }
     HermesTheme(skin) {
@@ -627,6 +701,28 @@ fun HermesApp(
                     }
                 }
             }
+        }
+        entryDelivery?.failureMessage?.let { failure ->
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Hermes could not finish this request") },
+                text = { Text(failure) },
+                confirmButton = {
+                    TextButton(onClick = { onEntryRetry(entryDelivery.request.id) }) { Text("Retry") }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            entryRequestScope.launch {
+                                (entryDelivery.request as? HermesEntryRequest.ImportDraft)?.let {
+                                    viewModel.discardSharedContent(it.content)
+                                }
+                                onEntryDiscard(entryDelivery.request.id)
+                            }
+                        },
+                    ) { Text("Discard") }
+                },
+            )
         }
     }
 }
@@ -836,7 +932,6 @@ private fun HermesWorkspace(
     onSecureScreenChange: (Boolean) -> Unit,
     skin: HermesSkin,
     onSkinChange: (HermesSkin) -> Unit,
-    sharedContentId: String?,
 ) {
     val context = LocalContext.current
     val openExternalUrl: (String) -> Unit = remember(context) {
@@ -903,17 +998,6 @@ private fun HermesWorkspace(
                 )
             }
         }
-        LaunchedEffect(sharedContentId, state.activeStoredSession?.durableId) {
-            val session = state.activeStoredSession
-            if (sharedContentId != null && session != null && session.durableId.isNotBlank()) {
-                navigator.openConversation(
-                    backendId = backendId,
-                    profileId = session.profile?.takeIf(String::isNotBlank) ?: state.currentProfile,
-                    sessionId = session.durableId,
-                )
-            }
-        }
-
         fun navigate(destination: WorkspaceContent) {
             onRecovery(null)
             when (destination) {

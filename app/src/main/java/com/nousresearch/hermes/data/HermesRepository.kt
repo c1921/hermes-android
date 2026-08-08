@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.data
 
 import android.net.Uri
+import android.util.Log
 import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.ComposerQueue
 import com.nousresearch.hermes.domain.QueuedPrompt
@@ -52,7 +53,6 @@ import com.nousresearch.hermes.protocol.RollbackRestoreResult
 import com.nousresearch.hermes.protocol.SessionCreateResult
 import com.nousresearch.hermes.protocol.SessionBranchResult
 import com.nousresearch.hermes.protocol.SessionCompressResult
-import com.nousresearch.hermes.protocol.SessionCloseResult
 import com.nousresearch.hermes.protocol.SessionDeleteResult
 import com.nousresearch.hermes.protocol.SessionHistoryResult
 import com.nousresearch.hermes.protocol.SessionMessagePage
@@ -233,6 +233,11 @@ data class HermesState(
 data class SpawnTreeReplay(
     val archive: SpawnTreeListEntry,
     val subagents: List<SubagentProgress>,
+)
+
+data class EntryAuthoritySnapshot(
+    val profileIds: Set<String>,
+    val cronJobIds: Set<String>,
 )
 
 data class ProviderOAuthSession(
@@ -756,71 +761,85 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    suspend fun newSession(profile: String? = null) {
+    suspend fun newSession(profile: String? = null): Boolean {
         val requestGeneration = openSessionGeneration.incrementAndGet()
-        runCatching { activeCredentials(allowRecovery = true) }.getOrElse { error ->
+        val backend = try {
+            activeCredentials(allowRecovery = true).first
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
             if (openSessionGeneration.get() == requestGeneration) fail(error)
-            return
+            return false
         }
         flushDraft()
         setLoading(true)
-        var opened = false
-        var targetToPersist: SessionTarget? = null
-        runCatching {
-            mutableState.value.runtimeSessionId?.let { currentSessionId ->
-                val closed = gateway.request(
-                    "session.close",
-                    buildJsonObject { put("session_id", currentSessionId) },
-                )
-                json.decodeFromJsonElement(SessionCloseResult.serializer(), closed)
-            }
-            val result = gateway.request(
+        val created = try {
+            gateway.request(
                 "session.create",
                 buildJsonObject {
                     put("cols", 96)
                     put("source", "android")
                     profile?.let { put("profile", it) }
                 },
-            )
-            json.decodeFromJsonElement(SessionCreateResult.serializer(), result)
-        }.onSuccess { created ->
-            val current = mutableState.value
-            val backend = current.backend ?: return@onSuccess
-            if (openSessionGeneration.get() != requestGeneration) return@onSuccess
-            val activeProfile = profile ?: current.activeProfile
-            val durableId = created.durableSessionId.orEmpty().ifBlank { created.info.storedSessionId }
-            val activeSession = durableId.takeIf(String::isNotBlank)?.let {
-                StoredSession(sessionId = it, profile = activeProfile, source = "android")
-            }
-            mutableState.value = current.copy(
-                activeStoredSession = activeSession,
-                runtimeSessionId = created.runtimeSessionId,
-                timeline = TimelineReducer.hydrate(created.messages),
-                runtimeInfo = created.info.copy(storedSessionId = durableId),
-                activeProfile = activeProfile,
-                restoration = SessionRestorationState(
-                    status = SessionRestorationStatus.READY,
-                    target = activeSession?.let { sessionTarget(current.backend.id, it) },
-                    session = activeSession,
-                ),
-                pendingAttachments = emptyList(),
-                checkpointsEnabled = null,
-                checkpoints = emptyList(),
-                checkpointPreview = null,
-                checkpointsLoading = false,
-                checkpointNotice = null,
-                checkpointError = null,
-                loading = false,
-                error = null,
-            )
-            targetToPersist = activeSession?.let { sessionTarget(backend.id, it) }
-            opened = true
-        }.onFailure(::fail)
-        if (opened) {
-            targetToPersist?.let { persistSessionTargetIfCurrent(requestGeneration, it) }
-            loadComposerState()
-            refreshModelOptions()
+            ).let { json.decodeFromJsonElement(SessionCreateResult.serializer(), it) }
+        } catch (cancelled: CancellationException) {
+            if (openSessionGeneration.get() == requestGeneration) setLoading(false)
+            throw cancelled
+        } catch (error: Throwable) {
+            if (openSessionGeneration.get() == requestGeneration) fail(error)
+            return false
         }
+        val current = mutableState.value
+        if (
+            openSessionGeneration.get() != requestGeneration ||
+            current.backend?.id != backend.id
+        ) {
+            try {
+                gateway.request(
+                    "session.close",
+                    buildJsonObject { put("session_id", created.runtimeSessionId) },
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Log.w(
+                    "HermesRepository",
+                    "Could not close a stale created session: " +
+                        DiagnosticRedactor.redact(error.message.orEmpty()).ifBlank { "unknown error" },
+                )
+            }
+            return false
+        }
+        val activeProfile = profile ?: current.activeProfile
+        val durableId = created.durableSessionId.orEmpty().ifBlank { created.info.storedSessionId }
+        val activeSession = durableId.takeIf(String::isNotBlank)?.let {
+            StoredSession(sessionId = it, profile = activeProfile, source = "android")
+        }
+        mutableState.value = current.copy(
+            activeStoredSession = activeSession,
+            runtimeSessionId = created.runtimeSessionId,
+            timeline = TimelineReducer.hydrate(created.messages),
+            runtimeInfo = created.info.copy(storedSessionId = durableId),
+            activeProfile = activeProfile,
+            restoration = SessionRestorationState(
+                status = SessionRestorationStatus.READY,
+                target = activeSession?.let { sessionTarget(current.backend.id, it) },
+                session = activeSession,
+            ),
+            pendingAttachments = emptyList(),
+            checkpointsEnabled = null,
+            checkpoints = emptyList(),
+            checkpointPreview = null,
+            checkpointsLoading = false,
+            checkpointNotice = null,
+            checkpointError = null,
+            loading = false,
+            error = null,
+        )
+        activeSession?.let { persistSessionTargetIfCurrent(requestGeneration, sessionTarget(backend.id, it)) }
+        loadComposerState()
+        refreshModelOptions()
+        return true
     }
 
     fun updateDraft(value: String) {
@@ -835,23 +854,54 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun ingestSharedContent(text: String, uris: List<Uri>): Boolean = try {
-        if (mutableState.value.runtimeSessionId == null) {
-            newSession()
-            requireNotNull(mutableState.value.runtimeSessionId) { "Hermes could not open a session for shared content" }
-        }
-        uris.take(MAX_SHARED_ATTACHMENTS).forEach { uri ->
+        val allUris = uris
+            .distinctBy(Uri::toString)
+            .take(MAX_SHARED_ATTACHMENTS)
+        val importUris = allUris
+            .filterNot { uri -> mutableState.value.pendingAttachments.any { it.sourceUri == uri.toString() } }
+        importUris.forEach { uri ->
             require(uri.scheme.equals("content", ignoreCase = true)) { "Shared attachments must use content URIs" }
-            if (mutableState.value.pendingAttachments.none { it.sourceUri == uri.toString() }) attachOrThrow(uri)
+        }
+        // Read and fully bound every unfinished source before creating or mutating
+        // a Hermes session. Successful uploads are retained in pending composer
+        // state so a later failure can retry only the unfinished sources.
+        val payloads = importUris.map { uri -> uri to attachmentReader.read(uri, releaseAfterRead = false) }
+        if (mutableState.value.runtimeSessionId == null) {
+            require(newSession()) { "Hermes could not open a session for shared content" }
+        }
+        val sessionId = requireNotNull(mutableState.value.runtimeSessionId)
+        mutableState.value = mutableState.value.copy(attaching = payloads.isNotEmpty(), error = null)
+        try {
+            payloads.forEach { (uri, payload) ->
+                val attachment = createAttachment(sessionId, uri, payload)
+                // Commit each successful source to pending composer state before
+                // attempting the next one. A retry then skips completed source
+                // URIs instead of staging duplicate remote files.
+                mutableState.value = mutableState.value.copy(
+                    pendingAttachments = mutableState.value.pendingAttachments + attachment,
+                )
+            }
+        } finally {
+            mutableState.value = mutableState.value.copy(attaching = false)
         }
         if (text.isNotEmpty()) {
             updateDraft(mergeSharedText(mutableState.value.draft, text, DraftStore.MAX_DRAFT_CHARACTERS))
         }
+        allUris.forEach(attachmentReader::release)
         true
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (error: Throwable) {
         fail(error)
         false
+    }
+
+    suspend fun discardSharedContentUris(uriStrings: List<String>) {
+        val sources = uriStrings.toSet()
+        mutableState.value.pendingAttachments
+            .filter { it.sourceUri in sources }
+            .forEach { removePendingAttachment(it.id) }
+        uriStrings.map(Uri::parse).forEach(attachmentReader::release)
     }
 
     suspend fun queueDraft() {
@@ -1048,8 +1098,12 @@ class HermesRepository @Inject constructor(
                 }
             }
             .onFailure { error ->
-                if (currentSessionContentContext() == requestContext) {
+                val stillCurrent = currentSessionContentContext() == requestContext
+                if (stillCurrent) {
                     mutableState.value = mutableState.value.copy(modelsLoading = false)
+                }
+                if (error is CancellationException) throw error
+                if (stillCurrent) {
                     fail(error)
                 }
             }
@@ -1769,6 +1823,29 @@ class HermesRepository @Inject constructor(
                 error = null,
             )
         }.onFailure(::fail)
+    }
+
+    suspend fun entryAuthoritySnapshot(includeCronJobs: Boolean): EntryAuthoritySnapshot? = try {
+        val (backend, token) = activeCredentials()
+        val profiles = restClient.profiles(backend, token)
+        val active = restClient.activeProfile(backend, token)
+        EntryAuthoritySnapshot(
+            profileIds = buildSet {
+                profiles.profiles.mapTo(this) { it.name }
+                add(active.active)
+                add(active.current)
+            },
+            cronJobIds = if (includeCronJobs) {
+                restClient.cronJobs(backend, token).mapTo(mutableSetOf()) { it.id }
+            } else {
+                emptySet()
+            },
+        )
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        fail(error)
+        null
     }
 
     suspend fun createProfile(name: String, cloneFrom: String, cloneAll: Boolean, noSkills: Boolean) {
@@ -3423,72 +3500,12 @@ class HermesRepository @Inject constructor(
 
     private suspend fun attachOrThrow(uri: Uri) {
         val sessionId = mutableState.value.runtimeSessionId ?: run {
-            newSession()
+            require(newSession()) { "Hermes could not open a session for this attachment" }
             requireNotNull(mutableState.value.runtimeSessionId)
         }
         mutableState.value = mutableState.value.copy(attaching = true, error = null)
         val attachment = try {
-            val payload = attachmentReader.read(uri)
-            when {
-                payload.mimeType.startsWith("image/") -> {
-                    val result = gateway.request(
-                        "image.attach_bytes",
-                        buildJsonObject {
-                            put("session_id", sessionId)
-                            put("content_base64", payload.base64)
-                            put("filename", payload.displayName)
-                        },
-                    )
-                    val attached = json.decodeFromJsonElement(ImageAttachResult.serializer(), result)
-                    PendingAttachment(
-                        id = UUID.randomUUID().toString(),
-                        label = payload.displayName,
-                        mimeType = payload.mimeType,
-                        byteCount = payload.byteCount,
-                        queuedImagePaths = listOf(attached.path),
-                        sourceUri = uri.toString(),
-                    )
-                }
-                payload.mimeType == "application/pdf" -> {
-                    val result = gateway.request(
-                        "pdf.attach",
-                        buildJsonObject {
-                            put("session_id", sessionId)
-                            put("content_base64", payload.base64)
-                            put("filename", payload.displayName)
-                        },
-                    )
-                    val attached = json.decodeFromJsonElement(PdfAttachResult.serializer(), result)
-                    PendingAttachment(
-                        id = UUID.randomUUID().toString(),
-                        label = payload.displayName,
-                        mimeType = payload.mimeType,
-                        byteCount = payload.byteCount,
-                        queuedImagePaths = attached.pages.map { it.path },
-                        sourceUri = uri.toString(),
-                    )
-                }
-                else -> {
-                    val result = gateway.request(
-                        "file.attach",
-                        buildJsonObject {
-                            put("session_id", sessionId)
-                            put("name", payload.displayName)
-                            put("path", payload.displayName)
-                            put("data_url", "data:${payload.mimeType};base64,${payload.base64}")
-                        },
-                    )
-                    val attached = json.decodeFromJsonElement(FileAttachResult.serializer(), result)
-                    PendingAttachment(
-                        id = UUID.randomUUID().toString(),
-                        label = payload.displayName,
-                        mimeType = payload.mimeType,
-                        byteCount = payload.byteCount,
-                        refText = attached.refText,
-                        sourceUri = uri.toString(),
-                    )
-                }
-            }
+            createAttachment(sessionId, uri, attachmentReader.read(uri))
         } finally {
             mutableState.value = mutableState.value.copy(attaching = false)
         }
@@ -3497,22 +3514,89 @@ class HermesRepository @Inject constructor(
         )
     }
 
+    private suspend fun createAttachment(
+        sessionId: String,
+        uri: Uri,
+        payload: AttachmentPayload,
+    ): PendingAttachment = when {
+        payload.mimeType.startsWith("image/") -> {
+            val result = gateway.request(
+                "image.attach_bytes",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("content_base64", payload.base64)
+                    put("filename", payload.displayName)
+                },
+            )
+            val attached = json.decodeFromJsonElement(ImageAttachResult.serializer(), result)
+            PendingAttachment(
+                id = UUID.randomUUID().toString(),
+                label = payload.displayName,
+                mimeType = payload.mimeType,
+                byteCount = payload.byteCount,
+                queuedImagePaths = listOf(attached.path),
+                sourceUri = uri.toString(),
+            )
+        }
+        payload.mimeType == "application/pdf" -> {
+            val result = gateway.request(
+                "pdf.attach",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("content_base64", payload.base64)
+                    put("filename", payload.displayName)
+                },
+            )
+            val attached = json.decodeFromJsonElement(PdfAttachResult.serializer(), result)
+            PendingAttachment(
+                id = UUID.randomUUID().toString(),
+                label = payload.displayName,
+                mimeType = payload.mimeType,
+                byteCount = payload.byteCount,
+                queuedImagePaths = attached.pages.map { it.path },
+                sourceUri = uri.toString(),
+            )
+        }
+        else -> {
+            val result = gateway.request(
+                "file.attach",
+                buildJsonObject {
+                    put("session_id", sessionId)
+                    put("name", payload.displayName)
+                    put("path", payload.displayName)
+                    put("data_url", "data:${payload.mimeType};base64,${payload.base64}")
+                },
+            )
+            val attached = json.decodeFromJsonElement(FileAttachResult.serializer(), result)
+            PendingAttachment(
+                id = UUID.randomUUID().toString(),
+                label = payload.displayName,
+                mimeType = payload.mimeType,
+                byteCount = payload.byteCount,
+                refText = attached.refText,
+                sourceUri = uri.toString(),
+            )
+        }
+    }
+
+    private suspend fun detachRemoteAttachment(sessionId: String, attachment: PendingAttachment) {
+        attachment.queuedImagePaths.forEach { path ->
+            runCatching {
+                gateway.request(
+                    "image.detach",
+                    buildJsonObject {
+                        put("session_id", sessionId)
+                        put("path", path)
+                    },
+                )
+            }
+        }
+    }
+
     suspend fun removePendingAttachment(id: String) {
         val attachment = mutableState.value.pendingAttachments.firstOrNull { it.id == id } ?: return
         val sessionId = mutableState.value.runtimeSessionId
-        if (sessionId != null) {
-            attachment.queuedImagePaths.forEach { path ->
-                runCatching {
-                    gateway.request(
-                        "image.detach",
-                        buildJsonObject {
-                            put("session_id", sessionId)
-                            put("path", path)
-                        },
-                    )
-                }
-            }
-        }
+        if (sessionId != null) detachRemoteAttachment(sessionId, attachment)
         mutableState.value = mutableState.value.copy(
             pendingAttachments = mutableState.value.pendingAttachments.filterNot { it.id == id },
         )

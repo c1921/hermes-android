@@ -202,6 +202,11 @@ data class SessionIdentity(
     val sessionId: String,
 )
 
+data class AutomationResourceIdentity(
+    val destination: AutomationDestination,
+    val resourceId: String,
+)
+
 data class RouteResolution(
     val route: HermesRoute,
     val explanation: String? = null,
@@ -250,6 +255,74 @@ fun resolveRestoredRoute(
         }
     }
     return RouteResolution(route = route, mutationsEnabled = true)
+}
+
+/**
+ * Resolve an Android system entry only from authenticated, server-authoritative
+ * identity. Stable route fields select a candidate; they never grant access.
+ */
+fun resolveEntryDestination(
+    route: HermesDestinationRoute,
+    availableBackendIds: Set<String>,
+    authenticatedBackendId: String?,
+    authoritativeSessions: Set<SessionIdentity>,
+    authoritativeProfileIds: Set<String>,
+    fallbackProfileId: String,
+    authoritativeAutomationResources: Set<AutomationResourceIdentity>,
+): RouteResolution {
+    val restored = resolveRestoredRoute(
+        route = route,
+        availableBackendIds = availableBackendIds,
+        authenticatedBackendId = authenticatedBackendId,
+        authoritativeSessions = authoritativeSessions,
+    )
+    if (restored.route != route) return restored
+    val profileId = route.profileIdOrNull()
+    if (profileId != null && profileId !in authoritativeProfileIds) {
+        val safeProfileId = fallbackProfileId.takeIf(authoritativeProfileIds::contains)
+            ?: authoritativeProfileIds.firstOrNull()
+            ?: fallbackProfileId
+        return RouteResolution(
+            route = HermesDestinationRoute.Chats(route.backendIdOrNull().orEmpty(), safeProfileId),
+            explanation = "That Hermes profile could not be found. Opened Chats for the authenticated profile instead.",
+        )
+    }
+    return when (route) {
+        is HermesDestinationRoute.Artifacts -> if (route.artifactId != null || route.filePath != null) {
+            RouteResolution(
+                route = HermesDestinationRoute.Artifacts(route.backendId, route.profileId),
+                explanation = "This external artifact reference could not be verified. Opened Artifacts without the resource instead.",
+            )
+        } else {
+            restored
+        }
+        is HermesDestinationRoute.Automations -> if (
+            route.resourceId != null && (
+                route.destination == null || AutomationResourceIdentity(
+                    destination = route.destination,
+                    resourceId = route.resourceId,
+                ) !in authoritativeAutomationResources
+            )
+        ) {
+            RouteResolution(
+                route = HermesDestinationRoute.Automations(route.backendId, route.profileId, route.destination),
+                explanation = "That automation could not be verified. Opened Automations without the resource instead.",
+            )
+        } else {
+            restored
+        }
+        is HermesDestinationRoute.Manage -> if (route.resourceId != null) {
+            RouteResolution(
+                route = HermesDestinationRoute.Manage(route.backendId, route.profileId, route.section, route.destination),
+                explanation = "This external management resource could not be verified. Opened its section without the resource instead.",
+            )
+        } else {
+            restored
+        }
+        is HermesDestinationRoute.Chats,
+        is HermesDestinationRoute.AppSettings,
+        -> restored
+    }
 }
 
 fun HermesRoute.backendIdOrNull(): String? = when (this) {
