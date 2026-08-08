@@ -253,6 +253,9 @@ class HermesViewModel @Inject constructor(
     }
     fun closeLearningNode() = repository.closeLearningNode()
     fun runDiagnostic(action: DiagnosticAction) = viewModelScope.launch { repository.runDiagnostic(action) }
+    fun refreshHostMaintenance(force: Boolean = false) = viewModelScope.launch {
+        repository.refreshHostMaintenance(force)
+    }
     fun refreshProviders() = viewModelScope.launch { repository.refreshProviders(refresh = true) }
     fun startProviderOAuth(providerId: String) = viewModelScope.launch { repository.startProviderOAuth(providerId) }
     fun submitProviderOAuth(code: String) = viewModelScope.launch { repository.submitProviderOAuth(code) }

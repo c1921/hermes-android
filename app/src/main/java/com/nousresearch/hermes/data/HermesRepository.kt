@@ -17,6 +17,7 @@ import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.BackgroundProcess
 import com.nousresearch.hermes.protocol.BackgroundProcessKillResponse
 import com.nousresearch.hermes.protocol.BackgroundProcessListResponse
+import com.nousresearch.hermes.protocol.BackendUpdateCheck
 import com.nousresearch.hermes.protocol.BillingChargeResponse
 import com.nousresearch.hermes.protocol.BillingChargeStatusResponse
 import com.nousresearch.hermes.protocol.BillingMutationResponse
@@ -162,6 +163,10 @@ data class HermesState(
     val starmapNotice: String? = null,
     val starmapError: String? = null,
     val diagnostics: Map<DiagnosticAction, DiagnosticRunState> = emptyMap(),
+    val hostUpdate: BackendUpdateCheck? = null,
+    val hostLogs: List<String> = emptyList(),
+    val hostMaintenanceLoading: Boolean = false,
+    val hostMaintenanceError: String? = null,
     val providerOptions: ModelOptionsResult? = null,
     val providerEnv: Map<String, EnvVarInfo> = emptyMap(),
     val oauthProviders: List<OAuthProvider> = emptyList(),
@@ -2124,6 +2129,37 @@ class HermesRepository @Inject constructor(
                     running = false,
                     error = DiagnosticRedactor.redact(error.message.orEmpty()).ifBlank { "Diagnostic action failed" },
                 ),
+            )
+        }
+    }
+
+    suspend fun refreshHostMaintenance(force: Boolean = false) {
+        val (backend, token) = activeCredentials()
+        mutableState.value = mutableState.value.copy(hostMaintenanceLoading = true, hostMaintenanceError = null)
+        val errors = mutableListOf<String>()
+        val update = try {
+            restClient.hermesUpdateCheck(backend, token, force)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            errors += error.message.orEmpty()
+            null
+        }
+        val logs = try {
+            restClient.hostLogs(backend, token).lines
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            errors += error.message.orEmpty()
+            null
+        }
+        if (mutableState.value.backend?.id == backend.id) {
+            mutableState.value = mutableState.value.copy(
+                hostUpdate = update ?: mutableState.value.hostUpdate,
+                hostLogs = logs?.let(DiagnosticRedactor::redactLines)?.takeLast(200) ?: mutableState.value.hostLogs,
+                hostMaintenanceLoading = false,
+                hostMaintenanceError = DiagnosticRedactor.redact(errors.filter(String::isNotBlank).joinToString(" / "))
+                    .ifBlank { null },
             )
         }
     }

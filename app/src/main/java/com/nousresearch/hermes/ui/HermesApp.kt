@@ -305,6 +305,7 @@ private data class ManagementActions(
     val updateLearningNode: (String, String, String) -> Unit,
     val deleteLearningNode: (String, String) -> Unit,
     val runDiagnostic: (DiagnosticAction) -> Unit,
+    val refreshHostMaintenance: (Boolean) -> Unit,
     val refreshProviders: () -> Unit,
     val startProviderOAuth: (String) -> Unit,
     val submitProviderOAuth: (String) -> Unit,
@@ -429,6 +430,7 @@ fun HermesApp(
             updateLearningNode = viewModel::updateLearningNode,
             deleteLearningNode = viewModel::deleteLearningNode,
             runDiagnostic = viewModel::runDiagnostic,
+            refreshHostMaintenance = viewModel::refreshHostMaintenance,
             refreshProviders = viewModel::refreshProviders,
             startProviderOAuth = viewModel::startProviderOAuth,
             submitProviderOAuth = viewModel::submitProviderOAuth,
@@ -1351,6 +1353,7 @@ private fun HermesWorkspace(
                         state = state,
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
+                        onRefreshHost = managementActions.refreshHostMaintenance,
                         onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )

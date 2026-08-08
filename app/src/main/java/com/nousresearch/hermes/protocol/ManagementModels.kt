@@ -208,6 +208,32 @@ data class LearningMutationResponse(
 )
 
 @Serializable
+data class HostLogsResponse(
+    val file: String,
+    val lines: List<String> = emptyList(),
+)
+
+@Serializable
+data class BackendUpdateCommit(
+    val sha: String,
+    val summary: String,
+    val author: String,
+    val at: Long,
+)
+
+@Serializable
+data class BackendUpdateCheck(
+    @SerialName("install_method") val installMethod: String,
+    @SerialName("current_version") val currentVersion: String,
+    val behind: Int? = null,
+    @SerialName("update_available") val updateAvailable: Boolean,
+    @SerialName("can_apply") val canApply: Boolean,
+    @SerialName("update_command") val updateCommand: String? = null,
+    val message: String? = null,
+    val commits: List<BackendUpdateCommit> = emptyList(),
+)
+
+@Serializable
 data class ActionResponse(
     val name: String,
     val ok: Boolean,

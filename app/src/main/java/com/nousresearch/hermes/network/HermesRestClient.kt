@@ -9,9 +9,11 @@ import com.nousresearch.hermes.protocol.ActionStatusResponse
 import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.AudioSpeakResponse
 import com.nousresearch.hermes.protocol.AudioTranscriptionResponse
+import com.nousresearch.hermes.protocol.BackendUpdateCheck
 import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.FsDataUrlResponse
 import com.nousresearch.hermes.protocol.FsTextPreview
+import com.nousresearch.hermes.protocol.HostLogsResponse
 import com.nousresearch.hermes.protocol.CronJob
 import com.nousresearch.hermes.protocol.CronJobCreatePayload
 import com.nousresearch.hermes.protocol.CronJobUpdates
@@ -850,6 +852,26 @@ class HermesRestClient(
     suspend fun runSecurityAudit(config: BackendConfig, token: String): ActionResponse =
         startAction(config, token, "/api/ops/security-audit")
 
+    suspend fun hostLogs(config: BackendConfig, token: String): HostLogsResponse = boundedGet(
+        config,
+        token,
+        "/api/logs?file=agent&lines=200",
+        MAX_HOST_LOG_RESPONSE_BYTES,
+        HostLogsResponse.serializer(),
+    )
+
+    suspend fun hermesUpdateCheck(
+        config: BackendConfig,
+        token: String,
+        force: Boolean = false,
+    ): BackendUpdateCheck = boundedGet(
+        config,
+        token,
+        "/api/hermes/update/check?force=${if (force) "true" else "false"}",
+        MAX_UPDATE_CHECK_RESPONSE_BYTES,
+        BackendUpdateCheck.serializer(),
+    )
+
     suspend fun actionStatus(
         config: BackendConfig,
         token: String,
@@ -1246,6 +1268,8 @@ class HermesRestClient(
         const val MAX_LEARNING_NODE_CONTENT_CHARACTERS = 256 * 1024
         const val MAX_STARMAP_RESPONSE_BYTES = 2L * 1024L * 1024L
         const val MAX_LEARNING_NODE_RESPONSE_BYTES = 384L * 1024L
+        const val MAX_HOST_LOG_RESPONSE_BYTES = 512L * 1024L
+        const val MAX_UPDATE_CHECK_RESPONSE_BYTES = 192L * 1024L
     }
 }
 

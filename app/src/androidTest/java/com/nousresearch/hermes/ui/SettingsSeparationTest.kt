@@ -43,6 +43,7 @@ class SettingsSeparationTest {
                     state = HermesState(),
                     connection = GatewayConnectionState.Idle,
                     onRun = {},
+                    onRefreshHost = {},
                     onBack = null,
                 )
             }

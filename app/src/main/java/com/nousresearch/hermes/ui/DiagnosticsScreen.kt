@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,6 +70,7 @@ internal fun DiagnosticsScreen(
     state: HermesState,
     connection: GatewayConnectionState,
     onRun: (DiagnosticAction) -> Unit,
+    onRefreshHost: (Boolean) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -76,6 +78,7 @@ internal fun DiagnosticsScreen(
     val scope = rememberCoroutineScope()
     var exportInProgress by rememberSaveable { mutableStateOf(false) }
     var exportNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.backend?.id) { if (state.backend != null) onRefreshHost(false) }
     val createReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri == null) {
             exportInProgress = false
@@ -120,11 +123,12 @@ internal fun DiagnosticsScreen(
             }
             item {
                 Text(
-                    "These commands run on the selected Hermes server. Output is bounded and redacted again on Android before display; it is not uploaded by the app.",
+                    "These commands run on the selected Hermes server. Host logs and update state describe the whole authenticated Hermes installation, not only the selected profile. Output is bounded and redacted again on Android before display; it is not uploaded by the app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            item { HostMaintenanceCard(state, onRefreshHost) }
             item {
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -167,6 +171,60 @@ internal fun DiagnosticsScreen(
                     onRun = { onRun(DiagnosticAction.SECURITY_AUDIT) },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun HostMaintenanceCard(state: HermesState, onRefresh: (Boolean) -> Unit) {
+    val update = state.hostUpdate
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("HERMES HOST", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (state.hostMaintenanceLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+            Text(
+                "Read-only status for the authenticated Hermes host. Android does not apply updates or infer a profile from this host-wide endpoint.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (update != null) {
+                DiagnosticValue("Installed version", update.currentVersion)
+                DiagnosticValue("Install method", update.installMethod)
+                DiagnosticValue(
+                    "Update state",
+                    when {
+                        update.behind == 0 -> "Current"
+                        update.behind != null && update.behind > 0 -> "${update.behind} commits behind"
+                        update.updateAvailable -> "Update available; count unavailable"
+                        else -> "Unavailable"
+                    },
+                )
+                update.message?.takeIf(String::isNotBlank)?.let { DiagnosticValue("Host guidance", it) }
+                update.commits.take(20).takeIf { it.isNotEmpty() }?.let { commits ->
+                    SelectionContainer {
+                        Text(
+                            commits.joinToString("\n") { "${it.sha.take(8)}  ${it.summary.take(300)}" },
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+            }
+            state.hostMaintenanceError?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            if (state.hostLogs.isNotEmpty()) {
+                Text("RECENT REDACTED AGENT LOG", style = MaterialTheme.typography.labelMedium)
+                SelectionContainer {
+                    Text(
+                        state.hostLogs.joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+            Button(onClick = { onRefresh(true) }, enabled = !state.hostMaintenanceLoading) { Text("Check now") }
         }
     }
 }
@@ -357,7 +415,15 @@ private fun HermesState.buildDiagnosticReport(connection: GatewayConnectionState
                         lines = run.error?.let { run.lines + it } ?: run.lines,
                     )
                 }
-            },
+            } + hostLogs.takeIf { it.isNotEmpty() }?.let {
+                listOf(
+                    DiagnosticReportSection(
+                        title = "Recent redacted Hermes host log",
+                        status = "${it.size.coerceAtMost(200)} lines",
+                        lines = it.takeLast(200),
+                    ),
+                )
+            }.orEmpty(),
         ),
     )
 }
