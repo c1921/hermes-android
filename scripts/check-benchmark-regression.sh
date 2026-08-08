@@ -25,6 +25,7 @@ while IFS= read -r -d '' file; do
           end;
         .benchmarks[]? as $benchmark |
         ($benchmark.metrics // {}) | to_entries[] |
+        select(.key != "frameCount") |
         (.value.median // ((.value.runs // []) | map(select(type == "number")) | median)) as $value |
         select(($value | type) == "number" and ($value | isfinite) and $value >= 0) |
         [$benchmark.name, .key, $value] | @tsv
