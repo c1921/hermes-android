@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -50,7 +51,7 @@ class BillingScreenTest {
         )
 
         compose.onNodeWithText("BALANCE").assertExists()
-        compose.onNodeWithText("$24.50", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithText("$24.50", useUnmergedTree = true).fetchSemanticsNodes().let { assertEquals(2, it.size) }
         compose.onNodeWithText("Super / $20/mo").assertExists()
         compose.onNodeWithText("ACCOUNT").assertExists()
         compose.onNodeWithText("Visa •••• 4242").assertExists()

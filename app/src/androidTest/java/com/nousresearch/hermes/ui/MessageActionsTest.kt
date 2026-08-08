@@ -2,6 +2,7 @@ package com.nousresearch.hermes.ui
 
 import android.content.ClipboardManager
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -10,6 +11,7 @@ import com.nousresearch.hermes.domain.MessageRole
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -51,8 +53,14 @@ class MessageActionsTest {
         }
 
         compose.waitForIdle()
-        compose.onNodeWithText("Rendered heading", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("First item", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("val answer = 42", substring = true, useUnmergedTree = true).assertExists()
+        assertRenderedText("Rendered heading")
+        assertRenderedText("First item")
+        assertRenderedText("val answer = 42", substring = true)
+    }
+
+    private fun assertRenderedText(text: String, substring: Boolean = false) {
+        val merged = compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes()
+        val unmerged = compose.onAllNodesWithText(text, substring = substring, useUnmergedTree = true).fetchSemanticsNodes()
+        assertTrue("Expected rendered text '$text'", merged.isNotEmpty() || unmerged.isNotEmpty())
     }
 }
