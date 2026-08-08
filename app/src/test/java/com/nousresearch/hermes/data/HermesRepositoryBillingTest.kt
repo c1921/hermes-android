@@ -2,6 +2,7 @@ package com.nousresearch.hermes.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.core.content.FileProvider
 import com.nousresearch.hermes.network.DashboardAuthClient
 import com.nousresearch.hermes.network.DashboardSessionCredential
 import com.nousresearch.hermes.network.HermesRestClient
@@ -10,6 +11,8 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.GatewayEvent
 import com.nousresearch.hermes.protocol.HermesGatewayClient
 import com.nousresearch.hermes.protocol.StoredSession
+import com.nousresearch.hermes.platform.newCameraCaptureUri
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -81,6 +84,131 @@ class HermesRepositoryBillingTest {
             assertEquals("Review this before sending", repository.state.value.draft)
             assertEquals("stored-share", repository.state.value.activeStoredSession?.durableId)
             assertFalse(gateway.requests.any { it.method == "prompt.submit" })
+        }
+    }
+
+    @Test
+    fun `shared attachment failures stay independent and successful camera files are released`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-files","stored_session_id":"stored-files","messages":[],"info":{"stored_session_id":"stored-files"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            gateway.enqueue(
+                "image.attach_bytes",
+                json.parseToJsonElement(
+                    """{"attached":true,"path":"/srv/.hermes/images/upload.png","count":1,"text":"[User attached image]","bytes":4,"width":2}""",
+                ),
+            )
+            val rejectedFile = File(context.cacheDir, "camera/rejected.apk").apply {
+                parentFile?.mkdirs()
+                writeBytes(byteArrayOf(1, 2))
+            }
+            val rejectedUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                rejectedFile,
+            )
+            val cameraUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+
+            assertTrue(repository.ingestSharedContent("", listOf(rejectedUri, cameraUri)))
+
+            assertEquals(
+                listOf(AttachmentPhase.ERROR, AttachmentPhase.READY),
+                repository.state.value.pendingAttachments.map(PendingAttachment::phase),
+            )
+            assertTrue(repository.state.value.pendingAttachments.first().error.orEmpty().contains("not supported"))
+            assertTrue(runCatching { context.contentResolver.openInputStream(cameraUri)!!.close() }.isFailure)
+            assertFalse(gateway.requests.any { it.method == "prompt.submit" })
+            repository.state.value.pendingAttachments.toList().forEach { repository.removePendingAttachment(it.id) }
+
+            val uploadStarted = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("image.attach_bytes") {
+                uploadStarted.complete(Unit)
+                CompletableDeferred<JsonElement>().await()
+            }
+            val retryUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+            val attaching = launch { repository.attach(retryUri) }
+            uploadStarted.await()
+            val attachmentId = repository.state.value.pendingAttachments.single().id
+
+            repository.cancelPendingAttachment(attachmentId)
+            attaching.join()
+
+            assertEquals(AttachmentPhase.ERROR, repository.state.value.pendingAttachments.single().phase)
+            assertEquals("Attachment cancelled", repository.state.value.pendingAttachments.single().error)
+            gateway.enqueue(
+                "image.attach_bytes",
+                json.parseToJsonElement(
+                    """{"attached":false,"path":"","count":0,"text":"","bytes":0,"width":0}""",
+                ),
+            )
+
+            repository.retryPendingAttachment(attachmentId)
+
+            assertEquals(AttachmentPhase.ERROR, repository.state.value.pendingAttachments.single().phase)
+            assertTrue(repository.state.value.pendingAttachments.single().error.orEmpty().contains("did not attach"))
+            gateway.enqueue(
+                "image.attach_bytes",
+                json.parseToJsonElement(
+                    """{"attached":true,"path":"/srv/.hermes/images/retry.png","count":1,"text":"[User attached image]","bytes":4,"width":2}""",
+                ),
+            )
+
+            repository.retryPendingAttachment(attachmentId)
+
+            assertEquals(AttachmentPhase.READY, repository.state.value.pendingAttachments.single().phase)
+            assertTrue(runCatching { context.contentResolver.openInputStream(retryUri)!!.close() }.isFailure)
+            repository.removePendingAttachment(attachmentId)
+
+            val staleUploadStarted = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("image.attach_bytes") {
+                staleUploadStarted.complete(Unit)
+                CompletableDeferred<JsonElement>().await()
+            }
+            val staleUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+            val staleAttachment = launch { repository.attach(staleUri) }
+            staleUploadStarted.await()
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-new","stored_session_id":"stored-new","messages":[],"info":{"stored_session_id":"stored-new"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            assertTrue(repository.newSession())
+            staleAttachment.join()
+
+            assertEquals("live-new", repository.state.value.runtimeSessionId)
+            assertTrue(repository.state.value.pendingAttachments.isEmpty())
+            assertTrue(runCatching { context.contentResolver.openInputStream(staleUri)!!.close() }.isFailure)
         }
     }
 

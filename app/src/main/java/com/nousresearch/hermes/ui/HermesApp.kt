@@ -185,6 +185,7 @@ import com.nousresearch.hermes.data.SessionRestorationStatus
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.PendingAttachment
+import com.nousresearch.hermes.data.AttachmentPhase
 import com.nousresearch.hermes.data.ProfileIdentityDraft
 import com.nousresearch.hermes.data.SlashSuggestion
 import com.nousresearch.hermes.domain.MessageRole
@@ -234,6 +235,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
+private const val MAX_PENDING_ATTACHMENTS = 5
 private enum class WorkspaceContent {
     SESSIONS, CHAT, ARTIFACTS, AUTOMATIONS, MANAGE, APP_SETTINGS,
     SKILLS, CRON, WEBHOOKS, PROFILES, BACKENDS, FILES, DIAGNOSTICS,
@@ -668,7 +670,9 @@ fun HermesApp(
             onDraftChange = viewModel::updateDraft,
             onCompleteSlash = viewModel::completeSlash,
             onExecuteSlash = viewModel::executeSlash,
-            onAttach = viewModel::attach,
+            onAttach = { uris -> uris.forEach(viewModel::attach) },
+            onRetryAttachment = viewModel::retryAttachment,
+            onCancelAttachment = viewModel::cancelAttachment,
             onRemoveAttachment = viewModel::removeAttachment,
             onInterrupt = viewModel::interrupt,
             onApprove = viewModel::approve,
@@ -1045,7 +1049,9 @@ private fun HermesWorkspace(
     onDraftChange: (String) -> Unit,
     onCompleteSlash: (String) -> Unit,
     onExecuteSlash: (String) -> Unit,
-    onAttach: (android.net.Uri) -> Unit,
+    onAttach: (List<android.net.Uri>) -> Unit,
+    onRetryAttachment: (String) -> Unit,
+    onCancelAttachment: (String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
@@ -1240,7 +1246,7 @@ private fun HermesWorkspace(
                 if (conversationReady) {
                     ChatSurface(
                         state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
-                        onAttach, onRemoveAttachment, onInterrupt,
+                        onAttach, onRetryAttachment, onCancelAttachment, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions,
                         Modifier.weight(1f),
                         compactLayout = compact,
@@ -2137,7 +2143,9 @@ private fun ChatSurface(
     onDraftChange: (String) -> Unit,
     onCompleteSlash: (String) -> Unit,
     onExecuteSlash: (String) -> Unit,
-    onAttach: (android.net.Uri) -> Unit,
+    onAttach: (List<android.net.Uri>) -> Unit,
+    onRetryAttachment: (String) -> Unit,
+    onCancelAttachment: (String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     onApprove: (String) -> Unit,
@@ -2215,7 +2223,6 @@ private fun ChatSurface(
                 sending = state.sending || state.runtimeInfo.running || state.timeline.items.any {
                     it is TimelineItem.Message && it.streaming
                 },
-                attaching = state.attaching,
                 connected = connection is GatewayConnectionState.Open,
                 attachmentEnabled = state.supportsRemoteAttachments,
                 attachments = state.pendingAttachments,
@@ -2232,6 +2239,8 @@ private fun ChatSurface(
                 onCompleteSlash = onCompleteSlash,
                 onExecuteSlash = onExecuteSlash,
                 onAttach = onAttach,
+                onRetryAttachment = onRetryAttachment,
+                onCancelAttachment = onCancelAttachment,
                 onRemoveAttachment = onRemoveAttachment,
                 onInterrupt = onInterrupt,
                 voiceViewModel = voiceViewModel,
@@ -2733,7 +2742,6 @@ private fun Composer(
     slashSuggestions: List<SlashSuggestion>,
     slashLoading: Boolean,
     sending: Boolean,
-    attaching: Boolean,
     connected: Boolean,
     attachmentEnabled: Boolean,
     attachments: List<PendingAttachment>,
@@ -2749,7 +2757,9 @@ private fun Composer(
     onDraftChange: (String) -> Unit,
     onCompleteSlash: (String) -> Unit,
     onExecuteSlash: (String) -> Unit,
-    onAttach: (android.net.Uri) -> Unit,
+    onAttach: (List<android.net.Uri>) -> Unit,
+    onRetryAttachment: (String) -> Unit,
+    onCancelAttachment: (String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onInterrupt: () -> Unit,
     voiceViewModel: VoiceViewModel,
@@ -2758,7 +2768,7 @@ private fun Composer(
 ) {
     var pendingDestructiveSlash by rememberSaveable { mutableStateOf<String?>(null) }
     var microphoneDenied by rememberSaveable { mutableStateOf(false) }
-    var capturedCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var capturedCameraUri by remember { mutableStateOf<String?>(null) }
     var cameraError by rememberSaveable { mutableStateOf<String?>(null) }
     var historyMenuOpen by rememberSaveable(historySessionId) { mutableStateOf(false) }
     var historyCursor by rememberSaveable(historySessionId) { mutableIntStateOf(-1) }
@@ -2821,7 +2831,7 @@ private fun Composer(
         return true
     }
     fun submit() {
-        if (draft.isBlank()) return
+        if (draft.isBlank() || attachments.any { !it.ready }) return
         if (draft.trimStart().startsWith('/')) {
             val slash = draft.trim()
             val normalized = slash.lowercase()
@@ -2838,14 +2848,14 @@ private fun Composer(
         focus.clearFocus()
     }
     LaunchedEffect(draft) { onCompleteSlash(draft) }
-    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let(onAttach)
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        onAttach(uris.take((MAX_PENDING_ATTACHMENTS - attachments.size).coerceAtLeast(0)))
     }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
         val uri = capturedCameraUri?.let(Uri::parse)
         capturedCameraUri = null
         if (captured && uri != null) {
-            onAttach(uri)
+            onAttach(listOf(uri))
         } else if (uri != null) {
             context.contentResolver.delete(uri, null, null)
         }
@@ -2874,7 +2884,7 @@ private fun Composer(
             )
             Spacer(Modifier.height(8.dp))
         }
-        if (attachments.isNotEmpty() || attaching) {
+        if (attachments.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -2882,18 +2892,45 @@ private fun Composer(
             ) {
                 attachments.forEach { attachment ->
                     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
+                        Column(Modifier.widthIn(max = 260.dp).padding(start = 10.dp, top = 6.dp, bottom = 6.dp)) {
                             Text(attachment.label, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                            IconButton(
-                                onClick = { onRemoveAttachment(attachment.id) },
-                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                            ) {
-                                Icon(Icons.Outlined.Close, "Remove ${attachment.label}", modifier = Modifier.size(16.dp))
+                            Text(
+                                attachmentStatusText(attachment),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (attachment.phase == AttachmentPhase.ERROR) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (attachment.phase == AttachmentPhase.READING) {
+                                val total = attachment.declaredSize
+                                if (total != null && total > 0) {
+                                    LinearProgressIndicator(
+                                        progress = { (attachment.bytesRead.toFloat() / total).coerceIn(0f, 1f) },
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    )
+                                } else {
+                                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
+                                }
+                            } else if (attachment.phase == AttachmentPhase.UPLOADING) {
+                                LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
+                            }
+                            Row {
+                                when {
+                                    attachment.phase == AttachmentPhase.ERROR -> {
+                                        TextButton(onClick = { onRetryAttachment(attachment.id) }) { Text("Retry") }
+                                        TextButton(onClick = { onRemoveAttachment(attachment.id) }) { Text("Remove") }
+                                    }
+                                    attachment.active -> TextButton(onClick = { onCancelAttachment(attachment.id) }) { Text("Cancel") }
+                                    else -> TextButton(onClick = { onRemoveAttachment(attachment.id) }) { Text("Remove") }
+                                }
                             }
                         }
                     }
                 }
-                if (attaching) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         }
         VoiceStatus(
@@ -2926,8 +2963,11 @@ private fun Composer(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (attachmentEnabled) {
-                IconButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, enabled = connected && !attaching) {
-                    Icon(Icons.Outlined.AttachFile, "Attach a file")
+                IconButton(
+                    onClick = { documentPicker.launch(arrayOf("*/*")) },
+                    enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
+                ) {
+                    Icon(Icons.Outlined.AttachFile, "Attach files")
                 }
                 IconButton(
                     onClick = {
@@ -2943,7 +2983,7 @@ private fun Composer(
                             cameraError = error.message ?: "Android could not open the camera"
                         }
                     },
-                    enabled = connected && !attaching,
+                    enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
                 ) {
                     Icon(Icons.Outlined.PhotoCamera, "Take a photo")
                 }
@@ -3038,11 +3078,14 @@ private fun Composer(
                 ) {
                     Icon(Icons.Outlined.Schedule, "Queue for the next turn")
                 }
-                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) {
+                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank() && attachments.all { it.ready }) {
                     Icon(Icons.AutoMirrored.Outlined.Send, "Steer the current run")
                 }
             } else {
-                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank()) { Icon(Icons.AutoMirrored.Outlined.Send, "Send message") }
+                IconButton(
+                    onClick = ::submit,
+                    enabled = connected && draft.isNotBlank() && attachments.all { it.ready },
+                ) { Icon(Icons.AutoMirrored.Outlined.Send, "Send message") }
             }
         }
         if (sending && attachments.isNotEmpty()) {
@@ -3112,6 +3155,17 @@ private fun Composer(
             dismissButton = { TextButton(onClick = { pendingDestructiveSlash = null }) { Text("Cancel") } },
         )
     }
+}
+
+private fun attachmentStatusText(attachment: PendingAttachment): String = when (attachment.phase) {
+    AttachmentPhase.VALIDATING -> "Validating"
+    AttachmentPhase.READING -> buildString {
+        append("Reading ${attachment.bytesRead} bytes")
+        attachment.declaredSize?.let { append(" / $it") }
+    }
+    AttachmentPhase.UPLOADING -> "Uploading"
+    AttachmentPhase.READY -> "Ready / foreground only"
+    AttachmentPhase.ERROR -> attachment.error ?: "Attachment failed"
 }
 
 @Composable

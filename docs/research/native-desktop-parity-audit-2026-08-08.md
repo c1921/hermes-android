@@ -64,6 +64,11 @@ integration, full device accessibility, and release proof remain incomplete.
   update status without exposing update application as a profile action.
 - Added confirmed host backup creation, exact process-receipt polling, and
   bounded direct-to-SAF ZIP export without persisting archive bytes in app storage.
+- Replaced the global attachment spinner/eager shared batch with a transient,
+  scope-fenced per-item lifecycle: bounded MIME/size validation, exact local-read
+  progress, indeterminate one-frame upload, multi-document selection, and
+  independent retry/cancel/remove. Ready handles remain foreground-only and the
+  durable prompt queue remains text-only until Hermes owns a durable descriptor.
 
 The practical conclusion is not “Android is missing most of Desktop.” The
 foreground client is broad and functional. The remaining distance is

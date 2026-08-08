@@ -336,6 +336,8 @@ class HermesViewModel @Inject constructor(
     fun completeSlash(text: String) = repository.completeSlash(text)
     fun executeSlash(command: String) = viewModelScope.launch { repository.executeSlash(command) }
     fun attach(uri: Uri) = viewModelScope.launch { repository.attach(uri) }
+    fun retryAttachment(id: String) = viewModelScope.launch { repository.retryPendingAttachment(id) }
+    fun cancelAttachment(id: String) = repository.cancelPendingAttachment(id)
     fun removeAttachment(id: String) = viewModelScope.launch { repository.removePendingAttachment(id) }
     fun refreshModels() = viewModelScope.launch { repository.refreshModelOptions(refresh = true) }
     fun selectModel(provider: String, model: String) = viewModelScope.launch { repository.selectModel(provider, model) }
