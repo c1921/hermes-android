@@ -177,6 +177,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.data.BackendConfig
 import com.nousresearch.hermes.data.SessionRestorationStatus
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticAction
@@ -190,6 +191,7 @@ import com.nousresearch.hermes.domain.QueuedPrompt
 import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
+import com.nousresearch.hermes.domain.indexOfServerMessage
 import com.nousresearch.hermes.domain.presentation
 import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.protocol.SessionSearchHit
@@ -266,6 +268,10 @@ private data class QueueActions(
 )
 
 private data class ManagementActions(
+    val refreshArtifacts: (BackendConfig, String) -> Unit,
+    val updateArtifactQuery: (String) -> Unit,
+    val updateArtifactFilter: (com.nousresearch.hermes.data.ArtifactIndexFilter) -> Unit,
+    val loadArtifactPreview: suspend (BackendConfig, com.nousresearch.hermes.domain.DetectedArtifact) -> com.nousresearch.hermes.data.ArtifactPreviewContent,
     val refreshSkills: () -> Unit,
     val toggleSkill: (String, Boolean) -> Unit,
     val loadSkillHub: (String) -> Unit,
@@ -338,6 +344,8 @@ fun HermesApp(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
+    val artifactIndex by viewModel.artifactIndex.collectAsStateWithLifecycle()
+    val artifactPreferences by viewModel.artifactPreferences.collectAsStateWithLifecycle()
     val latestConnectionState = rememberUpdatedState(connection)
     val latestHermesState = rememberUpdatedState(state)
     val entryRequestScope = rememberCoroutineScope()
@@ -376,6 +384,10 @@ fun HermesApp(
     }
     val managementActions = remember(viewModel) {
         ManagementActions(
+            refreshArtifacts = viewModel::refreshArtifacts,
+            updateArtifactQuery = viewModel::updateArtifactQuery,
+            updateArtifactFilter = viewModel::updateArtifactFilter,
+            loadArtifactPreview = viewModel::loadArtifactPreview,
             refreshSkills = viewModel::refreshSkills,
             toggleSkill = viewModel::toggleSkill,
             loadSkillHub = viewModel::loadSkillHub,
@@ -612,6 +624,8 @@ fun HermesApp(
             navigator = navigator,
             onRecovery = { recoveryNotice = it },
             state = state,
+            artifactIndex = artifactIndex,
+            artifactPreferences = artifactPreferences,
             connection = connection,
             onRefresh = viewModel::refresh,
             onSearchSessions = viewModel::searchSessions,
@@ -986,6 +1000,8 @@ private fun HermesWorkspace(
     navigator: HermesNavigator,
     onRecovery: (String?) -> Unit,
     state: HermesState,
+    artifactIndex: ArtifactIndexUiState,
+    artifactPreferences: ArtifactBrowserPreferences,
     connection: GatewayConnectionState,
     onRefresh: () -> Unit,
     onSearchSessions: (String) -> Unit,
@@ -1206,6 +1222,7 @@ private fun HermesWorkspace(
                         },
                         onBack = if (compact) ({ navigator.back(backendId, profileId) }) else null,
                         onFiles = { navigate(WorkspaceContent.FILES) },
+                        focusMessageId = (route as? HermesDestinationRoute.Chats)?.messageId,
                     )
                 } else {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -1215,10 +1232,29 @@ private fun HermesWorkspace(
             }
 
             when (destination) {
-                    WorkspaceContent.ARTIFACTS -> NativeDestinationScreen(
-                        destination = NativeDestination.ARTIFACTS,
+                    WorkspaceContent.ARTIFACTS -> ArtifactsScreen(
+                        backend = requireNotNull(state.backend),
+                        profileId = profileId,
+                        indexState = artifactIndex,
+                        preferences = artifactPreferences,
+                        selectedArtifactId = (route as? HermesDestinationRoute.Artifacts)?.artifactId,
+                        expanded = !compact,
+                        onRefresh = { managementActions.refreshArtifacts(requireNotNull(state.backend), profileId) },
+                        onQueryChange = managementActions.updateArtifactQuery,
+                        onFilterChange = managementActions.updateArtifactFilter,
+                        onSelect = { entry -> navigator.openArtifacts(backendId, profileId, artifactId = entry.artifact.id) },
+                        onOpenChat = { entry ->
+                            navigator.openConversation(
+                                backendId = backendId,
+                                profileId = entry.artifact.origin.profileId,
+                                sessionId = entry.artifact.origin.sessionId,
+                                messageId = entry.artifact.origin.messageId,
+                            )
+                        },
                         onBack = { navigator.back(backendId, profileId) },
-                        onOpenEntry = ::openNativeEntry,
+                        loadPreview = { entry ->
+                            managementActions.loadArtifactPreview(requireNotNull(state.backend), entry.artifact)
+                        },
                         modifier = Modifier.weight(1f),
                     )
                     WorkspaceContent.AUTOMATIONS -> NativeDestinationScreen(
@@ -1554,12 +1590,6 @@ private fun HermesWorkspace(
                 }
                 is HermesDestinationRoute.Artifacts -> when {
                     route.filePath != null -> WorkspaceRouteContent(WorkspaceContent.FILES, filesPath = route.filePath)
-                    route.artifactId != null -> ScopedDestinationScreen(
-                        title = "Artifact",
-                        resourceId = route.artifactId,
-                        onBack = { navigator.back(backendId, profileId) },
-                        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
-                    )
                     else -> WorkspaceRouteContent(WorkspaceContent.ARTIFACTS)
                 }
                 is HermesDestinationRoute.Automations -> if (route.resourceId != null) {
@@ -2072,6 +2102,7 @@ private fun ChatSurface(
     onToolExpandedChange: ((TimelineItem.Tool, Boolean) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     onFiles: (() -> Unit)? = null,
+    focusMessageId: String? = null,
 ) {
     val voiceViewModel: VoiceViewModel = hiltViewModel()
     val speechState by voiceViewModel.speechState.collectAsStateWithLifecycle()
@@ -2101,6 +2132,7 @@ private fun ChatSurface(
                     expandedToolIds = expandedToolIds,
                     toolDisclosureKey = toolDisclosureKey,
                     onToolExpandedChange = onToolExpandedChange,
+                    focusMessageId = focusMessageId,
                 )
             }
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -2220,10 +2252,22 @@ private fun Timeline(
     expandedToolIds: Set<String>,
     toolDisclosureKey: (TimelineItem.Tool) -> String,
     onToolExpandedChange: ((TimelineItem.Tool, Boolean) -> Unit)?,
+    focusMessageId: String?,
 ) {
     val listState = rememberLazyListState()
-    LaunchedEffect(items.size, (items.lastOrNull() as? TimelineItem.Message)?.text?.length) {
-        if (items.isNotEmpty()) listState.animateScrollToItem(items.lastIndex)
+    var focusConsumed by rememberSaveable(focusMessageId) { mutableStateOf(false) }
+    LaunchedEffect(items.size, (items.lastOrNull() as? TimelineItem.Message)?.text?.length, focusMessageId) {
+        if (focusMessageId != null) {
+            if (!focusConsumed) {
+                val target = items.indexOfServerMessage(focusMessageId)
+                if (target >= 0) {
+                    listState.scrollToItem(target)
+                    focusConsumed = true
+                }
+            }
+        } else if (items.isNotEmpty()) {
+            listState.animateScrollToItem(items.lastIndex)
+        }
     }
     LazyColumn(
         state = listState,

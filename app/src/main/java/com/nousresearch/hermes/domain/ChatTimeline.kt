@@ -119,6 +119,15 @@ sealed interface TimelineItem {
     ) : TimelineItem
 }
 
+internal fun List<TimelineItem>.indexOfServerMessage(messageId: String): Int {
+    if (messageId.isBlank()) return -1
+    return indexOfFirst { item ->
+        item.identity.value == messageId ||
+            item.identity.parentServerId == messageId ||
+            item.id == messageId
+    }
+}
+
 enum class MessageRole { USER, ASSISTANT, SYSTEM, TOOL }
 enum class ToolState { RUNNING, COMPLETE, FAILED }
 enum class BlockingRequestKind { APPROVAL, CLARIFICATION, SUDO_PASSWORD, SECRET }

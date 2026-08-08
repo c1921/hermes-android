@@ -96,10 +96,11 @@ class HermesRestClient(
         token: String,
         limit: Int = 50,
         offset: Int = 0,
+        profile: String? = null,
     ): SessionPage = get(
         config,
         token,
-        "/api/profiles/sessions?limit=$limit&offset=$offset&order=recent&profile=all&exclude_sources=cron",
+        "/api/profiles/sessions?limit=$limit&offset=$offset&order=recent&profile=${profile?.takeIf(String::isNotBlank)?.let(::encodePathSegment) ?: "all"}&exclude_sources=cron",
         SessionPage.serializer(),
     )
 

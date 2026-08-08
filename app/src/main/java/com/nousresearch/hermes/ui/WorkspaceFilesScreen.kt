@@ -115,6 +115,7 @@ internal fun WorkspaceFilesScreen(
         previewOpen = state.preview != null,
         parentAvailable = state.listing?.parent != null,
         exitAvailable = onBack != null,
+        atServerRootBoundary = state.listing?.isAtServerRootBoundary() == true,
     )
     val navigateBack: (() -> Unit)? = when (backTarget) {
         WorkspaceFilesBackTarget.CLOSE_PREVIEW -> viewModel::closePreview
@@ -212,7 +213,7 @@ internal fun WorkspaceFilesScreen(
                                 name = "..",
                                 detail = "Parent directory",
                                 directory = true,
-                                onClick = { viewModel.open(parent) },
+                                onClick = navigateBack ?: { viewModel.open(parent) },
                             )
                         }
                     }
@@ -251,12 +252,16 @@ internal fun workspaceFilesBackTarget(
     previewOpen: Boolean,
     parentAvailable: Boolean,
     exitAvailable: Boolean,
+    atServerRootBoundary: Boolean = false,
 ): WorkspaceFilesBackTarget? = when {
     previewOpen -> WorkspaceFilesBackTarget.CLOSE_PREVIEW
+    parentAvailable && (!atServerRootBoundary || !exitAvailable) -> WorkspaceFilesBackTarget.OPEN_PARENT
     exitAvailable -> WorkspaceFilesBackTarget.EXIT_FILES
-    parentAvailable -> WorkspaceFilesBackTarget.OPEN_PARENT
     else -> null
 }
+
+private fun com.nousresearch.hermes.protocol.ManagedFilesResponse.isAtServerRootBoundary(): Boolean =
+    path.trimEnd('/').isNotEmpty() && parent?.trimEnd('/') == ""
 
 @Composable
 private fun FilesHeader(path: String, loading: Boolean, onRefresh: (() -> Unit)?, onBack: (() -> Unit)?) {
@@ -377,7 +382,7 @@ private fun WorkspaceFilePreview.contentBytes(): ByteArray = when (kind) {
 }
 
 @Composable
-private fun RasterPreview(bytes: ByteArray, name: String) {
+internal fun RasterPreview(bytes: ByteArray, name: String) {
     val result by produceState<Result<Bitmap>?>(null, bytes) {
         value = withContext(Dispatchers.Default) {
             runCatching { requireNotNull(decodeBoundedBitmap(bytes)) { "Android could not decode this image" } }
@@ -398,7 +403,7 @@ private fun RasterPreview(bytes: ByteArray, name: String) {
 }
 
 @Composable
-private fun PdfPreview(bytes: ByteArray) {
+internal fun PdfPreview(bytes: ByteArray) {
     val context = LocalContext.current
     var page by rememberSaveable(bytes.contentHashCode()) { mutableStateOf(0) }
     val rendered by produceState<Result<PdfPage>?>(null, bytes, page) {
@@ -430,7 +435,7 @@ private fun PdfPreview(bytes: ByteArray) {
 }
 
 @Composable
-private fun PreviewFailure(message: String) {
+internal fun PreviewFailure(message: String) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -442,7 +447,7 @@ private fun PreviewFailure(message: String) {
 }
 
 @Composable
-private fun SandboxedHtmlPreview(source: String) {
+internal fun SandboxedHtmlPreview(source: String) {
     AndroidView(
         factory = { context ->
             WebView(context).apply {

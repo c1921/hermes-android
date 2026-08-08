@@ -1,29 +1,149 @@
 package com.nousresearch.hermes.ui
 
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nousresearch.hermes.data.AuthMode
 import com.nousresearch.hermes.data.BackendConfig
+import com.nousresearch.hermes.data.ArtifactPreviewContent
+import com.nousresearch.hermes.data.ArtifactPreviewRepository
+import com.nousresearch.hermes.data.ArtifactIndexFilter
+import com.nousresearch.hermes.data.DetectedArtifactIndex
+import com.nousresearch.hermes.data.DetectedArtifactIndexSnapshot
+import com.nousresearch.hermes.data.HermesArtifactSessionLoader
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.HermesRepository
+import com.nousresearch.hermes.domain.DetectedArtifact
+import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
+import com.nousresearch.hermes.security.SecureTokenStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.security.MessageDigest
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+
+private const val ARTIFACT_SCOPE_KEY = "artifacts.scope"
+private const val ARTIFACT_QUERY_KEY = "artifacts.query"
+private const val ARTIFACT_FILTER_KEY = "artifacts.filter"
+
+data class ArtifactIndexUiState(
+    val backendId: String? = null,
+    val profileId: String? = null,
+    val snapshot: DetectedArtifactIndexSnapshot? = null,
+    val loading: Boolean = false,
+    val error: String? = null,
+) {
+    fun matches(backendId: String, profileId: String): Boolean =
+        this.backendId == backendId && this.profileId == profileId
+}
+
+data class ArtifactBrowserPreferences(
+    val scope: String? = null,
+    val query: String = "",
+    val filter: ArtifactIndexFilter = ArtifactIndexFilter.ALL,
+)
 
 @HiltViewModel
 class HermesViewModel @Inject constructor(
     private val repository: HermesRepository,
+    restClient: HermesRestClient,
+    private val tokenStore: SecureTokenStore,
+    private val artifactPreviewRepository: ArtifactPreviewRepository,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val state = repository.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), repository.state.value)
     val connectionState = repository.connectionState
+    private val detectedArtifactIndex = DetectedArtifactIndex(HermesArtifactSessionLoader(restClient))
+    private val mutableArtifactIndex = MutableStateFlow(ArtifactIndexUiState())
+    private val mutableArtifactPreferences = MutableStateFlow(
+        ArtifactBrowserPreferences(
+            scope = savedStateHandle[ARTIFACT_SCOPE_KEY],
+            query = savedStateHandle[ARTIFACT_QUERY_KEY] ?: "",
+            filter = runCatching {
+                ArtifactIndexFilter.valueOf(savedStateHandle[ARTIFACT_FILTER_KEY] ?: ArtifactIndexFilter.ALL.name)
+            }.getOrDefault(ArtifactIndexFilter.ALL),
+        ),
+    )
+    private var artifactRefreshJob: Job? = null
+    val artifactIndex = mutableArtifactIndex.asStateFlow()
+    val artifactPreferences = mutableArtifactPreferences.asStateFlow()
+
+    fun refreshArtifacts(backend: BackendConfig, profileId: String) {
+        val normalizedProfile = profileId.trim()
+        bindArtifactScope(backend.id, normalizedProfile)
+        val current = mutableArtifactIndex.value
+        if (
+            normalizedProfile.isEmpty() ||
+            (current.loading && current.backendId == backend.id && current.profileId == normalizedProfile)
+        ) return
+        artifactRefreshJob?.cancel()
+        mutableArtifactIndex.value = ArtifactIndexUiState(
+            backendId = backend.id,
+            profileId = normalizedProfile,
+            snapshot = current.snapshot?.takeIf {
+                it.backendId == backend.id && it.profileId == normalizedProfile
+            },
+            loading = true,
+        )
+        artifactRefreshJob = viewModelScope.launch {
+            try {
+                val credential = tokenStore.get(backend.id)?.headerValue
+                    ?: error("Reconnect ${backend.label} before loading detected artifacts")
+                val snapshot = detectedArtifactIndex.load(backend, normalizedProfile, credential)
+                if (mutableArtifactIndex.value.matches(backend.id, normalizedProfile)) {
+                    mutableArtifactIndex.value = ArtifactIndexUiState(
+                        backendId = backend.id,
+                        profileId = normalizedProfile,
+                        snapshot = snapshot,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Throwable) {
+                if (mutableArtifactIndex.value.matches(backend.id, normalizedProfile)) {
+                    mutableArtifactIndex.value = mutableArtifactIndex.value.copy(
+                        loading = false,
+                        error = failure.message ?: "Detected artifacts could not be loaded",
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun loadArtifactPreview(
+        backend: BackendConfig,
+        artifact: DetectedArtifact,
+    ): ArtifactPreviewContent = artifactPreviewRepository.load(backend, artifact)
+
+    fun updateArtifactQuery(query: String) {
+        val bounded = query.take(200)
+        mutableArtifactPreferences.value = mutableArtifactPreferences.value.copy(query = bounded)
+        savedStateHandle[ARTIFACT_QUERY_KEY] = bounded
+    }
+
+    fun updateArtifactFilter(filter: ArtifactIndexFilter) {
+        mutableArtifactPreferences.value = mutableArtifactPreferences.value.copy(filter = filter)
+        savedStateHandle[ARTIFACT_FILTER_KEY] = filter.name
+    }
+
+    private fun bindArtifactScope(backendId: String, profileId: String) {
+        val scope = "$backendId\u0000$profileId"
+        if (mutableArtifactPreferences.value.scope == scope) return
+        mutableArtifactPreferences.value = ArtifactBrowserPreferences(scope = scope)
+        savedStateHandle[ARTIFACT_SCOPE_KEY] = scope
+        savedStateHandle[ARTIFACT_QUERY_KEY] = ""
+        savedStateHandle[ARTIFACT_FILTER_KEY] = ArtifactIndexFilter.ALL.name
+    }
 
     fun connect(
         label: String,

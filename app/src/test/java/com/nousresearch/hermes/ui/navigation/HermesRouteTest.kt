@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui.navigation
 
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -39,6 +40,30 @@ class HermesRouteTest {
         listOf("token", "password", "runtime", "transcript", "attachment", "share").forEach { forbidden ->
             assertFalse(encoded.lowercase().contains(forbidden))
         }
+    }
+
+    @Test
+    fun `chat message origin survives process restoration serialization`() {
+        val route: HermesRoute = HermesDestinationRoute.Chats(
+            backendId = "backend-1",
+            profileId = "research",
+            sessionId = "session-1",
+            messageId = "message-42",
+        )
+        val encoded = Json.encodeToString<HermesRoute>(route)
+
+        assertEquals(route, Json.decodeFromString<HermesRoute>(encoded))
+    }
+
+    @Test
+    fun `selected artifact survives process restoration serialization`() {
+        val route: HermesRoute = HermesDestinationRoute.Artifacts(
+            backendId = "backend-1",
+            profileId = "research",
+            artifactId = "artifact-42",
+        )
+
+        assertEquals(route, Json.decodeFromString<HermesRoute>(Json.encodeToString(route)))
     }
 
     @Test
@@ -282,6 +307,51 @@ class HermesRouteTest {
             assertTrue(result.explanation.orEmpty().contains("could not be verified"))
             assertEquals(null, (result.route as HermesDestinationRoute).resourceIdForTest())
         }
+    }
+
+    @Test
+    fun `external chat message reference is stripped while verified session remains`() {
+        val result = resolveEntryDestination(
+            route = HermesDestinationRoute.Chats(
+                backendId = "backend-1",
+                profileId = "default",
+                sessionId = "session-1",
+                messageId = "message-42",
+            ),
+            availableBackendIds = setOf("backend-1"),
+            authenticatedBackendId = "backend-1",
+            authoritativeSessions = setOf(SessionIdentity("backend-1", "default", "session-1")),
+            authoritativeProfileIds = setOf("default"),
+            fallbackProfileId = "default",
+            authoritativeAutomationResources = emptySet(),
+        )
+
+        assertEquals(
+            HermesDestinationRoute.Chats("backend-1", "default", "session-1"),
+            result.route,
+        )
+        assertTrue(result.explanation.orEmpty().contains("message"))
+        assertTrue(result.mutationsEnabled)
+    }
+
+    @Test
+    fun `verified internal chat route preserves its message origin`() {
+        val route = HermesDestinationRoute.Chats(
+            backendId = "backend-1",
+            profileId = "default",
+            sessionId = "session-1",
+            messageId = "message-42",
+        )
+
+        val result = resolveRestoredRoute(
+            route = route,
+            availableBackendIds = setOf("backend-1"),
+            authenticatedBackendId = "backend-1",
+            authoritativeSessions = setOf(SessionIdentity("backend-1", "default", "session-1")),
+        )
+
+        assertEquals(route, result.route)
+        assertTrue(result.mutationsEnabled)
     }
 
     @Test

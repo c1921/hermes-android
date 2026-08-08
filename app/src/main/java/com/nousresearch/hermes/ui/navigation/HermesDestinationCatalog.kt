@@ -159,6 +159,7 @@ object HermesDestinationUri {
                 "backend" to route.backendId,
                 "profile" to route.profileId,
                 "session" to route.sessionId,
+                "message" to route.messageId,
             )
             is HermesDestinationRoute.Artifacts -> "artifacts" to listOf(
                 "backend" to route.backendId,
@@ -203,8 +204,13 @@ object HermesDestinationUri {
         return runCatching {
             when (uri.host) {
                 "chats" -> {
-                    if (!query.hasOnly("backend", "profile", "session")) return null
-                    HermesDestinationRoute.Chats(query.required("backend"), query.required("profile"), query["session"])
+                    if (!query.hasOnly("backend", "profile", "session", "message")) return null
+                    HermesDestinationRoute.Chats(
+                        query.required("backend"),
+                        query.required("profile"),
+                        query["session"],
+                        query["message"],
+                    )
                 }
                 "artifacts" -> {
                     if (!query.hasOnly("backend", "profile", "artifact", "path")) return null

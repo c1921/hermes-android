@@ -17,11 +17,21 @@ fun textShareIntent(text: String): Intent = Intent(Intent.ACTION_SEND).apply {
 fun sharedFileUri(context: Context, name: String, bytes: ByteArray): Uri {
     require(bytes.isNotEmpty()) { "The file is empty" }
     val root = File(context.cacheDir, "shared").apply { check(mkdirs() || isDirectory) }
-    root.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > SHARED_FILE_MAX_AGE_MS }
-        ?.forEach(File::deleteRecursively)
+    pruneStaleSharedFiles(root, System.currentTimeMillis())
     val directory = File(root, UUID.randomUUID().toString()).apply { check(mkdir()) }
     val file = File(directory, safeContentName(name, "hermes-file")).apply { writeBytes(bytes) }
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
+internal fun pruneStaleSharedFiles(
+    root: File,
+    nowMillis: Long,
+    maxAgeMillis: Long = SHARED_FILE_MAX_AGE_MS,
+) {
+    require(maxAgeMillis >= 0) { "Maximum shared-file age must not be negative" }
+    root.listFiles()
+        ?.filter { nowMillis - it.lastModified() > maxAgeMillis }
+        ?.forEach(File::deleteRecursively)
 }
 
 fun fileShareIntent(uri: Uri, mimeType: String, name: String): Intent = Intent(Intent.ACTION_SEND).apply {

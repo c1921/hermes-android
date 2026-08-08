@@ -64,8 +64,13 @@ class HermesNavigator(private val controller: NavHostController) {
         navigate(route, clearHistory)
     }
 
-    fun openChats(backendId: String, profileId: String, sessionId: String? = null) {
-        navigate(HermesDestinationRoute.Chats(backendId, profileId, sessionId))
+    fun openChats(
+        backendId: String,
+        profileId: String,
+        sessionId: String? = null,
+        messageId: String? = null,
+    ) {
+        navigate(HermesDestinationRoute.Chats(backendId, profileId, sessionId, messageId))
     }
 
     fun openArtifacts(
@@ -100,8 +105,13 @@ class HermesNavigator(private val controller: NavHostController) {
         navigate(HermesDestinationRoute.AppSettings(section))
     }
 
-    fun openConversation(backendId: String, profileId: String, sessionId: String) {
-        navigate(HermesDestinationRoute.Chats(backendId, profileId, sessionId))
+    fun openConversation(
+        backendId: String,
+        profileId: String,
+        sessionId: String,
+        messageId: String? = null,
+    ) {
+        navigate(HermesDestinationRoute.Chats(backendId, profileId, sessionId, messageId))
     }
 
     fun openFiles(backendId: String, profileId: String, path: String?) {

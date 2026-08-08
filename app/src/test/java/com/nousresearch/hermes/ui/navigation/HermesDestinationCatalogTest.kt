@@ -96,7 +96,12 @@ class HermesDestinationCatalogTest {
     @Test
     fun `deep link codec round trips every product home including explicit artifact path`() {
         val routes = listOf<HermesDestinationRoute>(
-            HermesDestinationRoute.Chats("backend one", "research", "session/1"),
+            HermesDestinationRoute.Chats(
+                "backend one",
+                "research",
+                "session/1",
+                messageId = "message/1",
+            ),
             HermesDestinationRoute.Artifacts("backend one", "research", filePath = "/workspace/report one.md"),
             HermesDestinationRoute.Automations(
                 "backend one",
@@ -117,6 +122,29 @@ class HermesDestinationCatalogTest {
         routes.forEach { route ->
             assertEquals(route, HermesDestinationUri.parse(HermesDestinationUri.encode(route)))
         }
+    }
+
+    @Test
+    fun `chat message origin is bounded by the chats codec allowlist`() {
+        val route = HermesDestinationRoute.Chats(
+            backendId = "backend",
+            profileId = "profile",
+            sessionId = "session",
+            messageId = "message-42",
+        )
+        val encoded = HermesDestinationUri.encode(route)
+
+        assertTrue(encoded.contains("message="))
+        assertEquals(route, HermesDestinationUri.parse(encoded))
+        assertEquals(
+            route,
+            HermesDestinationUri.parse("hermes://chats?backend=backend&profile=profile&session=session&message=message-42"),
+        )
+        assertNull(
+            HermesDestinationUri.parse(
+                "hermes://chats?backend=backend&profile=profile&session=session&messageId=message-42",
+            ),
+        )
     }
 
     @Test

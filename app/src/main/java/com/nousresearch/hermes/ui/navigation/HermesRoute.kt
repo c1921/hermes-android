@@ -90,10 +90,12 @@ sealed interface HermesDestinationRoute : HermesRoute {
         val backendId: String,
         val profileId: String,
         val sessionId: String? = null,
+        val messageId: String? = null,
     ) : HermesDestinationRoute {
         init {
             requireRemoteIdentity(backendId, profileId)
             requireOptionalStableId(sessionId)
+            requireOptionalStableId(messageId)
         }
     }
 
@@ -319,7 +321,15 @@ fun resolveEntryDestination(
         } else {
             restored
         }
-        is HermesDestinationRoute.Chats,
+        is HermesDestinationRoute.Chats -> if (route.messageId != null) {
+            RouteResolution(
+                route = HermesDestinationRoute.Chats(route.backendId, route.profileId, route.sessionId),
+                explanation = "This external transcript message reference could not be verified. Opened Chats without the message instead.",
+                mutationsEnabled = restored.mutationsEnabled,
+            )
+        } else {
+            restored
+        }
         is HermesDestinationRoute.AppSettings,
         -> restored
     }
