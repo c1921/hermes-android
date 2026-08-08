@@ -2231,23 +2231,16 @@ private fun Timeline(
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val renderContext = TimelineRenderContext(
+            speechState = speechState,
+            onSpeak = onSpeak,
+            onStopSpeaking = onStopSpeaking,
+            expandedToolIds = expandedToolIds,
+            toolDisclosureKey = toolDisclosureKey,
+            onToolExpandedChange = onToolExpandedChange,
+        )
         items(items, key = { it.id }) { item ->
-            when (item) {
-                is TimelineItem.Message -> MessageBlock(
-                    message = item,
-                    speechState = speechState,
-                    onSpeak = { onSpeak(item.id, item.text) },
-                    onStopSpeaking = onStopSpeaking,
-                )
-                is TimelineItem.Tool -> ToolBlock(
-                    tool = item,
-                    expanded = item.id in expandedToolIds,
-                    disclosureKey = toolDisclosureKey(item),
-                    onExpandedChange = onToolExpandedChange,
-                )
-                is TimelineItem.Reasoning -> ReasoningBlock(item)
-                is TimelineItem.Status -> StatusBlock(item)
-            }
+            TimelineRendererRegistry.Render(item, renderContext)
         }
     }
 }
@@ -2570,7 +2563,7 @@ private fun ToolTranscriptContent(
 }
 
 @Composable
-private fun ReasoningBlock(reasoning: TimelineItem.Reasoning) {
+internal fun ReasoningBlock(reasoning: TimelineItem.Reasoning) {
     var expanded by rememberSaveable(reasoning.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 4.dp)) {
         Text("REASONING ${if (expanded) "−" else "+"}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2579,7 +2572,7 @@ private fun ReasoningBlock(reasoning: TimelineItem.Reasoning) {
 }
 
 @Composable
-private fun StatusBlock(status: TimelineItem.Status) {
+internal fun StatusBlock(status: TimelineItem.Status) {
     val colour = when {
         status.kind == "compacting" || status.kind == "context_pressure" -> WarningColor
         status.kind == "goal" && status.text.startsWith("✓") -> MaterialTheme.colorScheme.tertiary

@@ -82,6 +82,11 @@ class TimelineReducerTest {
             items = listOf(
                 TimelineItem.Reasoning("reasoning:runtime-1:3:reasoning.delta", "Checking", streaming = true),
                 TimelineItem.Tool("tool-7", "terminal", context = "workspace", state = ToolState.RUNNING),
+                TimelineItem.BlockingRequest(
+                    "request:clarify-8",
+                    BlockingRequestKind.CLARIFICATION,
+                    "Which branch?",
+                ),
             ),
             approval = ApprovalRequest("runtime-1", "git status", "Inspect worktree", listOf("once", "deny")),
             clarification = ClarificationRequest("runtime-1", "clarify-8", "Which branch?", listOf("dev", "main")),
@@ -111,6 +116,7 @@ class TimelineReducerTest {
         assertEquals(3, result.generation)
         assertTrue(result.items.any { it.id == "reasoning:runtime-1:3:reasoning.delta" })
         assertTrue(result.items.any { it.id == "tool-7" })
+        assertTrue(result.items.any { it.id == "request:clarify-8" })
     }
 
     @Test
@@ -268,6 +274,214 @@ class TimelineReducerTest {
     }
 
     @Test
+    fun `structured history preserves ordered typed parts and explicit identity provenance`() {
+        val state = TimelineReducer.hydrate(
+            listOf(
+                ProtocolMessage(
+                    id = "server-turn-7",
+                    role = "assistant",
+                    content = buildJsonArray {
+                        add(buildJsonObject { put("type", "text"); put("text", "Answer") })
+                        add(buildJsonObject {
+                            put("type", "reference")
+                            put("label", "Model B")
+                            put("text", "Alternative")
+                        })
+                        add(buildJsonObject {
+                            put("type", "artifact")
+                            put("artifact_id", "artifact-1")
+                            put("name", "report.md")
+                            put("mime", "text/markdown")
+                        })
+                        add(buildJsonObject {
+                            put("type", "tool-call")
+                            put("tool_id", "tool-8")
+                            put("name", "terminal")
+                            put("arguments", buildJsonObject { put("command", "git status") })
+                        })
+                        add(buildJsonObject { put("type", "error"); put("message", "Partial failure") })
+                    },
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                TimelineItem.Message::class,
+                TimelineItem.Reference::class,
+                TimelineItem.Artifact::class,
+                TimelineItem.Tool::class,
+                TimelineItem.Error::class,
+            ),
+            state.items.map { it::class },
+        )
+        assertTrue(state.items.all { it.identity.parentServerId == "server-turn-7" })
+        assertEquals(TimelineIdentityKind.GENERATED_FALLBACK, state.items.first().identity.kind)
+        assertEquals(TimelineIdentityKind.SERVER, state.items.filterIsInstance<TimelineItem.Tool>().single().identity.kind)
+    }
+
+    @Test
+    fun `server ids are preferred while legacy history ids remain explicit fallbacks`() {
+        val state = TimelineReducer.hydrate(
+            listOf(
+                ProtocolMessage(id = "server-message", role = "user", text = "Stable"),
+                ProtocolMessage(role = "assistant", text = "Legacy"),
+            ),
+        )
+
+        assertEquals(TimelineIdentityKind.SERVER, state.items[0].identity.kind)
+        assertEquals("server-message", state.items[0].identity.value)
+        assertEquals(TimelineIdentityKind.GENERATED_FALLBACK, state.items[1].identity.kind)
+    }
+
+    @Test
+    fun `fallback message start and stable blocking request ids make replay idempotent`() {
+        val start = GatewayEvent(
+            "message.start",
+            "runtime-1",
+            buildJsonObject { put("id", "message-7") },
+        )
+        val clarify = GatewayEvent(
+            "clarify.request",
+            "runtime-1",
+            buildJsonObject {
+                put("request_id", "clarify-8")
+                put("question", "Which branch?")
+            },
+        )
+        var state = TimelineReducer.reduce(TimelineState(), start)
+        state = TimelineReducer.reduce(state, start)
+        state = TimelineReducer.reduce(state, clarify)
+        state = TimelineReducer.reduce(state, clarify)
+
+        assertEquals(1, state.items.filterIsInstance<TimelineItem.Message>().size)
+        assertEquals(1, state.items.filterIsInstance<TimelineItem.BlockingRequest>().size)
+        assertEquals(TimelineIdentityKind.GENERATED_FALLBACK, state.items.first().identity.kind)
+        assertEquals(
+            TimelineIdentityKind.SERVER,
+            state.items.filterIsInstance<TimelineItem.BlockingRequest>().single().identity.kind,
+        )
+    }
+
+    @Test
+    fun `events from another runtime cannot mutate the active projection`() {
+        val active = TimelineReducer.reduce(TimelineState(), GatewayEvent("message.start", "runtime-a"))
+
+        val raced = TimelineReducer.reduce(
+            active,
+            event("message.delta", "runtime-b", "text", "wrong session"),
+        )
+
+        assertEquals(active, raced)
+    }
+
+    @Test
+    fun `unscoped events cannot mutate a runtime bound projection`() {
+        val active = TimelineReducer.reduce(TimelineState(), GatewayEvent("message.start", "runtime-a"))
+
+        val raced = TimelineReducer.reduce(active, event("message.delta", null, "text", "unscoped"))
+
+        assertEquals(active, raced)
+    }
+
+    @Test
+    fun `replayed fallback terminal frames do not fork a completed turn`() {
+        var state = TimelineReducer.appendUserMessage(TimelineState(), "local:1", "Question")
+        state = TimelineReducer.reduce(state, GatewayEvent("message.start", "runtime-1"))
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Answer"))
+        state = TimelineReducer.reduce(state, event("message.complete", "runtime-1", "text", "Answer"))
+        val completed = state
+
+        state = TimelineReducer.reduce(state, GatewayEvent("message.start", "runtime-1"))
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Answer"))
+        state = TimelineReducer.reduce(state, event("message.complete", "runtime-1", "text", "Answer"))
+
+        assertEquals(completed, state)
+    }
+
+    @Test
+    fun `terminal tool state cannot be reopened by late progress`() {
+        val complete = GatewayEvent(
+            "tool.complete",
+            "runtime-1",
+            buildJsonObject { put("tool_id", "tool-1"); put("name", "terminal"); put("summary", "Done") },
+        )
+        val progress = GatewayEvent(
+            "tool.progress",
+            "runtime-1",
+            buildJsonObject { put("tool_id", "tool-1"); put("name", "terminal"); put("args_text", "late") },
+        )
+
+        val completed = TimelineReducer.reduce(TimelineState(), complete)
+        val raced = TimelineReducer.reduce(completed, progress)
+
+        assertEquals(completed, raced)
+    }
+
+    @Test
+    fun `terminal message error keeps partial output and structured failure`() {
+        var state = TimelineReducer.appendUserMessage(TimelineState(), "local:1", "Question")
+        state = TimelineReducer.reduce(state, GatewayEvent("message.start", "runtime-1"))
+        state = TimelineReducer.reduce(state, event("message.delta", "runtime-1", "text", "Half an answer"))
+        state = TimelineReducer.reduce(
+            state,
+            GatewayEvent(
+                "message.complete",
+                "runtime-1",
+                buildJsonObject {
+                    put("status", "error")
+                    put("text", "Half an answer")
+                    put("error", "connection reset")
+                    put("partial", true)
+                    put("recoverable", true)
+                },
+            ),
+        )
+
+        val assistant = state.items.filterIsInstance<TimelineItem.Message>().last()
+        val error = state.items.filterIsInstance<TimelineItem.Error>().single()
+        assertEquals("Half an answer", assistant.text)
+        assertTrue(assistant.failed)
+        assertEquals("connection reset", error.message)
+        assertTrue(error.recoverable)
+    }
+
+    @Test
+    fun `malformed deltas and unadvertised replay envelopes are inert fallbacks`() {
+        val original = TimelineState()
+        val malformed = TimelineReducer.reduce(original, GatewayEvent("message.delta", "runtime-1"))
+        val replay = TimelineReducer.reduce(original, GatewayEvent("resync.required", "runtime-1"))
+
+        assertEquals(original.copy(runtimeSessionId = "runtime-1"), malformed)
+        assertEquals(original, replay)
+        assertEquals(TimelineSyncMode.AUTHORITATIVE_RESUME, malformed.sync.mode)
+    }
+
+    @Test
+    fun `message completion clears stale blocking parts and keeps recoverable error typed`() {
+        var state = TimelineReducer.reduce(
+            TimelineState(),
+            GatewayEvent(
+                "secret.request",
+                "runtime-1",
+                buildJsonObject { put("request_id", "secret-1"); put("prompt", "Token") },
+            ),
+        )
+        state = TimelineReducer.reduce(
+            state,
+            GatewayEvent(
+                "error",
+                "runtime-1",
+                buildJsonObject { put("message", "Provider failed"); put("recoverable", true) },
+            ),
+        )
+
+        assertTrue(state.sensitiveInput == null)
+        assertTrue(state.items.none { it is TimelineItem.BlockingRequest })
+        assertTrue((state.items.last() as TimelineItem.Error).recoverable)
+    }
+
+    @Test
     fun `transient status replaces its predecessor and ready clears it`() {
         var state = TimelineState(items = listOf(TimelineItem.Message("u1", MessageRole.USER, "Keep me")))
         state = TimelineReducer.reduce(
@@ -381,7 +595,7 @@ class TimelineReducerTest {
         assertEquals("Retry this @file:notes.txt", lastUserPrompt(messages))
     }
 
-    private fun event(type: String, sessionId: String, key: String, value: String) = GatewayEvent(
+    private fun event(type: String, sessionId: String?, key: String, value: String) = GatewayEvent(
         type,
         sessionId,
         buildJsonObject { put(key, value) },
