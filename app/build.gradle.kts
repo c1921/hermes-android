@@ -117,30 +117,30 @@ val provenanceSigningFingerprint = if (provenanceChannel == "release") {
 } else {
     configuredDebugFingerprint
 }
+val provenanceContent = listOf(
+    "android.version=$provenanceVersionName",
+    "android.version_code=$appVersionCode",
+    "android.channel=$provenanceChannel",
+    "android.commit=$androidCommit",
+    "hermes.audited_commit=$auditedHermesCommit",
+    "hermes.agent_version=$hermesAgentVersion",
+    "hermes.agent_version_range==${hermesAgentVersion}",
+    "hermes.desktop_version=$hermesDesktopVersion",
+    "hermes.desktop_version_range==${hermesDesktopVersion}",
+    "toolchain.digest=$toolchainDigest",
+    "build.identity=$buildIdentity",
+    "build.package=$provenancePackageName",
+    "build.signing_fingerprint=$provenanceSigningFingerprint",
+    "build.author=luinbytes",
+).joinToString("\n", postfix = "\n")
 
 tasks.register("writeBuildProvenance") {
+    inputs.property("content", provenanceContent)
     outputs.file(provenanceOutput)
     doLast {
         val output = provenanceOutput.get().asFile
         output.parentFile.mkdirs()
-        output.writeText(
-            listOf(
-                "android.version=$provenanceVersionName",
-                "android.version_code=$appVersionCode",
-                "android.channel=$provenanceChannel",
-                "android.commit=$androidCommit",
-                "hermes.audited_commit=$auditedHermesCommit",
-                "hermes.agent_version=$hermesAgentVersion",
-                "hermes.agent_version_range==${hermesAgentVersion}",
-                "hermes.desktop_version=$hermesDesktopVersion",
-                "hermes.desktop_version_range==${hermesDesktopVersion}",
-                "toolchain.digest=$toolchainDigest",
-                "build.identity=$buildIdentity",
-                "build.package=$provenancePackageName",
-                "build.signing_fingerprint=$provenanceSigningFingerprint",
-                "build.author=luinbytes",
-            ).joinToString("\n", postfix = "\n"),
-        )
+        output.writeText(provenanceContent)
     }
 }
 
