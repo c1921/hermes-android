@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.ui.theme
 
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -44,6 +45,16 @@ class HermesThemeTest {
     fun `unknown persisted skin returns to nous`() {
         assertEquals(HermesSkin.NOUS, HermesSkin.fromId("retired-theme"))
         assertEquals(HermesSkin.NOUS, HermesSkin.fromId(null))
+    }
+
+    @Test
+    fun `system bar icon contrast follows the active skin background`() {
+        assertEquals(true, useDarkSystemBarIcons(Color.White))
+        assertEquals(false, useDarkSystemBarIcons(Color.Black))
+        HermesSkin.entries.forEach { skin ->
+            assertEquals(!useDarkSystemBarIcons(skin.palette(dark = true).background), true)
+            assertEquals(useDarkSystemBarIcons(skin.palette(dark = false).background), true)
+        }
     }
 
     private fun HermesPalette.fingerprint(): String = listOf(

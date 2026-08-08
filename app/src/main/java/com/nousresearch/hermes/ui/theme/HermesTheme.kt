@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -8,8 +9,10 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -17,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nousresearch.hermes.R
+import androidx.core.view.WindowCompat
 
 val NousBlue = Color(0xFF0053FD)
 val HermesPaper = Color(0xFFFFE6CB)
@@ -270,6 +274,8 @@ private fun mix(a: Color, b: Color, amount: Float): Color = Color(
 
 private fun readableOn(color: Color): Color = if (color.luminance() > 0.58f) Color(0xFF161616) else Color.White
 
+internal fun useDarkSystemBarIcons(background: Color): Boolean = background.luminance() > 0.5f
+
 private val HermesDisplay = FontFamily(Font(R.font.cormorant_garamond, weight = FontWeight.Light))
 
 private val HermesMono = FontFamily(
@@ -308,6 +314,17 @@ fun HermesTheme(
         colorScheme = skin.colorScheme(darkTheme),
         typography = HermesTypography,
         shapes = HermesShapes,
-        content = content,
-    )
+    ) {
+        val view = LocalView.current
+        val darkIcons = useDarkSystemBarIcons(MaterialTheme.colorScheme.background)
+        SideEffect {
+            (view.context as? Activity)?.window?.let { window ->
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = darkIcons
+                    isAppearanceLightNavigationBars = darkIcons
+                }
+            }
+        }
+        content()
+    }
 }
