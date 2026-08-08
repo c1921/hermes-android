@@ -199,8 +199,11 @@ class VoiceViewModel @Inject constructor(
                         mutableSpeechState.value = SpeechUiState()
                     }
                 }
+                val mediaStop: () -> Unit = {
+                    if (generation == speechGeneration) stopSpeaking()
+                }
                 val streamed = voice.streamSpeech(config, profile, speakableText) { format ->
-                    player.beginPcmStream(format, status, playbackError, playbackComplete)
+                    player.beginPcmStream(format, status, playbackError, playbackComplete, mediaStop)
                 }
                 if (generation != speechGeneration) return@launch
                 if (streamed == StreamedSpeechResult.COMPLETED) return@launch
@@ -212,6 +215,7 @@ class VoiceViewModel @Inject constructor(
                     onStatus = status,
                     onError = playbackError,
                     onComplete = playbackComplete,
+                    onStop = mediaStop,
                 )
             } catch (cancelled: CancellationException) {
                 if (generation == speechGeneration) player.stop()

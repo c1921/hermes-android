@@ -2364,13 +2364,11 @@ internal fun Timeline(
         }
     }
     LaunchedEffect(items.size, items.lastOrNull(), focusMessageId, followLatest) {
-        if (focusMessageId != null) {
-            if (!focusConsumed) {
-                val target = items.indexOfServerMessage(focusMessageId)
-                if (target >= 0) {
-                    listState.scrollToItem(target)
-                    focusConsumed = true
-                }
+        if (focusMessageId != null && !focusConsumed) {
+            val target = items.indexOfServerMessage(focusMessageId)
+            if (target >= 0) {
+                listState.scrollToItem(target)
+                focusConsumed = true
             }
         } else if (followLatest && items.isNotEmpty()) {
             listState.scrollToItem(items.lastIndex)
@@ -2400,7 +2398,10 @@ internal fun Timeline(
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) {
             SmallFloatingActionButton(
-                onClick = { followLatest = true },
+                onClick = {
+                    focusConsumed = true
+                    followLatest = true
+                },
             ) {
                 Icon(Icons.Outlined.KeyboardArrowDown, "Jump to latest message")
             }

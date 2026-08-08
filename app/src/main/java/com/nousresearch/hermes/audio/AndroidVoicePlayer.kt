@@ -80,6 +80,7 @@ class AndroidVoicePlayer @Inject constructor(
     private var statusCallback: ((VoicePlaybackStatus) -> Unit)? = null
     private var errorCallback: ((String) -> Unit)? = null
     private var completionCallback: (() -> Unit)? = null
+    private var mediaStopCallback: (() -> Unit)? = null
     private var resumeAfterFocusGain = false
     private var mediaSession: MediaSession? = null
     private var playbackGeneration = 0L
@@ -96,6 +97,7 @@ class AndroidVoicePlayer @Inject constructor(
         onStatus: (VoicePlaybackStatus) -> Unit,
         onError: (String) -> Unit,
         onComplete: () -> Unit,
+        onStop: (() -> Unit)? = null,
     ) {
         stop()
         val generation = playbackGeneration
@@ -123,6 +125,7 @@ class AndroidVoicePlayer @Inject constructor(
             statusCallback = onStatus
             errorCallback = onError
             completionCallback = onComplete
+            mediaStopCallback = onStop
             prepareMediaSession()
             publishMediaState(PlaybackState.STATE_BUFFERING)
             next.setOnPreparedListener { prepared ->
@@ -170,6 +173,7 @@ class AndroidVoicePlayer @Inject constructor(
         onStatus: (VoicePlaybackStatus) -> Unit,
         onError: (String) -> Unit,
         onComplete: () -> Unit,
+        onStop: (() -> Unit)? = null,
     ): PcmAudioSink {
         stop()
         val generation = playbackGeneration
@@ -181,6 +185,7 @@ class AndroidVoicePlayer @Inject constructor(
             statusCallback = onStatus
             errorCallback = onError
             completionCallback = onComplete
+            mediaStopCallback = onStop
             prepareMediaSession()
             publishMediaState(PlaybackState.STATE_BUFFERING)
             track.addOnRoutingChangedListener(
@@ -450,6 +455,7 @@ class AndroidVoicePlayer @Inject constructor(
         statusCallback = null
         errorCallback = null
         completionCallback = null
+        mediaStopCallback = null
         resumeAfterFocusGain = false
         releaseAudioFocus()
         mediaSession?.setPlaybackState(
@@ -474,7 +480,11 @@ class AndroidVoicePlayer @Inject constructor(
                 object : MediaSession.Callback() {
                     override fun onPlay() = resume()
                     override fun onPause() = pause()
-                    override fun onStop() = stop()
+                    override fun onStop() {
+                        val callback = synchronized(this@AndroidVoicePlayer) { mediaStopCallback }
+                        stop()
+                        callback?.invoke()
+                    }
                 },
                 mainHandler,
             )

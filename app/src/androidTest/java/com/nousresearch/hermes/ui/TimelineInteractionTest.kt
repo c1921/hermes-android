@@ -51,4 +51,37 @@ class TimelineInteractionTest {
         compose.waitForIdle()
         compose.onNodeWithText("message-29").assertIsDisplayed()
     }
+
+    @Test
+    fun jumpToLatestOverridesConsumedFocusedMessage() {
+        val items = List(30) { index ->
+            TimelineItem.Message(
+                id = "message-$index",
+                role = MessageRole.ASSISTANT,
+                text = "message-$index",
+            )
+        }
+
+        compose.setContent {
+            HermesTheme {
+                Timeline(
+                    items = items,
+                    speechState = SpeechUiState(),
+                    onSpeak = { _, _ -> },
+                    onStopSpeaking = {},
+                    expandedToolIds = emptySet(),
+                    toolDisclosureKey = { it.id },
+                    onToolExpandedChange = null,
+                    focusMessageId = "message-5",
+                )
+            }
+        }
+
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithContentDescription("Jump to latest message").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Jump to latest message").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("message-29").assertIsDisplayed()
+    }
 }
