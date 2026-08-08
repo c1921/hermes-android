@@ -30,7 +30,7 @@ jobs:
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: >-
           ./gradlew --no-daemon --no-parallel --max-workers=2
-          :app:testDebugUnitTest :app:lintDebug :app:lintRelease
+          :app:testDebugUnitTest :app:lintDebug
 
   dev-artifacts:
     name: Dev debug APK and AAB
@@ -179,7 +179,7 @@ jobs:
           set -euo pipefail
           ./gradlew --no-daemon --no-parallel --max-workers=2 clean \
             -Phermes.provenance.channel=release \
-            :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease :app:cyclonedxDirectBom
+            :app:writeBuildProvenance :app:lintRelease :app:assembleRelease :app:bundleRelease :app:cyclonedxDirectBom
           mkdir -p "$RUNNER_TEMP/hermes-candidate/first"
           cp app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/hermes-candidate/first/hermes-android.apk"
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-candidate/first/hermes-android.aab"
