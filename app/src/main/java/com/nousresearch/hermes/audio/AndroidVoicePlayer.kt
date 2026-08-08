@@ -81,9 +81,11 @@ class AndroidVoicePlayer @Inject constructor(
     private var errorCallback: ((String) -> Unit)? = null
     private var completionCallback: (() -> Unit)? = null
     private var mediaStopCallback: (() -> Unit)? = null
+    private var streamFailureCallback: (() -> Unit)? = null
     private var resumeAfterFocusGain = false
     private var mediaSession: MediaSession? = null
     private var playbackGeneration = 0L
+    private var pcmDrainRunnable: Runnable? = null
 
     init {
         context.cacheDir.listFiles { file -> file.name.startsWith(SPEECH_FILE_PREFIX) }
@@ -174,6 +176,7 @@ class AndroidVoicePlayer @Inject constructor(
         onError: (String) -> Unit,
         onComplete: () -> Unit,
         onStop: (() -> Unit)? = null,
+        onStreamFailure: (() -> Unit)? = null,
     ): PcmAudioSink {
         stop()
         val generation = playbackGeneration
@@ -186,6 +189,7 @@ class AndroidVoicePlayer @Inject constructor(
             errorCallback = onError
             completionCallback = onComplete
             mediaStopCallback = onStop
+            streamFailureCallback = onStreamFailure
             prepareMediaSession()
             publishMediaState(PlaybackState.STATE_BUFFERING)
             track.addOnRoutingChangedListener(
@@ -229,7 +233,13 @@ class AndroidVoicePlayer @Inject constructor(
                 return
             }
             runCatching { activePcm.play() }
-                .onSuccess { notifyStatus(VoicePlaybackPhase.PLAYING) }
+                .onSuccess {
+                    notifyStatus(VoicePlaybackPhase.PLAYING)
+                    pcmDrainRunnable?.let { drain ->
+                        mainHandler.removeCallbacks(drain)
+                        mainHandler.post(drain)
+                    }
+                }
                 .onFailure { fail("Android could not resume the Hermes PCM stream") }
             return
         }
@@ -346,8 +356,10 @@ class AndroidVoicePlayer @Inject constructor(
             override fun run() {
                 synchronized(this@AndroidVoicePlayer) {
                     if (pcmTrack !== track || playbackGeneration != generation) return
+                    if (track.playState == AudioTrack.PLAYSTATE_PAUSED) return
                     val playedFrames = track.playbackHeadPosition.toLong() and UINT32_MASK
                     if (playedFrames >= targetFrames) {
+                        pcmDrainRunnable = null
                         finish()
                         callback?.invoke()
                     } else {
@@ -356,6 +368,7 @@ class AndroidVoicePlayer @Inject constructor(
                 }
             }
         }
+        pcmDrainRunnable = drain
         mainHandler.post(drain)
     }
 
@@ -436,15 +449,17 @@ class AndroidVoicePlayer @Inject constructor(
     @Synchronized
     private fun fail(message: String) {
         val callback = errorCallback
-        val streamStopCallback = mediaStopCallback.takeIf { pcmTrack != null }
+        val streamFailureCallback = this.streamFailureCallback.takeIf { pcmTrack != null }
         finish()
-        streamStopCallback?.invoke()
+        streamFailureCallback?.invoke()
         callback?.invoke(message)
     }
 
     @Synchronized
     private fun finish() {
         playbackGeneration++
+        pcmDrainRunnable?.let(mainHandler::removeCallbacks)
+        pcmDrainRunnable = null
         val active = player
         player = null
         runCatching { active?.release() }
@@ -458,6 +473,7 @@ class AndroidVoicePlayer @Inject constructor(
         errorCallback = null
         completionCallback = null
         mediaStopCallback = null
+        streamFailureCallback = null
         resumeAfterFocusGain = false
         releaseAudioFocus()
         mediaSession?.setPlaybackState(

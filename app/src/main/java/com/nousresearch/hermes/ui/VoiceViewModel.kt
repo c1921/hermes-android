@@ -202,8 +202,21 @@ class VoiceViewModel @Inject constructor(
                 val mediaStop: () -> Unit = {
                     if (generation == speechGeneration) stopSpeaking()
                 }
+                val streamFailure: () -> Unit = {
+                    if (generation == speechGeneration) {
+                        speechJob?.cancel()
+                        speechJob = null
+                    }
+                }
                 val streamed = voice.streamSpeech(config, profile, speakableText) { format ->
-                    player.beginPcmStream(format, status, playbackError, playbackComplete, mediaStop)
+                    player.beginPcmStream(
+                        format,
+                        status,
+                        playbackError,
+                        playbackComplete,
+                        mediaStop,
+                        streamFailure,
+                    )
                 }
                 if (generation != speechGeneration) return@launch
                 if (streamed == StreamedSpeechResult.COMPLETED) return@launch

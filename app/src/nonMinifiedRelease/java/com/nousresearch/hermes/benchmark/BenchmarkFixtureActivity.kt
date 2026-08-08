@@ -156,7 +156,7 @@ private fun FixtureChats(streamText: String) {
             )
         }
         Text("Composer", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-        var draft by rememberSaveable { mutableStateOf("") }
+        var draft by rememberSaveable(resetKey) { mutableStateOf("") }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = draft,

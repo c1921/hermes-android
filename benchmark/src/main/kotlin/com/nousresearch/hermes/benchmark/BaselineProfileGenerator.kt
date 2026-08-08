@@ -6,7 +6,7 @@ import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiObject2
+import androidx.test.uiautomator.Until
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
@@ -36,17 +36,20 @@ class BaselineProfileGenerator {
             startActivityAndWait(Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME)))
             val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             uiDevice.waitForIdle()
-            uiDevice.clickTextIfVisible("Atlas")
-            uiDevice.clickTextIfVisible("Chats")
-            uiDevice.clickTextIfVisible("Files")
-            uiDevice.clickTextIfVisible("Artifacts")
-            uiDevice.clickTextIfVisible("Manage")
+            uiDevice.clickText("Atlas")
+            uiDevice.clickText("Chats")
+            uiDevice.clickText("Files")
+            uiDevice.clickText("Artifacts")
+            uiDevice.clickText("Manage")
         }
     }
 }
 
-private fun UiDevice.clickTextIfVisible(text: String): UiObject2? =
-    findObject(By.textContains(text))?.also {
-        it.click()
-        waitForIdle()
-    }
+private fun UiDevice.clickText(text: String) {
+    requireNotNull(
+        wait(Until.findObject(By.desc(text)), 1_000L)
+            ?: wait(Until.findObject(By.text(text)), 4_000L),
+    ) { "Baseline Profile fixture surface not found: $text" }
+        .click()
+    waitForIdle()
+}
