@@ -44,6 +44,7 @@ class TimelineInteractionTest {
 
         compose.onNode(hasScrollAction()).performScrollToIndex(0)
         compose.onNodeWithContentDescription("Jump to latest message").assertIsDisplayed().performClick()
+        compose.waitForIdle()
         compose.onNodeWithText("message-29").assertIsDisplayed()
     }
 }

@@ -51,7 +51,7 @@ class BillingScreenTest {
         )
 
         compose.onNodeWithText("BALANCE").assertExists()
-        compose.onAllNodesWithText("$24.50").fetchSemanticsNodes().let { assertEquals(2, it.size) }
+        compose.onAllNodesWithText("$24.50", useUnmergedTree = true).fetchSemanticsNodes().let { assertEquals(2, it.size) }
         compose.onNodeWithText("Super / $20/mo").assertExists()
         compose.onNodeWithText("ACCOUNT").assertExists()
         compose.onNodeWithText("Visa •••• 4242").assertExists()
@@ -128,7 +128,7 @@ class BillingScreenTest {
             ),
         )
 
-        compose.onNodeWithText("$0.00 of $50.00 left / $0.79 over").performScrollTo().assertExists()
+        compose.onNodeWithText("$0.00 of $50.00 left / $0.79 over", useUnmergedTree = true).performScrollTo().assertExists()
     }
 
     @Test
@@ -164,7 +164,7 @@ class BillingScreenTest {
             ),
         )
 
-        compose.onNodeWithText("$7.00 remaining").performScrollTo().assertExists()
+        compose.onNodeWithText("$7.00 remaining", useUnmergedTree = true).performScrollTo().assertExists()
         compose.onNodeWithText("$40.00 remaining").assertDoesNotExist()
     }
 
