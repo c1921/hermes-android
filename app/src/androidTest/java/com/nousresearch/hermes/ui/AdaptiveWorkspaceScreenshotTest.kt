@@ -32,6 +32,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.filters.SdkSuppress
 import androidx.window.core.layout.WindowSizeClass
 import com.nousresearch.hermes.domain.TimelineItem
 import com.nousresearch.hermes.domain.ToolState
@@ -44,6 +45,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+@SdkSuppress(minSdkVersion = 29)
 class AdaptiveWorkspaceScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
