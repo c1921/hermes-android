@@ -47,7 +47,7 @@ class HermesStartupBenchmark {
             startupMode = StartupMode.WARM,
             setupBlock = { pressHome() },
         ) {
-            startActivityAndWait()
+            startActivityAndWait(Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME)))
             device.waitForIdle()
         }
     }
