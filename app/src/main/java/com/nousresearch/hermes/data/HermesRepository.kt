@@ -887,7 +887,11 @@ class HermesRepository @Inject constructor(
         val importUris = allUris
             .filterNot { uri -> mutableState.value.pendingAttachments.any { it.sourceUri == uri.toString() } }
             .take((MAX_SHARED_ATTACHMENTS - mutableState.value.pendingAttachments.size).coerceAtLeast(0))
-        var accepted = false
+        val requestedSources = allUris.mapTo(mutableSetOf(), Uri::toString)
+        mutableState.value.pendingAttachments
+            .filter { it.sourceUri in requestedSources && it.phase == AttachmentPhase.ERROR }
+            .map(PendingAttachment::id)
+            .forEach { retryPendingAttachment(it) }
         val stagedIds = importUris.mapNotNull { uri ->
             if (!uri.scheme.equals("content", ignoreCase = true)) {
                 fail(IllegalArgumentException("Shared attachments must use content URIs"))
@@ -897,7 +901,9 @@ class HermesRepository @Inject constructor(
             }
         }
         stagedIds.map { id -> scope.launch { runAttachment(id) } }.joinAll()
-        accepted = stagedIds.isNotEmpty()
+        var accepted = mutableState.value.pendingAttachments.any {
+            it.sourceUri in requestedSources && it.phase == AttachmentPhase.READY
+        }
         if (text.isNotEmpty()) {
             if (mutableState.value.runtimeSessionId == null) {
                 require(newSession(preservePendingAttachments = true)) {

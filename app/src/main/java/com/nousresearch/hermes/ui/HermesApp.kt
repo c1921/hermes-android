@@ -553,7 +553,19 @@ fun HermesApp(
                     it.backend != null && it.status != null && !it.loading
                 }
                 snapshotFlow { latestConnectionState.value }.first { it == GatewayConnectionState.Open }
-                if (!viewModel.ingestSharedContent(request.content)) {
+                val imported = try {
+                    viewModel.ingestSharedContent(request.content)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    onEntryFailed(
+                        request.id,
+                        error.message?.takeIf(String::isNotBlank)
+                            ?: "Hermes could not add this shared content to a draft.",
+                    )
+                    return@LaunchedEffect
+                }
+                if (!imported) {
                     onEntryFailed(
                         request.id,
                         viewModel.state.value.error ?: "Hermes could not add this shared content to a draft.",

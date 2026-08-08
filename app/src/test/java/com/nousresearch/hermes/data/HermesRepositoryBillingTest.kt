@@ -213,6 +213,34 @@ class HermesRepositoryBillingTest {
     }
 
     @Test
+    fun `all failed shared attachments remain retryable and do not consume the share`() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = readyDashboardDispatcher()
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                RecordingGateway(json),
+            )
+            awaitReady(repository, backend.id)
+            val rejectedUri = android.net.Uri.parse("content://missing-share-provider/rejected")
+
+            assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
+            assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
+            assertEquals(1, repository.state.value.pendingAttachments.size)
+            assertEquals(AttachmentPhase.ERROR, repository.state.value.pendingAttachments.single().phase)
+        }
+    }
+
+    @Test
     fun `failed new session preserves the active session and never closes it first`() = runBlocking {
         MockWebServer().use { server ->
             server.dispatcher = readyDashboardDispatcher()
