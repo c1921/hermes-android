@@ -9,7 +9,8 @@ pull requests into `main`.
 ## Journeys
 
 `HermesStartupBenchmark` records `StartupTimingMetric` (TTID and TTFD when the
-app reports full display) and `FrameTimingMetric` for cold and warm startup.
+app reports full display) for cold startup and `FrameTimingMetric` for cold and
+warm startup.
 `HermesSurfaceJourneyBenchmark` provides named Atlas/chat, continuous-stream
 transcript scroll, composer, Files/Artifacts, and Manage frame journeys. The
 non-minified release-only fixture activity renders the production Compose

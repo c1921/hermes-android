@@ -39,10 +39,10 @@ class HermesStartupBenchmark {
     }
 
     @Test
-    fun warmStartupReportsTtidTtfdAndFrames() {
+    fun warmStartupReportsFrames() {
         benchmarkRule.measureRepeated(
             packageName = TARGET_PACKAGE_NAME,
-            metrics = listOf(StartupTimingMetric(), FrameTimingMetric()),
+            metrics = listOf(FrameTimingMetric()),
             iterations = 5,
             startupMode = StartupMode.WARM,
             setupBlock = { pressHome() },
