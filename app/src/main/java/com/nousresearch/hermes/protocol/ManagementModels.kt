@@ -241,6 +241,14 @@ data class ActionResponse(
 )
 
 @Serializable
+data class BackupActionResponse(
+    val ok: Boolean,
+    val pid: Long,
+    val name: String,
+    val archive: String,
+)
+
+@Serializable
 data class ActionStatusResponse(
     @SerialName("exit_code") val exitCode: Int? = null,
     val lines: List<String> = emptyList(),

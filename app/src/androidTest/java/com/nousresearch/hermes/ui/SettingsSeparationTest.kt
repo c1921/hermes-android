@@ -3,6 +3,7 @@ package com.nousresearch.hermes.ui
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
@@ -44,6 +45,10 @@ class SettingsSeparationTest {
                     connection = GatewayConnectionState.Idle,
                     onRun = {},
                     onRefreshHost = {},
+                    backup = HostBackupUiState(),
+                    onPrepareBackup = {},
+                    onSaveBackup = {},
+                    onCancelBackup = {},
                     onBack = null,
                 )
             }
@@ -52,6 +57,10 @@ class SettingsSeparationTest {
         compose.onNodeWithText("DIAGNOSTICS").assertExists()
         compose.onNodeWithText("APPEARANCE").assertDoesNotExist()
         compose.onNodeWithText("SECURE SCREEN").assertDoesNotExist()
+        compose.onNode(hasScrollAction()).performScrollToIndex(2)
+        compose.onNodeWithText("Create backup").performClick()
+        compose.onNodeWithText("CREATE HERMES HOST BACKUP?").assertExists()
+        compose.onNodeWithText("not only profile default", substring = true).assertExists()
     }
 
     @Test

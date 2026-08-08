@@ -25,14 +25,17 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +74,10 @@ internal fun DiagnosticsScreen(
     connection: GatewayConnectionState,
     onRun: (DiagnosticAction) -> Unit,
     onRefreshHost: (Boolean) -> Unit,
+    backup: HostBackupUiState,
+    onPrepareBackup: () -> Unit,
+    onSaveBackup: (android.net.Uri) -> Unit,
+    onCancelBackup: () -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -78,7 +85,11 @@ internal fun DiagnosticsScreen(
     val scope = rememberCoroutineScope()
     var exportInProgress by rememberSaveable { mutableStateOf(false) }
     var exportNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmBackup by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.backend?.id) { if (state.backend != null) onRefreshHost(false) }
+    val createBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        uri?.let(onSaveBackup)
+    }
     val createReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri == null) {
             exportInProgress = false
@@ -128,7 +139,16 @@ internal fun DiagnosticsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            item { HostMaintenanceCard(state, onRefreshHost) }
+            item {
+                HostMaintenanceCard(
+                    state = state,
+                    backup = backup,
+                    onRefresh = onRefreshHost,
+                    onPrepareBackup = { confirmBackup = true },
+                    onSaveBackup = { createBackup.launch(backup.suggestedName) },
+                    onCancelBackup = onCancelBackup,
+                )
+            }
             item {
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -173,10 +193,34 @@ internal fun DiagnosticsScreen(
             }
         }
     }
+    if (confirmBackup) {
+        AlertDialog(
+            onDismissRequest = { confirmBackup = false },
+            title = { Text("CREATE HERMES HOST BACKUP?") },
+            text = {
+                Text(
+                    "This runs backup on the whole authenticated Hermes installation, not only profile ${state.activeProfile}. " +
+                        "After Hermes confirms the exact process succeeded, Android will ask where to save the ZIP. " +
+                        "The archive is never stored in this app or Android backup.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmBackup = false; onPrepareBackup() }) { Text("Create backup") }
+            },
+            dismissButton = { TextButton(onClick = { confirmBackup = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
-private fun HostMaintenanceCard(state: HermesState, onRefresh: (Boolean) -> Unit) {
+private fun HostMaintenanceCard(
+    state: HermesState,
+    backup: HostBackupUiState,
+    onRefresh: (Boolean) -> Unit,
+    onPrepareBackup: () -> Unit,
+    onSaveBackup: () -> Unit,
+    onCancelBackup: () -> Unit,
+) {
     val update = state.hostUpdate
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -225,6 +269,24 @@ private fun HostMaintenanceCard(state: HermesState, onRefresh: (Boolean) -> Unit
                 }
             }
             Button(onClick = { onRefresh(true) }, enabled = !state.hostMaintenanceLoading) { Text("Check now") }
+            HorizontalDivider()
+            Text("HOST BACKUP", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Hermes creates the archive on its host. Android downloads it only after the same process ID reports exit 0, directly into the document destination you choose.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            backup.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+            backup.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+            if (backup.preparing || backup.saving) {
+                backup.progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
+                    ?: LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                TextButton(onClick = onCancelBackup) { Text(if (backup.preparing) "Stop waiting" else "Cancel export") }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onPrepareBackup) { Text(if (backup.archive == null) "Create backup" else "Create another") }
+                    if (backup.archive != null) Button(onClick = onSaveBackup) { Text("Save ZIP…") }
+                }
+            }
         }
     }
 }

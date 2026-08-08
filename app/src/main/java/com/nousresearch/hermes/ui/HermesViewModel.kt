@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -14,13 +15,17 @@ import com.nousresearch.hermes.data.DetectedArtifactIndexSnapshot
 import com.nousresearch.hermes.data.HermesArtifactSessionLoader
 import com.nousresearch.hermes.data.DiagnosticAction
 import com.nousresearch.hermes.data.HermesRepository
+import com.nousresearch.hermes.data.backupReceiptError
 import com.nousresearch.hermes.domain.DetectedArtifact
 import com.nousresearch.hermes.network.HermesRestClient
 import com.nousresearch.hermes.network.DashboardAuthProvider
 import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.platform.SharedContent
+import com.nousresearch.hermes.platform.safeContentName
 import com.nousresearch.hermes.security.SecureTokenStore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.IOException
 import java.security.MessageDigest
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +33,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -35,6 +41,8 @@ import kotlinx.serialization.json.JsonElement
 private const val ARTIFACT_SCOPE_KEY = "artifacts.scope"
 private const val ARTIFACT_QUERY_KEY = "artifacts.query"
 private const val ARTIFACT_FILTER_KEY = "artifacts.filter"
+private const val HOST_BACKUP_POLL_LIMIT = 60
+private const val HOST_BACKUP_POLL_INTERVAL_MILLIS = 2_000L
 
 data class ArtifactIndexUiState(
     val backendId: String? = null,
@@ -53,13 +61,25 @@ data class ArtifactBrowserPreferences(
     val filter: ArtifactIndexFilter = ArtifactIndexFilter.ALL,
 )
 
+data class HostBackupUiState(
+    val backendId: String? = null,
+    val preparing: Boolean = false,
+    val saving: Boolean = false,
+    val archive: String? = null,
+    val suggestedName: String = "hermes-backup.zip",
+    val progress: Float? = null,
+    val notice: String? = null,
+    val error: String? = null,
+)
+
 @HiltViewModel
 class HermesViewModel @Inject constructor(
     private val repository: HermesRepository,
-    restClient: HermesRestClient,
+    private val restClient: HermesRestClient,
     private val tokenStore: SecureTokenStore,
     private val artifactPreviewRepository: ArtifactPreviewRepository,
     private val savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
     val state = repository.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), repository.state.value)
     val connectionState = repository.connectionState
@@ -75,8 +95,133 @@ class HermesViewModel @Inject constructor(
         ),
     )
     private var artifactRefreshJob: Job? = null
+    private val mutableHostBackup = MutableStateFlow(HostBackupUiState())
+    private var hostBackupJob: Job? = null
+    private var hostBackupGeneration = 0L
     val artifactIndex = mutableArtifactIndex.asStateFlow()
     val artifactPreferences = mutableArtifactPreferences.asStateFlow()
+    val hostBackup = mutableHostBackup.asStateFlow()
+
+    fun bindHostBackupBackend(backendId: String?) {
+        if (mutableHostBackup.value.backendId == null || mutableHostBackup.value.backendId == backendId) return
+        hostBackupGeneration += 1
+        hostBackupJob?.cancel()
+        hostBackupJob = null
+        mutableHostBackup.value = HostBackupUiState(backendId = backendId)
+    }
+
+    fun prepareHostBackup() {
+        val backend = repository.state.value.backend ?: return
+        val token = tokenStore.get(backend.id)?.headerValue ?: run {
+            mutableHostBackup.value = HostBackupUiState(backendId = backend.id, error = "Reconnect Hermes before creating a backup")
+            return
+        }
+        val generation = ++hostBackupGeneration
+        hostBackupJob?.cancel()
+        hostBackupJob = viewModelScope.launch {
+            mutableHostBackup.value = HostBackupUiState(backendId = backend.id, preparing = true)
+            try {
+                val started = restClient.startBackup(backend, token)
+                repeat(HOST_BACKUP_POLL_LIMIT) {
+                    delay(HOST_BACKUP_POLL_INTERVAL_MILLIS)
+                    val status = restClient.actionStatus(backend, token, "backup")
+                    backupReceiptError(started, status)?.let { throw IOException(it) }
+                    if (!status.running) {
+                        if (hostBackupIsCurrent(generation, backend.id)) {
+                            val rawName = started.archive.substringAfterLast('/').substringAfterLast('\\')
+                            val safeName = safeContentName(rawName, "hermes-backup.zip").let {
+                                if (it.endsWith(".zip", ignoreCase = true)) it else "$it.zip"
+                            }
+                            mutableHostBackup.value = HostBackupUiState(
+                                backendId = backend.id,
+                                archive = started.archive,
+                                suggestedName = safeName,
+                                notice = "Hermes confirmed the host backup. Choose where Android should save it.",
+                            )
+                        }
+                        return@launch
+                    }
+                }
+                throw IOException("Backup status timed out; the Hermes host may still be working")
+            } catch (cancelled: CancellationException) {
+                if (hostBackupIsCurrent(generation, backend.id)) {
+                    mutableHostBackup.value = HostBackupUiState(
+                        backendId = backend.id,
+                        notice = "Stopped waiting. The Hermes host backup may still continue.",
+                    )
+                }
+                throw cancelled
+            } catch (error: Throwable) {
+                if (hostBackupIsCurrent(generation, backend.id)) {
+                    mutableHostBackup.value = HostBackupUiState(
+                        backendId = backend.id,
+                        error = error.message ?: "Hermes backup failed",
+                    )
+                }
+            }
+        }
+    }
+
+    fun saveHostBackup(destination: Uri) {
+        val backend = repository.state.value.backend ?: return
+        val current = mutableHostBackup.value
+        val archive = current.archive?.takeIf { current.backendId == backend.id } ?: return
+        val token = tokenStore.get(backend.id)?.headerValue ?: return
+        val generation = ++hostBackupGeneration
+        hostBackupJob?.cancel()
+        hostBackupJob = viewModelScope.launch {
+            mutableHostBackup.value = current.copy(saving = true, progress = null, notice = null, error = null)
+            var complete = false
+            try {
+                val output = context.contentResolver.openOutputStream(destination, "w")
+                    ?: throw IOException("Android could not open the selected backup destination")
+                output.use {
+                    restClient.downloadBackup(backend, token, archive, it) { copied, total ->
+                        if (hostBackupIsCurrent(generation, backend.id)) {
+                            mutableHostBackup.value = mutableHostBackup.value.copy(
+                                progress = total?.takeIf { size -> size > 0 }?.let { size -> copied.toFloat() / size.toFloat() },
+                            )
+                        }
+                    }
+                }
+                complete = true
+                if (hostBackupIsCurrent(generation, backend.id)) {
+                    mutableHostBackup.value = current.copy(saving = false, progress = null, notice = "Hermes backup saved through Android.")
+                }
+            } catch (cancelled: CancellationException) {
+                if (hostBackupIsCurrent(generation, backend.id)) {
+                    mutableHostBackup.value = current.copy(saving = false, progress = null, notice = "Backup export cancelled.")
+                }
+                throw cancelled
+            } catch (error: Throwable) {
+                if (hostBackupIsCurrent(generation, backend.id)) {
+                    mutableHostBackup.value = current.copy(saving = false, progress = null, error = error.message ?: "Backup export failed")
+                }
+            } finally {
+                if (!complete) runCatching { context.contentResolver.delete(destination, null, null) }
+            }
+        }
+    }
+
+    fun cancelHostBackup() {
+        val current = mutableHostBackup.value
+        hostBackupGeneration += 1
+        hostBackupJob?.cancel()
+        hostBackupJob = null
+        mutableHostBackup.value = current.copy(
+            preparing = false,
+            saving = false,
+            progress = null,
+            notice = if (current.preparing) {
+                "Stopped waiting. The Hermes host backup may still continue."
+            } else {
+                "Backup export cancelled."
+            },
+        )
+    }
+
+    private fun hostBackupIsCurrent(generation: Long, backendId: String): Boolean =
+        hostBackupGeneration == generation && repository.state.value.backend?.id == backendId
 
     fun refreshArtifacts(backend: BackendConfig, profileId: String) {
         val normalizedProfile = profileId.trim()

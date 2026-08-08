@@ -10,6 +10,7 @@ import com.nousresearch.hermes.protocol.AnalyticsResponse
 import com.nousresearch.hermes.protocol.AudioSpeakResponse
 import com.nousresearch.hermes.protocol.AudioTranscriptionResponse
 import com.nousresearch.hermes.protocol.BackendUpdateCheck
+import com.nousresearch.hermes.protocol.BackupActionResponse
 import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.FsDataUrlResponse
 import com.nousresearch.hermes.protocol.FsTextPreview
@@ -872,6 +873,76 @@ class HermesRestClient(
         BackendUpdateCheck.serializer(),
     )
 
+    suspend fun startBackup(config: BackendConfig, token: String): BackupActionResponse =
+        json.decodeFromJsonElement(
+            BackupActionResponse.serializer(),
+            request(config, token, "/api/ops/backup", method = "POST", body = buildJsonObject { }),
+        ).also { started ->
+            require(started.ok && started.name == "backup" && started.pid > 0 && started.archive.isNotBlank()) {
+                "Hermes did not return a usable backup receipt"
+            }
+        }
+
+    suspend fun downloadBackup(
+        config: BackendConfig,
+        token: String,
+        archive: String,
+        output: OutputStream,
+        onProgress: (bytesCopied: Long, totalBytes: Long?) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        val cleanArchive = archive.trim()
+        require(cleanArchive.isNotEmpty() && cleanArchive.length <= MAX_BACKUP_ARCHIVE_PATH_CHARACTERS) {
+            "Hermes returned an invalid backup archive"
+        }
+        val base = TransportPolicy.validate(config).getOrThrow().toString().trimEnd('/')
+        val request = Request.Builder()
+            .url("$base/api/ops/backup/download?archive=${encodePathSegment(cleanArchive)}")
+            .get()
+            .header("Accept", "application/zip")
+            .header("User-Agent", "Hermes-Android/0.1")
+            .apply {
+                if (config.authMode == AuthMode.DASHBOARD_SESSION) header("Cookie", token)
+                else header("Authorization", "Bearer $token")
+            }
+            .build()
+        val noRedirectClient = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+        val call = noRedirectClient.newCall(request)
+        val cancellation = currentCoroutineContext()[Job]?.invokeOnCompletion { cause -> if (cause != null) call.cancel() }
+        try {
+            call.execute().use { response ->
+                if (response.request.url != request.url) throw IOException("Hermes redirected an authenticated backup")
+                if (!response.isSuccessful) {
+                    val detail = response.body?.use { readBounded(it.byteStream(), MAX_ERROR_RESPONSE_BYTES) }.orEmpty()
+                    throw HermesHttpException(response.code, detail.ifBlank { response.message })
+                }
+                updateStoredSession(config, token, response.headers.values("Set-Cookie"))
+                val body = response.body ?: throw IOException("Hermes returned an empty backup")
+                val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase()
+                require(mime == "application/zip" || mime == "application/octet-stream") {
+                    "Hermes returned a non-ZIP backup"
+                }
+                val total = body.contentLength().takeIf { it >= 0 }
+                require(total == null || total <= MAX_BACKUP_DOWNLOAD_BYTES) { "Hermes backup exceeds the Android export limit" }
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                    var copied = 0L
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        copied += read
+                        require(copied <= MAX_BACKUP_DOWNLOAD_BYTES) { "Hermes backup exceeds the Android export limit" }
+                        output.write(buffer, 0, read)
+                        onProgress(copied, total)
+                    }
+                    output.flush()
+                }
+            }
+        } finally {
+            cancellation?.dispose()
+        }
+    }
+
     suspend fun actionStatus(
         config: BackendConfig,
         token: String,
@@ -1253,11 +1324,12 @@ class HermesRestClient(
     }
 
     private companion object {
-        val ALLOWED_ACTIONS = setOf("doctor", "security-audit", "gateway-restart")
+        val ALLOWED_ACTIONS = setOf("backup", "doctor", "security-audit", "gateway-restart")
         val SKILL_ACTION = Regex("skills-(?:install|uninstall|update)(?:-[a-z0-9-]{1,80})?")
         val MCP_INSTALL_ACTION = Regex("mcp-install-[a-z0-9-]{1,48}-[a-f0-9]{8}")
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
+        const val MAX_ERROR_RESPONSE_BYTES = 8L * 1024L
         const val MAX_FS_DATA_URL_RESPONSE_BYTES = 23L * 1024L * 1024L
         const val MAX_FS_TEXT_RESPONSE_BYTES = 1L * 1024L * 1024L
         const val MAX_PROFILE_SOUL_CHARACTERS = 128 * 1024
@@ -1270,6 +1342,8 @@ class HermesRestClient(
         const val MAX_LEARNING_NODE_RESPONSE_BYTES = 384L * 1024L
         const val MAX_HOST_LOG_RESPONSE_BYTES = 512L * 1024L
         const val MAX_UPDATE_CHECK_RESPONSE_BYTES = 192L * 1024L
+        const val MAX_BACKUP_ARCHIVE_PATH_CHARACTERS = 4_096
+        const val MAX_BACKUP_DOWNLOAD_BYTES = 1L * 1024L * 1024L * 1024L
     }
 }
 

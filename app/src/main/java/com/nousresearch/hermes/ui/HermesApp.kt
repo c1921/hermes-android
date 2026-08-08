@@ -306,6 +306,9 @@ private data class ManagementActions(
     val deleteLearningNode: (String, String) -> Unit,
     val runDiagnostic: (DiagnosticAction) -> Unit,
     val refreshHostMaintenance: (Boolean) -> Unit,
+    val prepareHostBackup: () -> Unit,
+    val saveHostBackup: (Uri) -> Unit,
+    val cancelHostBackup: () -> Unit,
     val refreshProviders: () -> Unit,
     val startProviderOAuth: (String) -> Unit,
     val submitProviderOAuth: (String) -> Unit,
@@ -359,6 +362,8 @@ fun HermesApp(
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val artifactIndex by viewModel.artifactIndex.collectAsStateWithLifecycle()
     val artifactPreferences by viewModel.artifactPreferences.collectAsStateWithLifecycle()
+    val hostBackup by viewModel.hostBackup.collectAsStateWithLifecycle()
+    LaunchedEffect(state.backend?.id) { viewModel.bindHostBackupBackend(state.backend?.id) }
     val latestConnectionState = rememberUpdatedState(connection)
     val latestHermesState = rememberUpdatedState(state)
     val entryRequestScope = rememberCoroutineScope()
@@ -431,6 +436,9 @@ fun HermesApp(
             deleteLearningNode = viewModel::deleteLearningNode,
             runDiagnostic = viewModel::runDiagnostic,
             refreshHostMaintenance = viewModel::refreshHostMaintenance,
+            prepareHostBackup = viewModel::prepareHostBackup,
+            saveHostBackup = viewModel::saveHostBackup,
+            cancelHostBackup = viewModel::cancelHostBackup,
             refreshProviders = viewModel::refreshProviders,
             startProviderOAuth = viewModel::startProviderOAuth,
             submitProviderOAuth = viewModel::submitProviderOAuth,
@@ -648,6 +656,7 @@ fun HermesApp(
             state = state,
             artifactIndex = artifactIndex,
             artifactPreferences = artifactPreferences,
+            hostBackup = hostBackup,
             connection = connection,
             onRefresh = viewModel::refresh,
             onSearchSessions = viewModel::searchSessions,
@@ -1024,6 +1033,7 @@ private fun HermesWorkspace(
     state: HermesState,
     artifactIndex: ArtifactIndexUiState,
     artifactPreferences: ArtifactBrowserPreferences,
+    hostBackup: HostBackupUiState,
     connection: GatewayConnectionState,
     onRefresh: () -> Unit,
     onSearchSessions: (String) -> Unit,
@@ -1354,6 +1364,10 @@ private fun HermesWorkspace(
                         connection = connection,
                         onRun = managementActions.runDiagnostic,
                         onRefreshHost = managementActions.refreshHostMaintenance,
+                        backup = hostBackup,
+                        onPrepareBackup = managementActions.prepareHostBackup,
+                        onSaveBackup = managementActions.saveHostBackup,
+                        onCancelBackup = managementActions.cancelHostBackup,
                         onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
