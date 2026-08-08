@@ -59,6 +59,35 @@ class ManagementMutationConfirmationTest {
     }
 
     @Test
+    fun messagingEnableWaitsForConfirmation() {
+        var changed: Pair<String, Boolean>? = null
+        compose.setContent {
+            HermesTheme {
+                MessagingScreen(
+                    state = HermesState(
+                        activeProfile = "work",
+                        messagingPlatforms = listOf(MessagingPlatformInfo(id = "telegram", name = "Telegram")),
+                    ),
+                    onRefresh = {},
+                    onSetEnabled = { id, enabled -> changed = id to enabled },
+                    onSave = { _, _ -> },
+                    onClear = { _, _ -> },
+                    onTest = {},
+                    onRestartGateway = {},
+                    onBack = null,
+                )
+            }
+        }
+
+        compose.onNodeWithText("Telegram").performClick()
+        compose.onNodeWithContentDescription("Enable telegram").performClick()
+        assertNull(changed)
+        compose.onNodeWithText("Enable Telegram for profile work?", substring = true).assertExists()
+        compose.onNodeWithText("Enable").performClick()
+        assertEquals("telegram" to true, changed)
+    }
+
+    @Test
     fun cronMutationsNameProfileAndWaitForConfirmation() {
         var toggled: Pair<String, Boolean>? = null
         var triggered: String? = null
@@ -101,5 +130,35 @@ class ManagementMutationConfirmationTest {
         compose.onNodeWithText("Run Daily brief now for profile work?", substring = true).assertExists()
         compose.onNodeWithText("Run now").performClick()
         assertEquals("daily", triggered)
+    }
+
+    @Test
+    fun cronResumeWaitsForConfirmation() {
+        var toggled: Pair<String, Boolean>? = null
+        compose.setContent {
+            HermesTheme {
+                CronScreen(
+                    state = HermesState(
+                        activeProfile = "work",
+                        cronJobs = listOf(CronJob(id = "daily", name = "Daily brief", enabled = false)),
+                    ),
+                    onRefresh = {},
+                    onSetEnabled = { id, enabled -> toggled = id to enabled },
+                    onTrigger = {},
+                    onLoadRuns = {},
+                    onOpenRun = {},
+                    onCreate = { _, _, _, _ -> },
+                    onUpdate = { _, _, _, _, _ -> },
+                    onDelete = {},
+                    onBack = null,
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Resume job").performClick()
+        assertNull(toggled)
+        compose.onNodeWithText("Resume Daily brief for profile work?", substring = true).assertExists()
+        compose.onNodeWithText("Resume").performClick()
+        assertEquals("daily" to true, toggled)
     }
 }
