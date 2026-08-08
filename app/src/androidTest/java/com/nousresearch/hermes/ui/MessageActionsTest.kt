@@ -59,6 +59,11 @@ class MessageActionsTest {
     }
 
     private fun assertRenderedText(text: String, substring: Boolean = false) {
+        compose.waitUntil(timeoutMillis = 10_000) {
+            val merged = compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes()
+            val unmerged = compose.onAllNodesWithText(text, substring = substring, useUnmergedTree = true).fetchSemanticsNodes()
+            merged.isNotEmpty() || unmerged.isNotEmpty()
+        }
         val merged = compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes()
         val unmerged = compose.onAllNodesWithText(text, substring = substring, useUnmergedTree = true).fetchSemanticsNodes()
         assertTrue("Expected rendered text '$text'", merged.isNotEmpty() || unmerged.isNotEmpty())

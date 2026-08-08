@@ -3,6 +3,7 @@ package com.nousresearch.hermes.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,6 +44,9 @@ class TimelineInteractionTest {
         }
 
         compose.onNode(hasScrollAction()).performScrollToIndex(0)
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithContentDescription("Jump to latest message").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithContentDescription("Jump to latest message").assertIsDisplayed().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("message-29").assertIsDisplayed()

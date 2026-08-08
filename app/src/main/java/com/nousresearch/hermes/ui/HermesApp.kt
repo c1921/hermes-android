@@ -2348,15 +2348,19 @@ internal fun Timeline(
     val listState = rememberLazyListState()
     var followLatest by rememberSaveable { mutableStateOf(true) }
     var focusConsumed by rememberSaveable(focusMessageId) { mutableStateOf(false) }
+    var initialScrollObserved by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         snapshotFlow {
-            Triple(
-                listState.isScrollInProgress,
+            Pair(
                 listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
                 listState.layoutInfo.totalItemsCount,
             )
-        }.collect { (scrolling, lastVisibleIndex, totalItems) ->
-            if (scrolling) followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+        }.collect { (lastVisibleIndex, totalItems) ->
+            if (initialScrollObserved) {
+                followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+            } else {
+                initialScrollObserved = true
+            }
         }
     }
     LaunchedEffect(items.size, items.lastOrNull(), focusMessageId, followLatest) {
