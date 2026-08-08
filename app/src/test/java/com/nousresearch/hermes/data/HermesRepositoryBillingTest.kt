@@ -299,7 +299,18 @@ class HermesRepositoryBillingTest {
                 RecordingGateway(json),
             )
             awaitReady(repository, backend.id)
-            val rejectedUri = android.net.Uri.parse("content://missing-share-provider/rejected")
+            // Keep the source provider deterministic across local and hosted Robolectric runs.
+            FileProvider::class.java.getDeclaredField("sCache").apply { isAccessible = true }
+                .get(null).let { (it as MutableMap<*, *>).clear() }
+            val rejectedFile = File(context.cacheDir, "shared/rejected.apk").apply {
+                parentFile?.mkdirs()
+                writeBytes(byteArrayOf(1, 2))
+            }
+            val rejectedUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                rejectedFile,
+            )
 
             assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
             assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
