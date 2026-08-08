@@ -213,7 +213,7 @@ class HermesRepositoryBillingTest {
     }
 
     @Test
-    fun `active profile switch invalidates pending attachment and releases its camera uri`() = runBlocking {
+    fun `sticky profile switch preserves pending attachment for the active session`() = runBlocking {
         MockWebServer().use { server ->
             var activeProfile = "default"
             server.dispatcher = object : Dispatcher() {
@@ -270,12 +270,17 @@ class HermesRepositoryBillingTest {
             }
             val attaching = launch { repository.attach(cameraUri) }
             uploadStarted.await()
+            val pendingId = repository.state.value.pendingAttachments.single().id
 
             repository.setActiveProfile("research")
+            assertEquals(1, repository.state.value.pendingAttachments.size)
+            assertEquals("research", repository.state.value.activeProfile)
+
+            repository.cancelPendingAttachment(pendingId)
             withTimeout(5_000L) { attaching.join() }
+            repository.removePendingAttachment(pendingId)
 
             assertTrue(repository.state.value.pendingAttachments.isEmpty())
-            assertEquals("research", repository.state.value.activeProfile)
             assertTrue(runCatching { context.contentResolver.openInputStream(cameraUri)!!.close() }.isFailure)
         }
     }
