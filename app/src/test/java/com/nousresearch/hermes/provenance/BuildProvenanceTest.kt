@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.provenance
 
+import com.nousresearch.hermes.BuildConfig
 import com.nousresearch.hermes.security.DiagnosticReportInput
 import com.nousresearch.hermes.security.buildDiagnosticReport
 import org.junit.Assert.assertEquals
@@ -11,9 +12,9 @@ class BuildProvenanceTest {
     fun `current source is generated from the variant build metadata`() {
         val provenance = BuildProvenanceSource.current
 
-        assertEquals("0.2.0-debug", provenance.androidVersion)
+        assertEquals(BuildConfig.VERSION_NAME, provenance.androidVersion)
         assertEquals(2, provenance.versionCode)
-        assertEquals("debug", provenance.channel)
+        assertEquals(BuildConfig.HERMES_BUILD_CHANNEL, provenance.channel)
         assertEquals("b9aa9289a8083f2e9d248ad6837b2938f5ee92d7", provenance.auditedHermesCommit)
         assertEquals("0.20.0", provenance.hermesAgentVersion)
         assertEquals("0.17.0", provenance.hermesDesktopVersion)
