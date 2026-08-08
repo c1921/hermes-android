@@ -3,7 +3,8 @@
     <application>
         <activity
             android:name=".benchmark.BenchmarkFixtureActivity"
-            android:exported="true"
+            android:enabled="true"
+            android:exported="false"
             android:label="Hermes benchmark fixture" />
     </application>
 </manifest>
