@@ -861,12 +861,19 @@ private fun HermesWorkspace(
         val composerAdaptiveFocusState = rememberAdaptiveFocusState()
         val backendId = requireNotNull(state.backend).id
         val profileId = route.profileIdOr(state.currentProfile)
-        var supportingToolId by rememberSaveable(state.runtimeSessionId) { mutableStateOf<String?>(null) }
-        val supportingTool = state.timeline.items
-            .filterIsInstance<TimelineItem.Tool>()
-            .firstOrNull { it.id == supportingToolId }
-        LaunchedEffect(supportingToolId, supportingTool) {
-            if (supportingToolId != null && supportingTool == null) supportingToolId = null
+        val supportingSessionId = state.activeStoredSession?.durableId ?: state.runtimeSessionId.orEmpty()
+        var supportingToolId by rememberSaveable(backendId, profileId, supportingSessionId) {
+            mutableStateOf<String?>(null)
+        }
+        var expandedToolIds by rememberSaveable(backendId, profileId, supportingSessionId) {
+            mutableStateOf(emptyList<String>())
+        }
+        val timelineTools = state.timeline.items.filterIsInstance<TimelineItem.Tool>()
+        val availableToolIds = timelineTools.mapTo(mutableSetOf()) { it.id }
+        val supportingTool = timelineTools.firstOrNull { it.id == supportingToolId }
+        LaunchedEffect(supportingToolId, availableToolIds) {
+            expandedToolIds = expandedToolIds.filter(availableToolIds::contains)
+            if (supportingToolId != null && supportingToolId !in availableToolIds) supportingToolId = null
         }
         var pendingNewConversationFromId by rememberSaveable { mutableStateOf<String?>(null) }
         val openStoredSession: (StoredSession) -> Unit = { session ->
@@ -1017,8 +1024,18 @@ private fun HermesWorkspace(
                         Modifier.weight(1f),
                         compactLayout = compact,
                         adaptiveFocusState = composerAdaptiveFocusState,
-                        onSupportingToolChange = if (compact) null else { tool ->
-                            supportingToolId = tool?.id
+                        expandedToolIds = expandedToolIds.toSet(),
+                        toolDisclosureKey = { tool ->
+                            scopedToolPaneKey(backendId, profileId, supportingSessionId, tool.id)
+                        },
+                        onToolExpandedChange = { tool, toolExpanded ->
+                            if (toolExpanded) {
+                                expandedToolIds = (expandedToolIds + tool.id).distinct()
+                                supportingToolId = tool.id
+                            } else {
+                                expandedToolIds = expandedToolIds - tool.id
+                                if (supportingToolId == tool.id) supportingToolId = null
+                            }
                         },
                         onBack = if (compact) ({ navigator.back(backendId, profileId) }) else null,
                         onFiles = { navigate(WorkspaceContent.FILES) },
@@ -1263,14 +1280,19 @@ private fun HermesWorkspace(
                 },
                 supportingPaneKey = supportingTool
                     ?.takeIf { destination == WorkspaceContent.CHAT }
-                    ?.id,
+                    ?.let { tool ->
+                        scopedToolPaneKey(backendId, profileId, supportingSessionId, tool.id)
+                    },
                 supportingPane = supportingTool
                     ?.takeIf { destination == WorkspaceContent.CHAT }
                     ?.let { tool ->
                         {
                             ToolSupportingPane(
                                 tool = tool,
-                                onClose = { supportingToolId = null },
+                                onClose = {
+                                    expandedToolIds = expandedToolIds - tool.id
+                                    supportingToolId = null
+                                },
                             )
                         }
                     },
@@ -1501,6 +1523,15 @@ private fun HermesRoute.profileIdOr(fallback: String): String = when (this) {
     is HermesDestinationRoute.AppSettings -> null
     HermesRoute.Onboarding -> null
 }.orEmpty().ifBlank { fallback }
+
+internal fun scopedToolPaneKey(
+    backendId: String,
+    profileId: String,
+    sessionId: String,
+    toolId: String,
+): String = listOf(backendId, profileId, sessionId, toolId).joinToString(separator = "") { segment ->
+    "${segment.length}:$segment"
+}
 
 @Composable
 private fun SessionRail(
@@ -1868,7 +1899,9 @@ private fun ChatSurface(
     modifier: Modifier = Modifier,
     compactLayout: Boolean = true,
     adaptiveFocusState: AdaptiveFocusState,
-    onSupportingToolChange: ((TimelineItem.Tool?) -> Unit)? = null,
+    expandedToolIds: Set<String> = emptySet(),
+    toolDisclosureKey: (TimelineItem.Tool) -> String = { it.id },
+    onToolExpandedChange: ((TimelineItem.Tool, Boolean) -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     onFiles: (() -> Unit)? = null,
 ) {
@@ -1897,7 +1930,9 @@ private fun ChatSurface(
                     speechState = speechState,
                     onSpeak = voiceViewModel::speak,
                     onStopSpeaking = voiceViewModel::stopSpeaking,
-                    onSupportingToolChange = onSupportingToolChange,
+                    expandedToolIds = expandedToolIds,
+                    toolDisclosureKey = toolDisclosureKey,
+                    onToolExpandedChange = onToolExpandedChange,
                 )
             }
             if (state.loading) CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -2014,7 +2049,9 @@ private fun Timeline(
     speechState: SpeechUiState,
     onSpeak: (String, String) -> Unit,
     onStopSpeaking: () -> Unit,
-    onSupportingToolChange: ((TimelineItem.Tool?) -> Unit)?,
+    expandedToolIds: Set<String>,
+    toolDisclosureKey: (TimelineItem.Tool) -> String,
+    onToolExpandedChange: ((TimelineItem.Tool, Boolean) -> Unit)?,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(items.size, (items.lastOrNull() as? TimelineItem.Message)?.text?.length) {
@@ -2034,7 +2071,12 @@ private fun Timeline(
                     onSpeak = { onSpeak(item.id, item.text) },
                     onStopSpeaking = onStopSpeaking,
                 )
-                is TimelineItem.Tool -> ToolBlock(item, onSupportingToolChange)
+                is TimelineItem.Tool -> ToolBlock(
+                    tool = item,
+                    expanded = item.id in expandedToolIds,
+                    disclosureKey = toolDisclosureKey(item),
+                    onExpandedChange = onToolExpandedChange,
+                )
                 is TimelineItem.Reasoning -> ReasoningBlock(item)
                 is TimelineItem.Status -> StatusBlock(item)
             }
@@ -2219,9 +2261,12 @@ private fun MarkdownReply(text: String) {
 @Composable
 internal fun ToolBlock(
     tool: TimelineItem.Tool,
-    onSupportingToolChange: ((TimelineItem.Tool?) -> Unit)? = null,
+    expanded: Boolean? = null,
+    disclosureKey: String = tool.id,
+    onExpandedChange: ((TimelineItem.Tool, Boolean) -> Unit)? = null,
 ) {
-    var expanded by rememberSaveable(tool.id) { mutableStateOf(false) }
+    var localExpanded by rememberSaveable(disclosureKey) { mutableStateOf(false) }
+    val isExpanded = expanded ?: localExpanded
     val presentation = remember(tool.name, tool.summary, tool.state) { tool.presentation(includeTranscript = false) }
     val accessibilityDescription = remember(presentation) {
         listOfNotNull(
@@ -2248,14 +2293,15 @@ internal fun ToolBlock(
                     .fillMaxWidth()
                     .clickable(
                         role = Role.Button,
-                        onClickLabel = if (expanded) "Hide tool transcript" else "Show tool transcript",
+                        onClickLabel = if (isExpanded) "Hide tool transcript" else "Show tool transcript",
                     ) {
-                        expanded = !expanded
-                        onSupportingToolChange?.invoke(tool.takeIf { expanded })
+                        val nextExpanded = !isExpanded
+                        if (expanded == null) localExpanded = nextExpanded
+                        onExpandedChange?.invoke(tool, nextExpanded)
                     }
                     .semantics {
                         contentDescription = accessibilityDescription
-                        stateDescription = if (expanded) "Expanded" else "Collapsed"
+                        stateDescription = if (isExpanded) "Expanded" else "Collapsed"
                     }
                     .padding(horizontal = 12.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2272,11 +2318,11 @@ internal fun ToolBlock(
                     )
                 }
                 Icon(
-                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                     null,
                 )
             }
-            AnimatedVisibility(expanded, enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(isExpanded, enter = fadeIn(), exit = fadeOut()) {
                 ToolTranscriptContent(
                     tool = tool,
                     modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),

@@ -24,6 +24,7 @@ import androidx.compose.ui.test.waitUntilAtLeastOneExists
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.nousresearch.hermes.ui.navigation.HermesDestinationRoute
 import org.junit.Rule
 import org.junit.Test
 
@@ -35,7 +36,11 @@ class AdaptiveWorkspaceStateTest {
     @Test
     fun productionShellPreservesDestinationDraftFocusAndSupportingPaneAcrossMoves() {
         lateinit var expanded: MutableState<Boolean>
-        val runtimeOwnerIdentity = System.identityHashCode(Any()).toString()
+        val destination = HermesDestinationRoute.Chats(
+            backendId = "backend-intended",
+            profileId = "research",
+            sessionId = "session-42",
+        )
         val restoration = StateRestorationTester(compose)
         restoration.setContent {
             expanded = remember { mutableStateOf(false) }
@@ -46,8 +51,8 @@ class AdaptiveWorkspaceStateTest {
                     layout = if (expanded.value) AdaptiveWorkspaceLayout.EXPANDED else AdaptiveWorkspaceLayout.COMPACT,
                     supportsSupportingPane = expanded.value,
                 ),
-                destination = "conversation/session-42",
-                destinations = listOf("conversation/session-42"),
+                destination = destination,
+                destinations = listOf(destination),
                 isListDestination = { false },
                 paneModifier = { _, _ -> Modifier.fillMaxSize() },
                 expandedNavigation = { Spacer(Modifier.width(120.dp)) },
@@ -57,8 +62,10 @@ class AdaptiveWorkspaceStateTest {
                     Text("TOOL OUTPUT", Modifier.testTag("supporting-pane"))
                 },
             ) { activeDestination, compact ->
-                Text(activeDestination, Modifier.testTag("route"))
-                Text(runtimeOwnerIdentity, Modifier.testTag("runtime-owner"))
+                Text(
+                    "${activeDestination.backendId}/${activeDestination.profileId}/${activeDestination.sessionId}",
+                    Modifier.testTag("route"),
+                )
                 TextField(
                     value = draft,
                     onValueChange = { draft = it },
@@ -76,8 +83,7 @@ class AdaptiveWorkspaceStateTest {
 
         compose.onNodeWithTag("draft").assertTextContains("preserved").assertIsFocused()
         compose.onNodeWithTag("supporting-pane").assertExists()
-        compose.onNodeWithTag("route").assertTextContains("conversation/session-42")
-        compose.onNodeWithTag("runtime-owner").assertTextContains(runtimeOwnerIdentity)
+        compose.onNodeWithTag("route").assertTextContains("backend-intended/research/session-42")
 
         compose.runOnIdle { expanded.value = false }
         compose.waitUntilAtLeastOneExists(hasTestTag("draft"), 5_000)
@@ -88,7 +94,6 @@ class AdaptiveWorkspaceStateTest {
         restoration.emulateSavedInstanceStateRestore()
         compose.waitUntilAtLeastOneExists(hasTestTag("draft"), 5_000)
         compose.onNodeWithTag("draft").assertTextContains("preserved").assertIsFocused()
-        compose.onNodeWithTag("route").assertTextContains("conversation/session-42")
-        compose.onNodeWithTag("runtime-owner").assertTextContains(runtimeOwnerIdentity)
+        compose.onNodeWithTag("route").assertTextContains("backend-intended/research/session-42")
     }
 }

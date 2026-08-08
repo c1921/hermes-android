@@ -301,10 +301,11 @@ private val HermesShapes = Shapes(
 @Composable
 fun HermesTheme(
     skin: HermesSkin = HermesSkin.NOUS,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = skin.colorScheme(isSystemInDarkTheme()),
+        colorScheme = skin.colorScheme(darkTheme),
         typography = HermesTypography,
         shapes = HermesShapes,
         content = content,

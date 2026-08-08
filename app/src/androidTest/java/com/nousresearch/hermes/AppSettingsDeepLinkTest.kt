@@ -23,6 +23,11 @@ class AppSettingsDeepLinkTest {
         ActivityScenario.launch<MainActivity>(intent).use {
             compose.onNodeWithText("APP SETTINGS").assertIsDisplayed()
             compose.onNodeWithText("APPEARANCE").assertIsDisplayed()
+
+            it.recreate()
+
+            compose.onNodeWithText("APP SETTINGS").assertIsDisplayed()
+            compose.onNodeWithText("APPEARANCE").assertIsDisplayed()
         }
     }
 }

@@ -52,11 +52,15 @@ class ToolBlockTest {
         )
         compose.setContent {
             HermesTheme {
-                var supportingTool by remember { mutableStateOf<TimelineItem.Tool?>(null) }
-                if (supportingTool == null) {
-                    ToolBlock(tool, onSupportingToolChange = { supportingTool = it })
-                } else {
-                    ToolSupportingPane(tool = requireNotNull(supportingTool), onClose = { supportingTool = null })
+                var expanded by remember { mutableStateOf(false) }
+                ToolBlock(
+                    tool = tool,
+                    expanded = expanded,
+                    disclosureKey = scopedToolPaneKey("backend", "profile", "session", tool.id),
+                    onExpandedChange = { _, nextExpanded -> expanded = nextExpanded },
+                )
+                if (expanded) {
+                    ToolSupportingPane(tool = tool, onClose = { expanded = false })
                 }
             }
         }
@@ -65,5 +69,6 @@ class ToolBlockTest {
         compose.onNodeWithText("support transcript", substring = true).assertExists()
         compose.onNodeWithContentDescription("Close tool transcript").performClick()
         compose.onNodeWithContentDescription("Tool usage, Terminal, Terminal completed").assertExists()
+        compose.onNodeWithText("support transcript", substring = true).assertDoesNotExist()
     }
 }

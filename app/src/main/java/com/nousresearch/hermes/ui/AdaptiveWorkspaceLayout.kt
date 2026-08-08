@@ -70,6 +70,20 @@ internal fun adaptiveWorkspaceConfiguration(
     val height = windowSizeClass.minHeightDp.dp
     val expanded = windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
 
+    if (verticalHinge != null && horizontalHinge != null) {
+        val useLeft = verticalHinge.left >= width - verticalHinge.right
+        val useTop = horizontalHinge.top >= height - horizontalHinge.bottom
+        return AdaptiveWorkspaceConfiguration(
+            layout = AdaptiveWorkspaceLayout.COMPACT,
+            safeContentPadding = PaddingValues.Absolute(
+                left = if (useLeft) 0.dp else verticalHinge.right,
+                top = if (useTop) 0.dp else horizontalHinge.bottom,
+                right = if (useLeft) width - verticalHinge.left else 0.dp,
+                bottom = if (useTop) height - horizontalHinge.top else 0.dp,
+            ),
+        )
+    }
+
     horizontalHinge?.let { hinge ->
         val topHeight = hinge.top
         val bottomHeight = height - hinge.bottom
@@ -95,9 +109,9 @@ internal fun adaptiveWorkspaceConfiguration(
         return AdaptiveWorkspaceConfiguration(
             layout = AdaptiveWorkspaceLayout.COMPACT,
             safeContentPadding = if (leftWidth >= rightWidth) {
-                PaddingValues(end = width - hinge.left)
+                PaddingValues.Absolute(right = width - hinge.left)
             } else {
-                PaddingValues(start = hinge.right)
+                PaddingValues.Absolute(left = hinge.right)
             },
         )
     }
@@ -113,15 +127,22 @@ internal fun currentAdaptiveWorkspaceConfiguration(): AdaptiveWorkspaceConfigura
     val adaptiveInfo = currentWindowAdaptiveInfo()
     val posture = adaptiveInfo.windowPosture
     val density = LocalDensity.current
-    fun Rect.toAdaptiveHingeBounds(): AdaptiveHingeBounds = with(density) {
-        AdaptiveHingeBounds(left.toDp(), top.toDp(), right.toDp(), bottom.toDp())
+    fun List<Rect>.coveringHingeBounds(): AdaptiveHingeBounds? = if (isEmpty()) {
+        null
+    } else with(density) {
+        AdaptiveHingeBounds(
+            left = minOf { it.left }.toDp(),
+            top = minOf { it.top }.toDp(),
+            right = maxOf { it.right }.toDp(),
+            bottom = maxOf { it.bottom }.toDp(),
+        )
     }
     val verticalHinge = (
         posture.separatingVerticalHingeBounds + posture.occludingVerticalHingeBounds
-    ).firstOrNull()?.toAdaptiveHingeBounds()
+    ).coveringHingeBounds()
     val horizontalHinge = (
         posture.separatingHorizontalHingeBounds + posture.occludingHorizontalHingeBounds
-    ).firstOrNull()?.toAdaptiveHingeBounds()
+    ).coveringHingeBounds()
     return adaptiveWorkspaceConfiguration(
         windowSizeClass = adaptiveInfo.windowSizeClass,
         verticalHinge = verticalHinge,

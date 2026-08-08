@@ -14,17 +14,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.window.core.layout.WindowSizeClass
 import com.nousresearch.hermes.domain.TimelineItem
@@ -63,48 +68,53 @@ class AdaptiveWorkspaceScreenshotTest {
         )
 
         compose.setContent {
-            HermesTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AdaptiveWorkspaceShell(
-                        configuration = configuration,
-                        destination = "conversation/session-42",
-                        destinations = listOf("conversation/session-42"),
-                        isListDestination = { false },
-                        paneModifier = { _, _ -> Modifier.fillMaxSize() },
-                        expandedNavigation = {
-                            Column(
-                                Modifier
-                                    .width(330.dp)
-                                    .fillMaxHeight()
-                                    .padding(20.dp),
-                            ) {
-                                Text("HERMES", style = MaterialTheme.typography.titleLarge)
-                                Text("SESSIONS", style = MaterialTheme.typography.labelMedium)
-                                Spacer(Modifier.padding(8.dp))
-                                Text("Adaptive shell review", style = MaterialTheme.typography.bodyMedium)
+            HermesTheme(darkTheme = true) {
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density = 1f, fontScale = 1.3f),
+                    LocalLayoutDirection provides LayoutDirection.Rtl,
+                ) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        AdaptiveWorkspaceShell(
+                            configuration = configuration,
+                            destination = "conversation/session-42",
+                            destinations = listOf("conversation/session-42"),
+                            isListDestination = { false },
+                            paneModifier = { _, _ -> Modifier.fillMaxSize() },
+                            expandedNavigation = {
+                                Column(
+                                    Modifier
+                                        .width(330.dp)
+                                        .fillMaxHeight()
+                                        .padding(20.dp),
+                                ) {
+                                    Text("HERMES", style = MaterialTheme.typography.titleLarge)
+                                    Text("SESSIONS", style = MaterialTheme.typography.labelMedium)
+                                    Spacer(Modifier.padding(8.dp))
+                                    Text("Adaptive shell review", style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            supportingPaneKey = "tool-output/tool-7",
+                            supportingPane = {
+                                ToolSupportingPane(tool = tool, onClose = {})
+                            },
+                        ) { _, compact ->
+                            var draft by remember { mutableStateOf("Keep the draft while the window changes") }
+                            Column(Modifier.fillMaxSize().padding(20.dp).testTag("detail-pane")) {
+                                Text("ADAPTIVE PRODUCT SHELL", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    if (compact) "Compact conversation" else "Persistent conversation detail",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Spacer(Modifier.weight(1f))
+                                OutlinedTextField(
+                                    value = draft,
+                                    onValueChange = { draft = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Message Hermes") },
+                                )
                             }
-                            HorizontalDivider(Modifier.fillMaxHeight().width(1.dp))
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        supportingPaneKey = "tool-output/tool-7",
-                        supportingPane = {
-                            ToolSupportingPane(tool = tool, onClose = {})
-                        },
-                    ) { _, compact ->
-                        var draft by remember { mutableStateOf("Keep the draft while the window changes") }
-                        Column(Modifier.fillMaxSize().padding(20.dp).testTag("detail-pane")) {
-                            Text("ADAPTIVE PRODUCT SHELL", style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                if (compact) "Compact conversation" else "Persistent conversation detail",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Spacer(Modifier.weight(1f))
-                            OutlinedTextField(
-                                value = draft,
-                                onValueChange = { draft = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Message Hermes") },
-                            )
                         }
                     }
                 }
@@ -120,7 +130,11 @@ class AdaptiveWorkspaceScreenshotTest {
             assertTrue(actual.compress(Bitmap.CompressFormat.PNG, 100, stream))
         }
         assertTrue(output.length() > 0)
-        if (!InstrumentationRegistry.getArguments().getBoolean("recordGoldens", false)) {
+        val recordGoldens = InstrumentationRegistry.getArguments()
+            .getString("recordGoldens")
+            ?.toBooleanStrictOrNull()
+            ?: false
+        if (!recordGoldens) {
             val expected = instrumentation.context.assets.open("goldens/issue17-shell-$mode.png").use {
                 requireNotNull(BitmapFactory.decodeStream(it))
             }
