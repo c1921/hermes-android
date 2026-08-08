@@ -128,7 +128,7 @@ class HermesSurfaceJourneyBenchmark {
 }
 
 private fun UiDevice.clickText(text: String) {
-    requireNotNull(wait(Until.findObject(By.textContains(text)), 5_000L)) {
+    requireNotNull(wait(Until.findObject(By.desc(text)), 5_000L)) {
         "Benchmark fixture surface not found: $text"
     }.click()
     waitForIdle()

@@ -103,7 +103,10 @@ private fun BenchmarkFixture(resetKey: Long) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
             FixtureSurface.entries.forEach { candidate ->
-                TextButton(onClick = { surface = candidate }) {
+                TextButton(
+                    onClick = { surface = candidate },
+                    modifier = Modifier.semantics { contentDescription = candidate.label },
+                ) {
                     Text(candidate.label)
                 }
             }
