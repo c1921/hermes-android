@@ -1,14 +1,26 @@
 package com.nousresearch.hermes.audio
 
+import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.graphics.drawable.Icon
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaMetadata
 import android.media.MediaPlayer
 import android.media.MediaRouter2
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import com.nousresearch.hermes.MainActivity
+import com.nousresearch.hermes.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.IOException
@@ -37,11 +49,26 @@ data class VoicePlaybackStatus(
     val outputName: String,
 )
 
+internal data class VoiceMediaControls(val actions: Long, val toggleAction: String?)
+
+internal fun voiceMediaControls(state: Int): VoiceMediaControls = when (state) {
+    PlaybackState.STATE_PLAYING -> VoiceMediaControls(
+        PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_STOP,
+        AndroidVoicePlayer.ACTION_PAUSE,
+    )
+    PlaybackState.STATE_PAUSED -> VoiceMediaControls(
+        PlaybackState.ACTION_PLAY or PlaybackState.ACTION_STOP,
+        AndroidVoicePlayer.ACTION_PLAY,
+    )
+    else -> VoiceMediaControls(PlaybackState.ACTION_STOP, null)
+}
+
 @Singleton
 class AndroidVoicePlayer @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
+    private val notificationManager = context.getSystemService(NotificationManager::class.java)
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var player: MediaPlayer? = null
@@ -51,6 +78,14 @@ class AndroidVoicePlayer @Inject constructor(
     private var errorCallback: ((String) -> Unit)? = null
     private var completionCallback: (() -> Unit)? = null
     private var resumeAfterFocusGain = false
+    private var mediaSession: MediaSession? = null
+    private var playbackGeneration = 0L
+
+    init {
+        context.cacheDir.listFiles { file -> file.name.startsWith(SPEECH_FILE_PREFIX) }
+            .orEmpty()
+            .forEach(File::delete)
+    }
 
     @Synchronized
     fun play(
@@ -60,10 +95,11 @@ class AndroidVoicePlayer @Inject constructor(
         onComplete: () -> Unit,
     ) {
         stop()
+        val generation = playbackGeneration
         if (!requestAudioFocus()) throw IOException("Android could not reserve the speech audio session")
 
         val target = try {
-            File.createTempFile("hermes-speech-", audio.extension, context.cacheDir)
+            File.createTempFile(SPEECH_FILE_PREFIX, audio.extension, context.cacheDir)
         } catch (error: Throwable) {
             releaseAudioFocus()
             throw IOException("Android could not prepare temporary spoken audio", error)
@@ -84,20 +120,39 @@ class AndroidVoicePlayer @Inject constructor(
             statusCallback = onStatus
             errorCallback = onError
             completionCallback = onComplete
+            prepareMediaSession()
+            publishMediaState(PlaybackState.STATE_BUFFERING)
             next.setOnPreparedListener { prepared ->
-                prepared.start()
-                notifyStatus(VoicePlaybackPhase.PLAYING)
+                synchronized(this) {
+                    if (player !== prepared || playbackGeneration != generation) return@setOnPreparedListener
+                    prepared.start()
+                    notifyStatus(VoicePlaybackPhase.PLAYING)
+                }
             }
             next.setOnCompletionListener {
-                val callback = completionCallback
-                finish()
-                callback?.invoke()
+                synchronized(this) {
+                    if (player !== next || playbackGeneration != generation) return@setOnCompletionListener
+                    val callback = completionCallback
+                    finish()
+                    callback?.invoke()
+                }
             }
             next.setOnErrorListener { _, _, _ ->
-                fail("Android could not play the Hermes spoken reply")
+                synchronized(this) {
+                    if (player === next && playbackGeneration == generation) {
+                        fail("Android could not play the Hermes spoken reply")
+                    }
+                }
                 true
             }
-            next.addOnRoutingChangedListener({ notifyCurrentStatus() }, mainHandler)
+            next.addOnRoutingChangedListener(
+                {
+                    synchronized(this) {
+                        if (player === next && playbackGeneration == generation) notifyCurrentStatus()
+                    }
+                },
+                mainHandler,
+            )
             next.prepareAsync()
         } catch (error: Throwable) {
             target.delete()
@@ -108,7 +163,7 @@ class AndroidVoicePlayer @Inject constructor(
 
     @Synchronized
     fun pause() {
-        val active = player ?: return
+        val active = player ?: return finish()
         if (active.isPlaying) {
             active.pause()
             notifyStatus(VoicePlaybackPhase.PAUSED)
@@ -117,7 +172,7 @@ class AndroidVoicePlayer @Inject constructor(
 
     @Synchronized
     fun resume() {
-        val active = player ?: return
+        val active = player ?: return finish()
         if (!requestAudioFocus()) {
             fail("Android could not resume the speech audio session")
             return
@@ -161,7 +216,7 @@ class AndroidVoicePlayer @Inject constructor(
 
     private fun onAudioFocusChanged(change: Int) {
         when (change) {
-            AudioManager.AUDIOFOCUS_LOSS -> stop()
+            AudioManager.AUDIOFOCUS_LOSS -> fail("Playback stopped because Android audio focus changed")
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK,
             -> synchronized(this) {
@@ -186,6 +241,9 @@ class AndroidVoicePlayer @Inject constructor(
     @Synchronized
     private fun notifyStatus(phase: VoicePlaybackPhase) {
         val route = player?.routedDevice?.productName?.toString()?.takeIf(String::isNotBlank) ?: "Android media output"
+        publishMediaState(
+            if (phase == VoicePlaybackPhase.PLAYING) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
+        )
         statusCallback?.invoke(VoicePlaybackStatus(phase, route))
     }
 
@@ -198,6 +256,7 @@ class AndroidVoicePlayer @Inject constructor(
 
     @Synchronized
     private fun finish() {
+        playbackGeneration++
         val active = player
         player = null
         runCatching { active?.release() }
@@ -208,10 +267,126 @@ class AndroidVoicePlayer @Inject constructor(
         completionCallback = null
         resumeAfterFocusGain = false
         releaseAudioFocus()
+        mediaSession?.setPlaybackState(
+            PlaybackState.Builder().setState(PlaybackState.STATE_STOPPED, 0L, 0f).build(),
+        )
+        notificationManager.cancel(NOTIFICATION_ID)
+        mediaSession?.isActive = false
+        mediaSession?.release()
+        mediaSession = null
     }
 
     private fun releaseAudioFocus() {
         focusRequest?.let(audioManager::abandonAudioFocusRequest)
         focusRequest = null
+    }
+
+    private fun prepareMediaSession() {
+        if (mediaSession != null) return
+        createNotificationChannel()
+        mediaSession = MediaSession(context, "HermesReadAloud").apply {
+            setCallback(
+                object : MediaSession.Callback() {
+                    override fun onPlay() = resume()
+                    override fun onPause() = pause()
+                    override fun onStop() = stop()
+                },
+                mainHandler,
+            )
+            setSessionActivity(
+                PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            setMetadata(
+                MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "Hermes read-aloud")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "Hermes")
+                    .build(),
+            )
+            isActive = true
+        }
+    }
+
+    @SuppressLint("NotificationPermission") // Media-session notifications are exempt from the Android 13 runtime grant.
+    private fun publishMediaState(state: Int) {
+        val session = mediaSession ?: return
+        val controls = voiceMediaControls(state)
+        session.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(controls.actions)
+                .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, if (state == PlaybackState.STATE_PLAYING) 1f else 0f)
+                .build(),
+        )
+        val playing = state == PlaybackState.STATE_PLAYING
+        val stopIntent = mediaActionIntent(ACTION_STOP, 3)
+        val builder = Notification.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_hermes)
+            .setContentTitle("Hermes read-aloud")
+            .setContentText(if (state == PlaybackState.STATE_BUFFERING) "Preparing spoken reply" else "Spoken reply")
+            .setContentIntent(session.controller.sessionActivity)
+            .setDeleteIntent(stopIntent)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setOnlyAlertOnce(true)
+            .setOngoing(playing)
+        controls.toggleAction?.let { action ->
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(
+                        context,
+                        if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                    ),
+                    if (playing) "Pause" else "Play",
+                    mediaActionIntent(action, if (playing) 1 else 2),
+                ).build(),
+            )
+        }
+        builder
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
+                    "Stop",
+                    stopIntent,
+                ).build(),
+            )
+            .setStyle(
+                Notification.MediaStyle()
+                    .setMediaSession(session.sessionToken)
+                    .setShowActionsInCompactView(
+                        *(if (controls.toggleAction == null) intArrayOf(0) else intArrayOf(0, 1)),
+                    ),
+            )
+        val notification = builder.build()
+        // Media-session notifications are exempt from Android 13's runtime notification permission.
+        runCatching { notificationManager.notify(NOTIFICATION_ID, notification) }
+    }
+
+    private fun mediaActionIntent(action: String, requestCode: Int): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        requestCode,
+        Intent(context, VoiceMediaActionReceiver::class.java).setAction(action),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    private fun createNotificationChannel() {
+        notificationManager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Spoken replies", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Playback controls for Hermes read-aloud"
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                setSound(null, null)
+            },
+        )
+    }
+
+    internal companion object {
+        const val ACTION_PLAY = "com.nousresearch.hermes.voice.PLAY"
+        const val ACTION_PAUSE = "com.nousresearch.hermes.voice.PAUSE"
+        const val ACTION_STOP = "com.nousresearch.hermes.voice.STOP"
+        const val CHANNEL_ID = "hermes_read_aloud"
+        const val NOTIFICATION_ID = 3101
+        const val SPEECH_FILE_PREFIX = "hermes-speech-"
     }
 }

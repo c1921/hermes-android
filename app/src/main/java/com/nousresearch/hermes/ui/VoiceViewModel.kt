@@ -3,7 +3,9 @@ package com.nousresearch.hermes.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nousresearch.hermes.audio.AndroidVoiceRecorder
+import com.nousresearch.hermes.audio.AndroidVoiceHaptics
 import com.nousresearch.hermes.audio.AndroidVoicePlayer
+import com.nousresearch.hermes.audio.VoiceHaptic
 import com.nousresearch.hermes.audio.VoicePlaybackPhase
 import com.nousresearch.hermes.audio.sanitizeTextForSpeech
 import com.nousresearch.hermes.data.BackendConfig
@@ -47,6 +49,7 @@ data class SpeechUiState(
 class VoiceViewModel @Inject constructor(
     private val recorder: AndroidVoiceRecorder,
     private val player: AndroidVoicePlayer,
+    private val haptics: AndroidVoiceHaptics,
     private val voice: VoiceRepository,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(VoiceUiState())
@@ -60,10 +63,11 @@ class VoiceViewModel @Inject constructor(
     private var timeoutJob: Job? = null
     private var transcriptionJob: Job? = null
     private var speechJob: Job? = null
+    private var speechGeneration = 0L
 
     fun bind(config: BackendConfig) {
         if (backend?.id != config.id) {
-            cancelRecording()
+            cancelRecording(feedback = false)
             stopSpeaking()
             backend = config
             mutableState.value = VoiceUiState()
@@ -78,6 +82,7 @@ class VoiceViewModel @Inject constructor(
                 viewModelScope.launch { cancelRecording("Recording stopped because Android audio focus changed") }
             }
         }.onSuccess {
+            haptics.perform(VoiceHaptic.RECORD_START)
             val startedAt = System.currentTimeMillis()
             mutableState.value = VoiceUiState(phase = VoicePhase.RECORDING, recordingMode = mode)
             levelJob = viewModelScope.launch {
@@ -99,14 +104,20 @@ class VoiceViewModel @Inject constructor(
     }
 
     fun lockRecording() {
-        mutableState.update { current ->
-            if (current.phase == VoicePhase.RECORDING) current.copy(recordingMode = VoiceRecordingMode.LOCKED) else current
+        val shouldLock = mutableState.value.let {
+            it.phase == VoicePhase.RECORDING && it.recordingMode != VoiceRecordingMode.LOCKED
         }
+        if (!shouldLock) return
+        mutableState.update { current ->
+            current.copy(recordingMode = VoiceRecordingMode.LOCKED)
+        }
+        haptics.perform(VoiceHaptic.RECORD_LOCK)
     }
 
     fun stopAndTranscribe() {
         if (mutableState.value.phase != VoicePhase.RECORDING) return
         val config = backend ?: return cancelRecording("Reconnect Hermes before using voice input")
+        haptics.perform(VoiceHaptic.RECORD_STOP)
         stopMetering()
         mutableState.update { it.copy(phase = VoicePhase.TRANSCRIBING, level = 0f, error = null) }
         transcriptionJob = viewModelScope.launch {
@@ -127,12 +138,14 @@ class VoiceViewModel @Inject constructor(
         }
     }
 
-    fun cancelRecording(message: String? = null) {
+    fun cancelRecording(message: String? = null, feedback: Boolean = true) {
+        val wasRecording = mutableState.value.phase == VoicePhase.RECORDING
         stopMetering()
         transcriptionJob?.cancel()
         transcriptionJob = null
         recorder.cancel()
         mutableState.value = VoiceUiState(error = message)
+        if (feedback && wasRecording) haptics.perform(VoiceHaptic.RECORD_CANCEL)
     }
 
     fun permissionDenied() {
@@ -154,17 +167,19 @@ class VoiceViewModel @Inject constructor(
             stopSpeaking()
             return
         }
-        cancelRecording()
+        cancelRecording(feedback = false)
         stopSpeaking()
+        val generation = ++speechGeneration
         mutableSpeechState.value = SpeechUiState(phase = SpeechPhase.LOADING, messageId = messageId)
         speechJob = viewModelScope.launch {
             try {
                 val config = backend ?: throw IllegalStateException("Reconnect Hermes before playing spoken replies")
                 val audio = voice.speak(config, speakableText)
+                if (generation != speechGeneration) return@launch
                 player.play(
                     audio = audio,
                     onStatus = { status ->
-                        if (mutableSpeechState.value.messageId == messageId) {
+                        if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
                             mutableSpeechState.value = SpeechUiState(
                                 phase = if (status.phase == VoicePlaybackPhase.PLAYING) SpeechPhase.PLAYING else SpeechPhase.PAUSED,
                                 messageId = messageId,
@@ -173,18 +188,22 @@ class VoiceViewModel @Inject constructor(
                         }
                     },
                     onError = { message ->
-                        if (mutableSpeechState.value.messageId == messageId) {
+                        if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
                             mutableSpeechState.value = SpeechUiState(error = message)
                         }
                     },
                     onComplete = {
-                        if (mutableSpeechState.value.messageId == messageId) mutableSpeechState.value = SpeechUiState()
+                        if (generation == speechGeneration && mutableSpeechState.value.messageId == messageId) {
+                            mutableSpeechState.value = SpeechUiState()
+                        }
                     },
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
-                mutableSpeechState.value = SpeechUiState(error = error.userVoiceMessage())
+                if (generation == speechGeneration) {
+                    mutableSpeechState.value = SpeechUiState(error = error.userVoiceMessage())
+                }
             }
         }
     }
@@ -194,6 +213,7 @@ class VoiceViewModel @Inject constructor(
     fun showOutputSwitcher() = player.showOutputSwitcher()
 
     fun stopSpeaking() {
+        speechGeneration++
         speechJob?.cancel()
         speechJob = null
         player.stop()
@@ -203,7 +223,7 @@ class VoiceViewModel @Inject constructor(
     fun clearSpeechError() = mutableSpeechState.update { it.copy(error = null) }
 
     override fun onCleared() {
-        cancelRecording()
+        cancelRecording(feedback = false)
         stopSpeaking()
         super.onCleared()
     }
