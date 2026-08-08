@@ -161,16 +161,14 @@ private fun FixtureChats(streamText: String, resetKey: Long) {
             OutlinedTextField(
                 value = draft,
                 onValueChange = { draft = it.take(MAX_COMPOSER_CHARACTERS) },
-                modifier = Modifier.weight(1f).semantics { contentDescription = "benchmark-composer" },
+                modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {
+                    contentDescription = "benchmark-composer:$draft"
+                },
                 label = { Text("Message Hermes") },
                 singleLine = true,
             )
             Button(onClick = { draft = "" }, enabled = draft.isNotBlank()) { Text("Send") }
         }
-        Text(
-            text = "Draft: $draft",
-            modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "benchmark-composer-value" },
-        )
     }
 }
 

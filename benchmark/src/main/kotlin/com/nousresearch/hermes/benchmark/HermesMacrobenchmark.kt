@@ -82,13 +82,13 @@ class HermesSurfaceJourneyBenchmark {
 
     @Test
     fun composerJourney() = measureSurface("Chats") {
-        val composer = requireNotNull(wait(Until.findObject(By.desc("benchmark-composer")), 5_000L)) {
+        val composer = requireNotNull(wait(Until.findObject(By.descContains("benchmark-composer")), 5_000L)) {
             "Benchmark composer field not found"
         }
         val expectedText = "Deterministic benchmark composer input"
         composer.click()
         composer.text = expectedText
-        requireNotNull(wait(Until.findObject(By.desc("benchmark-composer-value")), 5_000L)) {
+        requireNotNull(wait(Until.findObject(By.descContains(expectedText)), 5_000L)) {
             "Benchmark composer field did not accept deterministic input"
         }
         waitForIdle()
