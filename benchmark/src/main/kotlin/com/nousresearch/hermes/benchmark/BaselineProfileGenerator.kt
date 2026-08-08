@@ -48,7 +48,7 @@ class BaselineProfileGenerator {
 private fun UiDevice.clickText(text: String) {
     requireNotNull(
         wait(Until.findObject(By.desc(text)), 1_000L)
-            ?: wait(Until.findObject(By.text(text)), 4_000L),
+            ?: wait(Until.findObject(By.textContains(text)), 4_000L),
     ) { "Baseline Profile fixture surface not found: $text" }
         .click()
     waitForIdle()

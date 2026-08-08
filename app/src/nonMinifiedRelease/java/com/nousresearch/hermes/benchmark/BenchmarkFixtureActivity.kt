@@ -105,7 +105,7 @@ private fun BenchmarkFixture(resetKey: Long) {
             FixtureSurface.entries.forEach { candidate ->
                 TextButton(
                     onClick = { surface = candidate },
-                    modifier = Modifier.semantics { contentDescription = candidate.label },
+                    modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = candidate.label },
                 ) {
                     Text(candidate.label)
                 }
@@ -169,7 +169,7 @@ private fun FixtureChats(streamText: String, resetKey: Long) {
         }
         Text(
             text = "Draft: $draft",
-            modifier = Modifier.semantics { contentDescription = "benchmark-composer-value" },
+            modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "benchmark-composer-value" },
         )
     }
 }
