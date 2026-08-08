@@ -281,6 +281,12 @@ android {
     }
 }
 
+androidComponents {
+    onVariants(selector().withName("nonMinifiedRelease")) {
+        sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
+    }
+}
+
 dependencies {
     baselineProfile(project(":benchmark"))
 
