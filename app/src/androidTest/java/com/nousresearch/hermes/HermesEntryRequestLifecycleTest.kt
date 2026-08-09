@@ -3,8 +3,10 @@ package com.nousresearch.hermes
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import com.nousresearch.hermes.platform.HermesEntryRequestStoreEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import org.junit.Assert.assertEquals
@@ -28,13 +30,12 @@ class HermesEntryRequestLifecycleTest {
 
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> activity.startActivity(intent) }
-            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            assertEquals(1, store.deliveries.value.size)
+            awaitDeliveryCount(1)
             scenario.onActivity(::assertPayloadCleared)
 
             scenario.recreate()
 
-            assertEquals(1, store.deliveries.value.size)
+            awaitDeliveryCount(1)
             scenario.onActivity(::assertPayloadCleared)
         }
         clearStore()
@@ -52,7 +53,7 @@ class HermesEntryRequestLifecycleTest {
 
         ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
             scenario.onActivity { activity -> activity.startActivity(malicious) }
-            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             assertTrue(store.deliveries.value.isEmpty())
             scenario.onActivity(::assertPayloadCleared)
             scenario.recreate()
@@ -69,5 +70,16 @@ class HermesEntryRequestLifecycleTest {
 
     private fun clearStore() {
         store.deliveries.value.forEach { store.discard(it.request.id) }
+    }
+
+    private fun awaitDeliveryCount(expected: Int) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val deadline = SystemClock.uptimeMillis() + 5_000L
+        while (SystemClock.uptimeMillis() < deadline) {
+            instrumentation.waitForIdleSync()
+            if (store.deliveries.value.size == expected) return
+            SystemClock.sleep(50L)
+        }
+        assertEquals(expected, store.deliveries.value.size)
     }
 }
