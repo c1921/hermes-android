@@ -29,7 +29,7 @@ integration, full device accessibility, and release proof remain incomplete.
 | Reported gap | Current evidence | Audit result |
 | --- | --- | --- |
 | Multiple password providers are rejected | Native onboarding and reconnect provider selection landed in `110ced5`; the selected provider is rediscovered and submitted exactly | Closed in Android source; physical renewable-session QA is still required |
-| Android has only launcher/share entry handling | Bounded launcher, share, app-link, notification, shortcut, and widget request parsing/routing landed in `8ba1dbd` | Client path exists; hosted App Links and real device producer proof remain external/runtime work |
+| Android has only launcher/share entry handling | Bounded launcher, share, app-link, notification, shortcut, and widget request parsing/routing landed in `8ba1dbd`; the privacy-safe New chat widget provider now ships on the current branch | Client path exists; hosted App Links and real device producer proof remain external/runtime work |
 | Conversation history lacks ordered typed parts | The pure reducer/registry landed in `6498158`; the current parity patch adds artifact/media/source history shapes and `message.interim` sealing | Foreground projection is implemented; exact missed-event replay still needs an upstream cursor/receipt contract |
 | No Artifacts destination | Adaptive list/detail, profile-scoped extraction, safe previews, origin navigation, SAF export, and read-only provider grants landed in `62c8d82` | Source/build complete; physical viewer, focus, and grant-lifecycle proof remains pending |
 
@@ -87,6 +87,8 @@ integration, full device accessibility, and release proof remain incomplete.
   messages, continuous streaming, core-surface journeys, API 28/36 managed
   device CI, Baseline Profile generation, SBOM/provenance retention, and
   deterministic unsigned APK/AAB payload comparison.
+- Added the Android home-screen New chat widget, reusing the validated explicit
+  entry intent so the widget carries no session, profile, or message data.
 
 The practical conclusion is not “Android is missing most of Desktop.” The
 foreground client is broad and functional. The remaining distance is
