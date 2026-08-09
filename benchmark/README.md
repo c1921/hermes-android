@@ -11,10 +11,12 @@ pull requests into `main`.
 `HermesStartupBenchmark` records `StartupTimingMetric` (TTID and TTFD when the
 app reports full display) for cold startup and `FrameTimingMetric` for cold and
 warm startup.
-`HermesSurfaceJourneyBenchmark` provides named Atlas/chat, continuous-stream
-transcript scroll, composer, Files/Artifacts, and Manage frame journeys. The
-benchmark-only fixture activity renders the production Compose
-surfaces with deterministic local data and no credentials or network access.
+`HermesSurfaceJourneyBenchmark` provides deterministic fixture journeys for
+Atlas/chat, continuous-stream transcript scroll, composer, Files/Artifacts, and
+Manage. The benchmark-only fixture reuses the production `Timeline`,
+`ArtifactsScreen`, and management header renderers where practical; its
+synthetic navigation and Atlas/Files/Manage content are harness coverage, not
+claims that the production navigation screens themselves were exercised.
 The fixture is present in the `benchmarkRelease` and `nonMinifiedRelease`
 source sets because the macrobenchmark and Baseline Profile tasks use distinct
 AGP variants; neither source set is part of the production `release` variant.

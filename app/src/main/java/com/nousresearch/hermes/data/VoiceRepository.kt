@@ -16,6 +16,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 
@@ -105,6 +106,9 @@ class VoiceRepository @Inject constructor(
             if (!session.append(text) && !terminal.isCompleted) throw IOException("Hermes rejected spoken text")
             if (!session.finish() && !terminal.isCompleted) throw IOException("Hermes rejected spoken completion")
             return withTimeout(STREAM_TIMEOUT_MILLIS) { terminal.await() }.also { completedNormally = true }
+        } catch (timeout: TimeoutCancellationException) {
+            if (!receivedAudio.get()) return StreamedSpeechResult.FALLBACK
+            throw IOException("Hermes voice stream timed out", timeout)
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: IOException) {

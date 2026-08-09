@@ -42,6 +42,12 @@ awk -F '\t' '
   { candidate[$1 "." $2] = $3 }
   END {
     failed = 0
+    for (key in candidate) {
+      if (!(key in baseline)) {
+        printf "missing baseline metric: %s candidate=%s\n", key, candidate[key] > "/dev/stderr"
+        failed = 1
+      }
+    }
     for (key in baseline) {
       if (!(key in candidate)) {
         printf "missing candidate metric: %s\n", key > "/dev/stderr"

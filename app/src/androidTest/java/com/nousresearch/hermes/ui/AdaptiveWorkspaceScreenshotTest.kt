@@ -60,9 +60,10 @@ class AdaptiveWorkspaceScreenshotTest {
     fun captureFoldProductionShellFrame() = captureProductionShellMatrixFrame("fold")
 
     private fun captureProductionShellMatrixFrame(mode: String) {
-        // Wide adaptive goldens run on the API 36 Pixel Tablet managed device;
-        // API 28 keeps the app matrix but cannot render these full-width frames.
-        assumeTrue("Adaptive shell goldens require the API 36 wide device", Build.VERSION.SDK_INT >= 29)
+        // The Pixel 2 runs the compact golden; wide goldens run on the Pixel Tablet.
+        if (mode != "compact") {
+            assumeTrue("Wide adaptive shell goldens require the API 36 tablet", Build.VERSION.SDK_INT >= 29)
+        }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val goldenSize = when (mode) {
             "expanded" -> 1280 to 800

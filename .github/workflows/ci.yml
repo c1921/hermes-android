@@ -120,6 +120,25 @@ jobs:
             :app:generateBaselineProfile
           ./gradlew --no-daemon --no-parallel --max-workers=1 \
             :benchmark:pixel6Api36BenchmarkReleaseAndroidTest
+      - name: Emit benchmark evidence metadata
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark/build/outputs/hermes-evidence
+          for benchmark in \
+            coldStartupReportsTtidTtfdAndFrames \
+            warmStartupReportsFrames \
+            atlasJourney chatContinuousStreamJourney transcriptScrollDuringContinuousStreamJourney \
+            composerJourney filesJourney artifactsJourney manageJourney; do
+            repetitions=3
+            case "$benchmark" in
+              coldStartupReportsTtidTtfdAndFrames|warmStartupReportsFrames) repetitions=5 ;;
+            esac
+            jq -cn \
+              --arg benchmark "$benchmark" \
+              --arg commit "$GITHUB_SHA" \
+              --argjson repetitions "$repetitions" \
+              '{benchmark:$benchmark,commit:$commit,device:"pixel6Api36",androidApi:36,toolchain:"AGP 8.9.2 / Gradle 8.11.1",profileState:"baseline-profile",repetitions:$repetitions,environment:{runner:"gmd",workflow:"ci"},metrics:{}}' \
+              >> benchmark/build/outputs/hermes-evidence/benchmark-evidence.jsonl
       - name: Enforce accepted API 36 benchmark baseline
         run: ./scripts/check-benchmark-regression.sh benchmark/build/outputs benchmark/accepted-baseline.json
       - uses: actions/upload-artifact@v4
@@ -190,12 +209,16 @@ jobs:
           cp app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/hermes-candidate/first/hermes-android.apk"
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-candidate/first/hermes-android.aab"
           cp app/build/reports/cyclonedx-direct/bom.json "$RUNNER_TEMP/hermes-candidate/first/hermes-android.cdx.json"
+          cp app/src/release/generated/baselineProfiles/baseline-prof.txt "$RUNNER_TEMP/hermes-candidate/baseline-prof.txt"
       - name: Build second clean unsigned candidate
         run: |
           set -euo pipefail
+          rm -rf app/src/release/generated/baselineProfiles
+          mkdir -p app/src/release/generated/baselineProfiles
+          cp "$RUNNER_TEMP/hermes-candidate/baseline-prof.txt" app/src/release/generated/baselineProfiles/baseline-prof.txt
           ./gradlew --no-daemon --no-parallel --max-workers=1 --no-build-cache --rerun-tasks clean \
             -Phermes.provenance.channel=release \
-            :app:generateBaselineProfile :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease
+            :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease
           mkdir -p "$RUNNER_TEMP/hermes-candidate/second"
           cp app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/hermes-candidate/second/hermes-android.apk"
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-candidate/second/hermes-android.aab"

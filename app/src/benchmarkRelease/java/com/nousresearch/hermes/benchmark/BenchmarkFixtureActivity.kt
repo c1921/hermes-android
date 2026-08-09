@@ -57,6 +57,9 @@ import kotlinx.coroutines.delay
 
 private const val FIXTURE_RESET_EXTRA = "hermes.benchmark.fixture_reset"
 
+// Benchmark-only deterministic harness. It reuses stable production renderers where practical;
+// fixture navigation and synthetic Atlas/Files/Manage content are not product-screen coverage.
+
 class BenchmarkFixtureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

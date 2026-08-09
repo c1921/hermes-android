@@ -256,6 +256,12 @@ class AndroidVoicePlayer @Inject constructor(
     @Synchronized
     fun stop() = finish()
 
+    fun stopFromMediaControl() {
+        val callback = synchronized(this) { mediaStopCallback }
+        stop()
+        callback?.invoke()
+    }
+
     private fun createPcmTrack(format: VoicePcmFormat): AudioTrack {
         val minimumBufferSize = AudioTrack.getMinBufferSize(
             format.sampleRate,
@@ -498,11 +504,7 @@ class AndroidVoicePlayer @Inject constructor(
                 object : MediaSession.Callback() {
                     override fun onPlay() = resume()
                     override fun onPause() = pause()
-                    override fun onStop() {
-                        val callback = synchronized(this@AndroidVoicePlayer) { mediaStopCallback }
-                        stop()
-                        callback?.invoke()
-                    }
+                    override fun onStop() = stopFromMediaControl()
                 },
                 mainHandler,
             )
