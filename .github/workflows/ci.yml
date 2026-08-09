@@ -139,6 +139,7 @@ jobs:
               --argjson repetitions "$repetitions" \
               '{benchmark:$benchmark,commit:$commit,device:"pixel6Api36",androidApi:36,toolchain:"AGP 8.9.2 / Gradle 8.11.1",profileState:"baseline-profile",repetitions:$repetitions,environment:{runner:"gmd",workflow:"ci"},metrics:{}}' \
               >> benchmark/build/outputs/hermes-evidence/benchmark-evidence.jsonl
+          done
       - name: Enforce accepted API 36 benchmark baseline
         run: ./scripts/check-benchmark-regression.sh benchmark/build/outputs benchmark/accepted-baseline.json
       - uses: actions/upload-artifact@v4
