@@ -12,7 +12,7 @@ class HermesWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_new_chat).apply {
                 setOnClickPendingIntent(
                     R.id.widget_new_chat,
-                    newChatPendingIntent(context, appWidgetId),
+                    newChatWidgetPendingIntent(context, appWidgetId),
                 )
             }
             manager.updateAppWidget(appWidgetId, views)
