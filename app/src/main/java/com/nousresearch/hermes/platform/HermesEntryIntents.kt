@@ -49,6 +49,13 @@ fun newChatPendingIntent(context: Context, requestCode: Int): PendingIntent = Pe
     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT,
 )
 
+fun newChatWidgetPendingIntent(context: Context, appWidgetId: Int): PendingIntent = PendingIntent.getActivity(
+    context,
+    appWidgetId,
+    newChatIntent(context),
+    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+)
+
 fun destinationPendingIntent(
     context: Context,
     requestCode: Int,

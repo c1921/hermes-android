@@ -3,13 +3,12 @@ package com.nousresearch.hermes
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
-import com.nousresearch.hermes.platform.HermesEntryRequestStore
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
+import androidx.test.platform.app.InstrumentationRegistry
+import com.nousresearch.hermes.platform.HermesEntryRequestStoreEntryPoint
 import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -19,7 +18,7 @@ class HermesEntryRequestLifecycleTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val store = EntryPointAccessors.fromApplication(
         context,
-        EntryRequestStoreEntryPoint::class.java,
+        HermesEntryRequestStoreEntryPoint::class.java,
     ).entryRequestStore()
 
     @Test
@@ -29,13 +28,14 @@ class HermesEntryRequestLifecycleTest {
             .setType("text/plain")
             .putExtra(Intent.EXTRA_TEXT, "private draft")
 
-        ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-            assertEquals(1, store.deliveries.value.size)
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
+            scenario.onActivity { activity -> activity.startActivity(intent) }
+            awaitDeliveryCount(1)
             scenario.onActivity(::assertPayloadCleared)
 
             scenario.recreate()
 
-            assertEquals(1, store.deliveries.value.size)
+            awaitDeliveryCount(1)
             scenario.onActivity(::assertPayloadCleared)
         }
         clearStore()
@@ -51,7 +51,9 @@ class HermesEntryRequestLifecycleTest {
             MainActivity::class.java,
         ).putExtra("approval_token", "must-not-survive")
 
-        ActivityScenario.launch<MainActivity>(malicious).use { scenario ->
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
+            scenario.onActivity { activity -> activity.startActivity(malicious) }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             assertTrue(store.deliveries.value.isEmpty())
             scenario.onActivity(::assertPayloadCleared)
             scenario.recreate()
@@ -69,10 +71,15 @@ class HermesEntryRequestLifecycleTest {
     private fun clearStore() {
         store.deliveries.value.forEach { store.discard(it.request.id) }
     }
-}
 
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-internal interface EntryRequestStoreEntryPoint {
-    fun entryRequestStore(): HermesEntryRequestStore
+    private fun awaitDeliveryCount(expected: Int) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val deadline = SystemClock.uptimeMillis() + 5_000L
+        while (SystemClock.uptimeMillis() < deadline) {
+            instrumentation.waitForIdleSync()
+            if (store.deliveries.value.size == expected) return
+            SystemClock.sleep(50L)
+        }
+        assertEquals(expected, store.deliveries.value.size)
+    }
 }

@@ -213,6 +213,79 @@ class HermesRepositoryBillingTest {
     }
 
     @Test
+    fun `sticky profile switch preserves pending attachment for the active session`() = runBlocking {
+        MockWebServer().use { server ->
+            var activeProfile = "default"
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody("""{"sessions":[]}""")
+                    "/api/profiles" -> MockResponse().setBody(
+                        """{"profiles":[{"name":"default","is_default":true},{"name":"research"}]}""",
+                    )
+                    "/api/profiles/active" -> if (request.method == "POST") {
+                        activeProfile = "research"
+                        MockResponse().setBody("""{"ok":true}""")
+                    } else {
+                        MockResponse().setBody("""{"active":"$activeProfile","current":"default"}""")
+                    }
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(
+                context,
+                registry,
+                credentials,
+                BillingPendingChargeStore(context, json),
+                gateway,
+            )
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.create",
+                json.parseToJsonElement(
+                    """{"session_id":"live-profile","stored_session_id":"stored-profile","messages":[],"info":{"stored_session_id":"stored-profile"}}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+            assertTrue(repository.newSession())
+
+            val uploadStarted = CompletableDeferred<Unit>()
+            gateway.enqueueBlock("image.attach_bytes") {
+                uploadStarted.complete(Unit)
+                CompletableDeferred<JsonElement>().await()
+            }
+            // Robolectric reuses FileProvider's authority cache across per-test application data roots.
+            FileProvider::class.java.getDeclaredField("sCache").apply { isAccessible = true }
+                .get(null).let { (it as MutableMap<*, *>).clear() }
+            val cameraUri = newCameraCaptureUri(context).also { uri ->
+                context.contentResolver.openOutputStream(uri)!!.use { it.write(byteArrayOf(1, 2, 3, 4)) }
+            }
+            val attaching = launch { repository.attach(cameraUri) }
+            uploadStarted.await()
+            val pendingId = repository.state.value.pendingAttachments.single().id
+
+            repository.setActiveProfile("research")
+            assertEquals(1, repository.state.value.pendingAttachments.size)
+            assertEquals("research", repository.state.value.activeProfile)
+
+            repository.cancelPendingAttachment(pendingId)
+            withTimeout(5_000L) { attaching.join() }
+            repository.removePendingAttachment(pendingId)
+
+            assertTrue(repository.state.value.pendingAttachments.isEmpty())
+            assertTrue(runCatching { context.contentResolver.openInputStream(cameraUri)!!.close() }.isFailure)
+        }
+    }
+
+    @Test
     fun `all failed shared attachments remain retryable and do not consume the share`() = runBlocking {
         MockWebServer().use { server ->
             server.dispatcher = readyDashboardDispatcher()
@@ -231,7 +304,18 @@ class HermesRepositoryBillingTest {
                 RecordingGateway(json),
             )
             awaitReady(repository, backend.id)
-            val rejectedUri = android.net.Uri.parse("content://missing-share-provider/rejected")
+            // Keep the source provider deterministic across local and hosted Robolectric runs.
+            FileProvider::class.java.getDeclaredField("sCache").apply { isAccessible = true }
+                .get(null).let { (it as MutableMap<*, *>).clear() }
+            val rejectedFile = File(context.cacheDir, "shared/rejected.apk").apply {
+                parentFile?.mkdirs()
+                writeBytes(byteArrayOf(1, 2))
+            }
+            val rejectedUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                rejectedFile,
+            )
 
             assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))
             assertFalse(repository.ingestSharedContent("", listOf(rejectedUri)))

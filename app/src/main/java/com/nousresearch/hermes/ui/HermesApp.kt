@@ -356,6 +356,7 @@ fun HermesApp(
     onBiometricReentryChange: (Boolean) -> Unit = {},
     skin: HermesSkin = HermesSkin.NOUS,
     onSkinChange: (HermesSkin) -> Unit = {},
+    onWorkspaceReady: () -> Unit = {},
     entryDelivery: HermesEntryDelivery? = null,
     onEntryConsumed: (String) -> Unit = {},
     onEntryFailed: (String, String) -> Unit = { _, _ -> },
@@ -364,10 +365,14 @@ fun HermesApp(
     viewModel: HermesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val startupReady by viewModel.startupReady.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val artifactIndex by viewModel.artifactIndex.collectAsStateWithLifecycle()
     val artifactPreferences by viewModel.artifactPreferences.collectAsStateWithLifecycle()
     val hostBackup by viewModel.hostBackup.collectAsStateWithLifecycle()
+    LaunchedEffect(startupReady) {
+        if (startupReady) onWorkspaceReady()
+    }
     LaunchedEffect(state.backend?.id) { viewModel.bindHostBackupBackend(state.backend?.id) }
     val latestConnectionState = rememberUpdatedState(connection)
     val latestHermesState = rememberUpdatedState(state)
@@ -1269,7 +1274,7 @@ private fun HermesWorkspace(
             fun ConversationContent() {
                 if (conversationReady) {
                     ChatSurface(
-                        state, connection, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
+                        state, connection, profileId, onSend, onSteer, onDraftChange, onCompleteSlash, onExecuteSlash,
                         onAttach, onRetryAttachment, onCancelAttachment, onRemoveAttachment, onInterrupt,
                         onApprove, onClarify, onSensitiveInput, modelActions, sessionActions, queueActions,
                         Modifier.weight(1f),
@@ -2165,6 +2170,7 @@ private fun SessionRow(
 private fun ChatSurface(
     state: HermesState,
     connection: GatewayConnectionState,
+    profileId: String,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
     onDraftChange: (String) -> Unit,
@@ -2193,7 +2199,7 @@ private fun ChatSurface(
 ) {
     val voiceViewModel: VoiceViewModel = hiltViewModel()
     val speechState by voiceViewModel.speechState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.backend?.id) { state.backend?.let(voiceViewModel::bind) }
+    LaunchedEffect(state.backend?.id, profileId) { state.backend?.let { voiceViewModel.bind(it, profileId) } }
     DisposableEffect(voiceViewModel) {
         onDispose {
             voiceViewModel.cancelRecording()
@@ -2334,7 +2340,7 @@ private fun ChatHeader(
 }
 
 @Composable
-private fun Timeline(
+internal fun Timeline(
     items: List<TimelineItem>,
     speechState: SpeechUiState,
     onSpeak: (String, String) -> Unit,
@@ -2347,28 +2353,35 @@ private fun Timeline(
     val listState = rememberLazyListState()
     var followLatest by rememberSaveable { mutableStateOf(true) }
     var focusConsumed by rememberSaveable(focusMessageId) { mutableStateOf(false) }
+    var initialScrollObserved by remember { mutableStateOf(false) }
+    var previousTotalItems by remember { mutableIntStateOf(0) }
     LaunchedEffect(listState) {
         snapshotFlow {
             Triple(
-                listState.isScrollInProgress,
                 listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index,
                 listState.layoutInfo.totalItemsCount,
+                listState.isScrollInProgress,
             )
-        }.collect { (scrolling, lastVisibleIndex, totalItems) ->
-            if (scrolling) followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+        }.collect { (lastVisibleIndex, totalItems, isScrollInProgress) ->
+            if (initialScrollObserved) {
+                if (!(totalItems > previousTotalItems && !isScrollInProgress)) {
+                    followLatest = timelineIsNearLatest(lastVisibleIndex, totalItems)
+                }
+            } else {
+                initialScrollObserved = true
+            }
+            previousTotalItems = totalItems
         }
     }
     LaunchedEffect(items.size, items.lastOrNull(), focusMessageId, followLatest) {
-        if (focusMessageId != null) {
-            if (!focusConsumed) {
-                val target = items.indexOfServerMessage(focusMessageId)
-                if (target >= 0) {
-                    listState.scrollToItem(target)
-                    focusConsumed = true
-                }
+        if (focusMessageId != null && !focusConsumed) {
+            val target = items.indexOfServerMessage(focusMessageId)
+            if (target >= 0) {
+                listState.scrollToItem(target)
+                focusConsumed = true
             }
         } else if (followLatest && items.isNotEmpty()) {
-            listState.animateScrollToItem(items.lastIndex)
+            listState.scrollToItem(items.lastIndex)
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -2395,7 +2408,10 @@ private fun Timeline(
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) {
             SmallFloatingActionButton(
-                onClick = { followLatest = true },
+                onClick = {
+                    focusConsumed = true
+                    followLatest = true
+                },
             ) {
                 Icon(Icons.Outlined.KeyboardArrowDown, "Jump to latest message")
             }
@@ -2759,6 +2775,16 @@ internal fun StatusBlock(status: TimelineItem.Status) {
     }
 }
 
+internal enum class ComposerKeyAction { NONE, ESCAPE, HISTORY_BACK, HISTORY_FORWARD }
+
+internal fun composerKeyAction(type: KeyEventType, key: Key, ctrlPressed: Boolean): ComposerKeyAction = when {
+    type != KeyEventType.KeyDown -> ComposerKeyAction.NONE
+    key == Key.Escape -> ComposerKeyAction.ESCAPE
+    ctrlPressed && key == Key.DirectionUp -> ComposerKeyAction.HISTORY_BACK
+    ctrlPressed && key == Key.DirectionDown -> ComposerKeyAction.HISTORY_FORWARD
+    else -> ComposerKeyAction.NONE
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
@@ -3056,14 +3082,17 @@ private fun Composer(
                     .weight(1f)
                     .preserveFocusAcrossAdaptiveMove(compactLayout, adaptiveFocusState)
                     .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) {
-                            false
-                        } else {
-                            when (event.key) {
-                                Key.DirectionUp -> browseHistory(backward = true)
-                                Key.DirectionDown -> browseHistory(backward = false)
-                                else -> false
+                        when (composerKeyAction(event.type, event.key, event.isCtrlPressed)) {
+                            ComposerKeyAction.ESCAPE -> {
+                                historyMenuOpen = false
+                                resetHistoryBrowse()
+                                focus.clearFocus(force = true)
+                                softwareKeyboard?.hide()
+                                true
                             }
+                            ComposerKeyAction.HISTORY_BACK -> browseHistory(backward = true)
+                            ComposerKeyAction.HISTORY_FORWARD -> browseHistory(backward = false)
+                            ComposerKeyAction.NONE -> false
                         }
                     },
                 enabled = connected,
@@ -3563,7 +3592,10 @@ private fun ApprovalDialog(command: String, description: String?, choices: List<
         icon = { Icon(Icons.Outlined.Terminal, null, tint = MaterialTheme.colorScheme.error) },
         title = { Text("COMMAND APPROVAL") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(description ?: "Hermes is waiting for permission to execute a potentially dangerous command.")
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(6.dp)) {
                     Text(command.ifBlank { "Command details were redacted by Hermes." }, Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodySmall)
@@ -3589,7 +3621,10 @@ private fun ClarificationDialog(question: String, choices: List<String>, onAnswe
         onDismissRequest = { },
         title = { Text("HERMES NEEDS INPUT") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(question)
                 if (choices.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -3622,7 +3657,10 @@ internal fun SensitiveInputDialog(
         icon = { Icon(Icons.Outlined.Key, null, tint = WarningColor) },
         title = { Text(if (sudo) "SUDO PASSWORD REQUIRED" else "SECRET REQUIRED") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(prompt)
                 environmentVariable?.let {
                     Text("ENVIRONMENT VARIABLE / $it", style = MaterialTheme.typography.labelMedium)

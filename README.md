@@ -85,10 +85,10 @@ See [Android signing and branch flow](docs/release-signing.md) for the public ce
 ### Partial foundations
 
 - [ ] **Partial:** reconnect uses bounded backoff and authoritative session rehydration, but exact in-flight delta replay needs a server event cursor.
-- [ ] **Partial:** tool activity is structured and expandable; specialised renderers and canonical inline media for every Hermes tool are not complete.
-- [ ] **Partial:** attachment sending, native camera capture, and managed downloads/previews/actions work; upload progress, large streamed uploads, and canonical generated-artifact delivery are not complete.
-- [ ] **Partial:** basic semantics and adaptive layouts exist; complete TalkBack, keyboard, switch-access, reduced-motion, foldable, and multi-window audits remain.
-- [ ] **Partial:** diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report. Generated build provenance and release checksums are published; SBOM and attestation-based reproducibility remain.
+- [ ] **Partial:** typed tool, media, file, diff, terminal, delegation, clarification, reference, and bounded unknown renderers are native; canonical server provenance is still capability-gated where Hermes does not send it.
+- [ ] **Partial:** attachment sending, native camera capture, per-item lifecycle/progress, and managed downloads/previews/actions work; resumable background upload waits for a server-owned descriptor and receipt contract.
+- [ ] **Partial:** semantics, keyboard Escape/back, 200% text, adaptive layouts, reduced motion, RTL, and streaming-focus checks exist; the physical TalkBack, Switch Access, foldable, and multi-window matrix remains owner validation.
+- [x] Diagnostics expose versions, connection state, doctor, security-audit results, and an allowlisted redacted SAF report. Release CI retains checksums, SBOM, provenance attestation, mapping, and two-clean-build unsigned payload comparison.
 
 ### Correctness fixes
 
@@ -102,13 +102,14 @@ See [Android signing and branch flow](docs/release-signing.md) for the public ce
 ### Not yet implemented
 
 - [ ] Native OAuth/OIDC sign-in for connecting the Android app itself to a Dashboard without username/password
-- [ ] Background push notifications and notification actions
+- [ ] Background push delivery and notification actions; private local notification channels and validated destination routing are implemented, but Hermes advertises no device registration/action-token contract
 - [x] Persisted appearance picker matching Hermes Desktop's built-in `nous`, `midnight`, `ember`, `mono`, `cyberpunk`, and `slate` palettes; Nous remains the default and Android follows the system light or dark setting
 - [ ] MCP custom-server add/edit, remote-client OAuth setup, and per-tool filters
 - [ ] Mobile background delivery for Agents when Android is suspended
 - [ ] Local Termux runtime discovery or companion integration
-- [ ] Biometric lock, deep links, shortcuts, widgets, and other platform integrations
-- [ ] Reproducibility verification, Play App Signing handoff, Baseline Profile, and macrobenchmarks
+- [x] Opt-in biometric re-entry, deep links, shortcuts, MediaSession controls, and purposeful voice haptics
+- [x] Android home-screen widget provider with a privacy-safe New chat launch through the validated entry pipeline
+- [ ] Play App Signing handoff and owner physical-device evidence; reproducibility, SBOM/provenance, API 36 macrobenchmarks, deterministic stress fixtures, Baseline Profile automation, and accepted-baseline comparison are implemented in CI
 
 The detailed, current source audit remains in [`docs/research/desktop-parity-matrix.md`](docs/research/desktop-parity-matrix.md).
 

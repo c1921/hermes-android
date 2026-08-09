@@ -4,6 +4,9 @@ import com.nousresearch.hermes.ui.navigation.HermesDestinationRoute
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,6 +75,12 @@ class HermesEntryRequestStore @Inject constructor() {
     private fun remove(id: String) = synchronized(lock) {
         mutableDeliveries.value = mutableDeliveries.value.filterNot { it.request.id == id }
     }
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface HermesEntryRequestStoreEntryPoint {
+    fun entryRequestStore(): HermesEntryRequestStore
 }
 
 internal fun stableEntryId(prefix: String, vararg values: String): String {

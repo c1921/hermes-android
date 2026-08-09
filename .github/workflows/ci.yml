@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, dev]
   pull_request:
@@ -27,7 +28,9 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@v3
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug
+      - run: >-
+          ./gradlew --no-daemon --no-parallel --max-workers=2
+          :app:testDebugUnitTest :app:lintDebug
 
   dev-artifacts:
     name: Dev debug APK and AAB
@@ -93,15 +96,12 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  release-artifacts:
-    name: Main release APK and AAB
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  benchmark:
+    name: API 36 benchmarks and Baseline Profile
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    environment: release
-    permissions:
-      contents: write
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -110,7 +110,165 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install API 36 benchmark image
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;x86_64"
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Run benchmark journeys and generate Baseline Profile
+        run: |
+          ./gradlew --no-daemon --no-parallel --max-workers=1 \
+            :app:generateBaselineProfile
+          ./gradlew --no-daemon --no-parallel --max-workers=1 \
+            :benchmark:pixel6Api36BenchmarkReleaseAndroidTest
+      - name: Emit benchmark evidence metadata
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark/build/outputs/hermes-evidence
+          for benchmark in \
+            coldStartupReportsTtidTtfdAndFrames \
+            warmStartupReportsFrames \
+            atlasJourney chatContinuousStreamJourney transcriptScrollDuringContinuousStreamJourney \
+            composerJourney filesJourney artifactsJourney manageJourney; do
+            repetitions=3
+            case "$benchmark" in
+              coldStartupReportsTtidTtfdAndFrames|warmStartupReportsFrames) repetitions=5 ;;
+            esac
+            jq -cn \
+              --arg benchmark "$benchmark" \
+              --arg commit "$GITHUB_SHA" \
+              --argjson repetitions "$repetitions" \
+              '{benchmark:$benchmark,commit:$commit,device:"pixel6Api36",androidApi:36,toolchain:"AGP 8.9.2 / Gradle 8.11.1",profileState:"baseline-profile",repetitions:$repetitions,environment:{runner:"gmd",workflow:"ci"},metrics:{}}' \
+              >> benchmark/build/outputs/hermes-evidence/benchmark-evidence.jsonl
+          done
+      - name: Enforce accepted API 36 benchmark baseline
+        run: ./scripts/check-benchmark-regression.sh benchmark/build/outputs benchmark/accepted-baseline.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hermes-android-api36-benchmarks
+          path: |
+            benchmark/build/outputs/**
+            app/src/release/generated/baselineProfiles/**
+            benchmark/accepted-baseline.json
+          if-no-files-found: error
+          retention-days: 14
+
+  device-tests:
+    name: API 28 and API 36 app tests
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install managed-device images
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-28;google_apis;x86_64" "system-images;android-36;google_apis;x86_64"
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Run Android app matrix
+        run: |
+          ./gradlew --no-daemon --no-parallel --max-workers=1 \
+            :app:pixel2Api28DebugAndroidTest \
+            :app:pixelTabletApi36DebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hermes-android-device-test-results
+          path: app/build/outputs/androidTest-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  candidate-evidence:
+    name: Reproducible release candidate
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;x86_64"
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Build first clean unsigned candidate and SBOM
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --no-parallel --max-workers=1 clean \
+            -Phermes.provenance.channel=release \
+            :app:generateBaselineProfile :app:writeBuildProvenance :app:lintRelease :app:assembleRelease :app:bundleRelease :app:cyclonedxDirectBom
+          mkdir -p "$RUNNER_TEMP/hermes-candidate/first"
+          cp app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/hermes-candidate/first/hermes-android.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-candidate/first/hermes-android.aab"
+          cp app/build/reports/cyclonedx-direct/bom.json "$RUNNER_TEMP/hermes-candidate/first/hermes-android.cdx.json"
+          cp app/src/release/generated/baselineProfiles/baseline-prof.txt "$RUNNER_TEMP/hermes-candidate/baseline-prof.txt"
+      - name: Build second clean unsigned candidate
+        run: |
+          set -euo pipefail
+          rm -rf app/src/release/generated/baselineProfiles
+          mkdir -p app/src/release/generated/baselineProfiles
+          cp "$RUNNER_TEMP/hermes-candidate/baseline-prof.txt" app/src/release/generated/baselineProfiles/baseline-prof.txt
+          ./gradlew --no-daemon --no-parallel --max-workers=1 --no-build-cache --rerun-tasks clean \
+            -Phermes.provenance.channel=release \
+            :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease
+          mkdir -p "$RUNNER_TEMP/hermes-candidate/second"
+          cp app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/hermes-candidate/second/hermes-android.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-candidate/second/hermes-android.aab"
+      - name: Compare unsigned payloads and stage evidence
+        run: |
+          set -euo pipefail
+          first="$RUNNER_TEMP/hermes-candidate/first"
+          second="$RUNNER_TEMP/hermes-candidate/second"
+          ./scripts/compare-android-payloads.sh "$first/hermes-android.apk" "$second/hermes-android.apk"
+          ./scripts/compare-android-payloads.sh "$first/hermes-android.aab" "$second/hermes-android.aab"
+          evidence="$RUNNER_TEMP/hermes-candidate/evidence"
+          mkdir -p "$evidence"
+          cp "$second/hermes-android.apk" "$evidence/hermes-android-release-unsigned.apk"
+          cp "$second/hermes-android.aab" "$evidence/hermes-android-release-unsigned.aab"
+          cp app/build/outputs/mapping/release/mapping.txt "$evidence/hermes-android-release-mapping.txt"
+          cp app/build/generated/provenance/hermes-android-release.properties "$evidence/hermes-android-release.provenance.properties"
+          cp "$first/hermes-android.cdx.json" "$evidence/hermes-android-release.cdx.json"
+          (cd "$evidence" && sha256sum * > hermes-android-release.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hermes-android-release-candidate-evidence
+          path: ${{ runner.temp }}/hermes-candidate/evidence
+          if-no-files-found: error
+          retention-days: 14
+
+  release-artifacts:
+    name: Main release APK and AAB
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "system-images;android-36;google_apis;x86_64"
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+      - name: Generate release Baseline Profile
+        run: ./gradlew --no-daemon --no-parallel --max-workers=1 :app:generateBaselineProfile
       - name: Restore release keystore
         env:
           HERMES_RELEASE_KEYSTORE_BASE64: ${{ secrets.HERMES_RELEASE_KEYSTORE_BASE64 }}
@@ -127,7 +285,7 @@ jobs:
           HERMES_RELEASE_KEY_ALIAS: hermes-release
           HERMES_RELEASE_KEY_PASSWORD: ${{ secrets.HERMES_RELEASE_KEYSTORE_PASSWORD }}
           HERMES_REQUIRE_RELEASE_SIGNING: "true"
-        run: ./gradlew --no-daemon -Phermes.provenance.channel=release :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease
+        run: ./gradlew --no-daemon -Phermes.provenance.channel=release :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease :app:cyclonedxDirectBom
       - name: Verify release signatures
         run: |
           set -euo pipefail
@@ -143,8 +301,13 @@ jobs:
           cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/hermes-release/hermes-android-release.aab"
           cp app/build/outputs/mapping/release/mapping.txt "$RUNNER_TEMP/hermes-release/hermes-android-release-mapping.txt"
           cp app/build/generated/provenance/hermes-android-release.properties "$RUNNER_TEMP/hermes-release/hermes-android-release.provenance.properties"
+          cp app/build/reports/cyclonedx-direct/bom.json "$RUNNER_TEMP/hermes-release/hermes-android-release.cdx.json"
           cd "$RUNNER_TEMP/hermes-release"
-          sha256sum hermes-android-release.apk hermes-android-release.aab hermes-android-release-mapping.txt hermes-android-release.provenance.properties > hermes-android-release.sha256
+          sha256sum hermes-android-release.apk hermes-android-release.aab hermes-android-release-mapping.txt hermes-android-release.provenance.properties hermes-android-release.cdx.json > hermes-android-release.sha256
+      - name: Attest release provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: ${{ runner.temp }}/hermes-release/*
       - name: Publish latest release downloads
         env:
           GH_TOKEN: ${{ github.token }}
@@ -157,6 +320,7 @@ jobs:
             "$release_dir/hermes-android-release.aab"
             "$release_dir/hermes-android-release-mapping.txt"
             "$release_dir/hermes-android-release.provenance.properties"
+            "$release_dir/hermes-android-release.cdx.json"
             "$release_dir/hermes-android-release.sha256"
           )
 

@@ -1,14 +1,19 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.nousresearch.hermes.domain.SensitiveInputKind
 import com.nousresearch.hermes.ui.theme.HermesTheme
@@ -83,5 +88,29 @@ class SensitiveInputDialogTest {
         compose.runOnIdle { requestId = "secret-2" }
 
         compose.onNodeWithText("first-request-only").assertDoesNotExist()
+    }
+
+    @Test
+    fun longSensitivePromptRemainsScrollableAtLargeTextScale() {
+        val prompt = buildString {
+            append("Start of the sensitive request")
+            repeat(80) { append("\nAdditional explanation $it") }
+            append("\nPROMPT TAIL")
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 2f)) {
+                HermesTheme {
+                    SensitiveInputDialog(
+                        requestId = "secret-long",
+                        kind = SensitiveInputKind.SECRET,
+                        prompt = prompt,
+                        environmentVariable = "DEPLOY_TOKEN",
+                        onSubmit = { },
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("PROMPT TAIL", substring = true).performScrollTo().assertIsDisplayed()
     }
 }

@@ -4,6 +4,8 @@ import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.baselineprofile)
+    alias(libs.plugins.cyclonedx)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.android)
@@ -71,6 +73,12 @@ val appVersionCode = 2
 val appVersionName = "0.2.0"
 require(Regex("\\d+\\.\\d+\\.\\d+").matches(appVersionName)) {
     "Hermes versionName must be semantic major.minor.patch."
+}
+tasks.cyclonedxDirectBom {
+    includeConfigs = listOf("releaseRuntimeClasspath")
+    projectType.set(org.cyclonedx.model.Component.Type.APPLICATION)
+    componentName.set("hermes-android")
+    componentVersion.set(appVersionName)
 }
 val auditedHermesCommit = "b9aa9289a8083f2e9d248ad6837b2938f5ee92d7"
 val hermesAgentVersion = "0.20.0"
@@ -247,10 +255,39 @@ android {
         "META-INF/DEPENDENCIES",
     )
 
-    testOptions.unitTests.isIncludeAndroidResources = true
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        managedDevices {
+            allDevices {
+                create<com.android.build.api.dsl.ManagedVirtualDevice>("pixel2Api28") {
+                    device = "Pixel 2"
+                    apiLevel = 28
+                    systemImageSource = "google"
+                }
+                create<com.android.build.api.dsl.ManagedVirtualDevice>("pixelTabletApi36") {
+                    device = "Pixel Tablet"
+                    apiLevel = 36
+                    systemImageSource = "google"
+                }
+            }
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withName("benchmarkRelease")) { variant ->
+        variant.sources.kotlin?.addStaticSourceDirectory("src/benchmarkRelease/java")
+        variant.sources.manifests.addStaticManifestFile("src/benchmarkRelease/AndroidManifest.xml")
+    }
+    onVariants(selector().withName("nonMinifiedRelease")) { variant ->
+        variant.sources.kotlin?.addStaticSourceDirectory("src/nonMinifiedRelease/java")
+        variant.sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
+    }
 }
 
 dependencies {
+    baselineProfile(project(":benchmark"))
+
     implementation(platform(libs.compose.bom))
     androidTestImplementation(platform(libs.compose.bom))
 

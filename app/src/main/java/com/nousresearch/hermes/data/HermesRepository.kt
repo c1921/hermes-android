@@ -355,6 +355,7 @@ class HermesRepository @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(HermesState())
+    private val mutableStartupReady = MutableStateFlow(false)
     private var reconnectJob: Job? = null
     private var draftSaveJob: Job? = null
     private var sessionSearchJob: Job? = null
@@ -379,6 +380,7 @@ class HermesRepository @Inject constructor(
     private var gatewayBackendId: String? = null
     private val openSessionGeneration = AtomicLong()
     val state = mutableState.asStateFlow()
+    val startupReady = mutableStartupReady.asStateFlow()
     val connectionState = gateway.connectionState
 
     init {
@@ -388,6 +390,7 @@ class HermesRepository @Inject constructor(
             }.collectLatest { (backends, backend) ->
                 billingAccountMutex.withLock {
                     if (backend == null) {
+                        mutableStartupReady.value = true
                         if (mutableState.value.backend != null) {
                             flushDraft()
                             intentionalDisconnect = true
@@ -402,8 +405,10 @@ class HermesRepository @Inject constructor(
                         mutableState.value.backend == backend &&
                         !mutableState.value.backendTransitionInProgress
                     ) {
+                        mutableStartupReady.value = true
                         mutableState.value = mutableState.value.copy(savedBackends = backends)
                     } else {
+                        mutableStartupReady.value = false
                         mutableState.value = mutableState.value.copy(savedBackends = backends)
                         connect(backend)
                     }
@@ -1920,8 +1925,11 @@ class HermesRepository @Inject constructor(
 
     suspend fun setActiveProfile(name: String) {
         val (backend, token) = activeCredentials()
+        val hasActiveSession = mutableState.value.activeStoredSession != null
+        val attachmentProfile = mutableState.value.activeProfile
         val result = runCatching { restClient.setActiveProfile(backend, token, name) }
         if (result.isSuccess) {
+            if (!hasActiveSession && attachmentProfile != name.trim()) invalidatePendingAttachments()
             providerOAuthPollJob?.cancel()
             providerOAuthPollJob = null
             mutableState.value = mutableState.value.copy(
@@ -4145,6 +4153,7 @@ class HermesRepository @Inject constructor(
                 error = "This legacy token-only backend must reconnect with its dashboard username and password.",
             )
             restorePendingBillingCharge(backend.id)
+            mutableStartupReady.value = true
             return
         }
         val cookie = tokenStore.get(backend.id)
@@ -4155,6 +4164,7 @@ class HermesRepository @Inject constructor(
                 error = "Saved dashboard session is unavailable. Reconnect this backend.",
             )
             restorePendingBillingCharge(backend.id)
+            mutableStartupReady.value = true
             return
         }
         val target = backendRegistry.sessionTarget(backend.id)
@@ -4205,9 +4215,11 @@ class HermesRepository @Inject constructor(
             } else {
                 loadComposerState()
             }
+            mutableStartupReady.value = true
         }.onFailure { error ->
             mutableState.value = mutableState.value.copy(backendTransitionInProgress = false)
             fail(error)
+            mutableStartupReady.value = true
         }
     }
 

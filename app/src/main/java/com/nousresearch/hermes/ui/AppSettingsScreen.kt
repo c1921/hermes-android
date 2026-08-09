@@ -1,6 +1,7 @@
 package com.nousresearch.hermes.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,6 +45,7 @@ import com.nousresearch.hermes.platform.markHermesNotificationPermissionRequeste
 import com.nousresearch.hermes.ui.theme.HermesSkin
 
 @Composable
+@SuppressLint("InlinedApi") // POST_NOTIFICATIONS is an inlined permission string and only launched after the API-aware policy requests it.
 internal fun AppSettingsScreen(
     secureScreen: Boolean,
     onSecureScreenChange: (Boolean) -> Unit,

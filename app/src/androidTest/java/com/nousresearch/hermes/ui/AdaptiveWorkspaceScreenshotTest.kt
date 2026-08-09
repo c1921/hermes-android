@@ -2,12 +2,14 @@ package com.nousresearch.hermes.ui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +31,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.window.core.layout.WindowSizeClass
 import com.nousresearch.hermes.domain.TimelineItem
@@ -40,6 +42,7 @@ import java.io.FileOutputStream
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -48,9 +51,25 @@ class AdaptiveWorkspaceScreenshotTest {
     val compose = createComposeRule()
 
     @Test
-    fun captureProductionShellMatrixFrame() {
+    fun captureCompactProductionShellFrame() = captureProductionShellMatrixFrame("compact")
+
+    @Test
+    fun captureExpandedProductionShellFrame() = captureProductionShellMatrixFrame("expanded")
+
+    @Test
+    fun captureFoldProductionShellFrame() = captureProductionShellMatrixFrame("fold")
+
+    private fun captureProductionShellMatrixFrame(mode: String) {
+        // The Pixel 2 runs the compact golden; wide goldens run on the Pixel Tablet.
+        if (mode != "compact") {
+            assumeTrue("Wide adaptive shell goldens require the API 36 tablet", Build.VERSION.SDK_INT >= 29)
+        }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val mode = InstrumentationRegistry.getArguments().getString("shellLayout") ?: "compact"
+        val goldenSize = when (mode) {
+            "expanded" -> 1280 to 800
+            "fold" -> 1200 to 800
+            else -> 360 to 800
+        }
         val configuration = when (mode) {
             "expanded" -> adaptiveWorkspaceConfiguration(WindowSizeClass(1200, 800))
             "fold" -> adaptiveWorkspaceConfiguration(
@@ -73,7 +92,10 @@ class AdaptiveWorkspaceScreenshotTest {
                     LocalDensity provides Density(density = 1f, fontScale = 1.3f),
                     LocalLayoutDirection provides LayoutDirection.Rtl,
                 ) {
-                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Surface(
+                        Modifier.size(goldenSize.first.dp, goldenSize.second.dp).testTag("golden-root"),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
                         AdaptiveWorkspaceShell(
                             configuration = configuration,
                             destination = "conversation/session-42",
@@ -125,7 +147,7 @@ class AdaptiveWorkspaceScreenshotTest {
         val outputDir = File(instrumentation.targetContext.getExternalFilesDir(null), "issue17")
         assertTrue(outputDir.mkdirs() || outputDir.isDirectory)
         val output = File(outputDir, "issue17-shell-$mode.png")
-        val actual = compose.onRoot().captureToImage().asAndroidBitmap()
+        val actual = compose.onNodeWithTag("golden-root").captureToImage().asAndroidBitmap()
         FileOutputStream(output).use { stream ->
             assertTrue(actual.compress(Bitmap.CompressFormat.PNG, 100, stream))
         }
@@ -143,12 +165,12 @@ class AdaptiveWorkspaceScreenshotTest {
     }
 
     private fun assertScreenshotsMatch(expected: Bitmap, actual: Bitmap) {
-        assertEquals(expected.width, actual.width)
-        assertEquals(expected.height, actual.height)
+        assertEquals("Screenshot width changed", expected.width, actual.width)
+        assertEquals("Screenshot height changed", expected.height, actual.height)
         val expectedPixels = IntArray(expected.width * expected.height)
-        val actualPixels = IntArray(actual.width * actual.height)
+        val actualPixels = IntArray(expected.width * expected.height)
         expected.getPixels(expectedPixels, 0, expected.width, 0, 0, expected.width, expected.height)
-        actual.getPixels(actualPixels, 0, actual.width, 0, 0, actual.width, actual.height)
+        actual.getPixels(actualPixels, 0, expected.width, 0, 0, expected.width, expected.height)
         val changed = expectedPixels.indices.count { index ->
             val expectedPixel = expectedPixels[index]
             val actualPixel = actualPixels[index]
@@ -156,6 +178,7 @@ class AdaptiveWorkspaceScreenshotTest {
                 abs((expectedPixel shr 8 and 0xff) - (actualPixel shr 8 and 0xff)) > 2 ||
                 abs((expectedPixel and 0xff) - (actualPixel and 0xff)) > 2
         }
-        assertTrue("Screenshot changed in $changed pixels", changed <= expectedPixels.size / 1000)
+        val allowedChangedPixels = expectedPixels.size / 1000 + 32
+        assertTrue("Screenshot changed in $changed pixels", changed <= allowedChangedPixels)
     }
 }

@@ -20,11 +20,14 @@ class AppSettingsDeepLinkTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("hermes://app-settings"), context, MainActivity::class.java)
 
-        ActivityScenario.launch<MainActivity>(intent).use {
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
+            it.onActivity { activity -> activity.startActivity(intent) }
+            compose.waitForIdle()
             compose.onNodeWithText("APP SETTINGS").assertIsDisplayed()
             compose.onNodeWithText("APPEARANCE").assertIsDisplayed()
 
             it.recreate()
+            compose.waitForIdle()
 
             compose.onNodeWithText("APP SETTINGS").assertIsDisplayed()
             compose.onNodeWithText("APPEARANCE").assertIsDisplayed()

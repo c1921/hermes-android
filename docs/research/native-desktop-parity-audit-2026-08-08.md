@@ -29,7 +29,7 @@ integration, full device accessibility, and release proof remain incomplete.
 | Reported gap | Current evidence | Audit result |
 | --- | --- | --- |
 | Multiple password providers are rejected | Native onboarding and reconnect provider selection landed in `110ced5`; the selected provider is rediscovered and submitted exactly | Closed in Android source; physical renewable-session QA is still required |
-| Android has only launcher/share entry handling | Bounded launcher, share, app-link, notification, shortcut, and widget request parsing/routing landed in `8ba1dbd` | Client path exists; hosted App Links and real device producer proof remain external/runtime work |
+| Android has only launcher/share entry handling | Bounded launcher, share, app-link, notification, shortcut, and widget request parsing/routing landed in `8ba1dbd`; the privacy-safe New chat widget provider now ships on the current branch | Client path exists; hosted App Links and real device producer proof remain external/runtime work |
 | Conversation history lacks ordered typed parts | The pure reducer/registry landed in `6498158`; the current parity patch adds artifact/media/source history shapes and `message.interim` sealing | Foreground projection is implemented; exact missed-event replay still needs an upstream cursor/receipt contract |
 | No Artifacts destination | Adaptive list/detail, profile-scoped extraction, safe previews, origin navigation, SAF export, and read-only provider grants landed in `62c8d82` | Source/build complete; physical viewer, focus, and grant-lifecycle proof remains pending |
 
@@ -45,8 +45,8 @@ integration, full device accessibility, and release proof remain incomplete.
 | MCP/toolsets | Catalog review/install/test/toggle/remove/reload and toolset toggles exist | Custom edit, OAuth, per-tool filters, and richer toolset setup remain client work; revision-safe patching lacks a server contract |
 | Messaging/webhooks/cron | Messaging and Cron CRUD/run history exist | Pairing, delivery targets, and blueprints remain. Webhook HTTP routes do not accept a profile; Desktop scopes them by selecting a profile-specific child process inside Electron, which Android cannot reproduce safely. Requested webhook edit/test routes also do not exist upstream |
 | Memory/maintenance | Profile-scoped Starmap graph/search/node detail/edit/removal, diagnostics, bounded redacted host logs, read-only update status, and exact-receipt host backup export exist | Memory/Curator routes still target only the serving process rather than an explicit remote profile; update apply and backup restore remain intentionally absent |
-| Android-native security/media | Secure-screen, opt-in biometric/device-credential re-entry, MediaSession read-aloud controls, and reduced-feedback-aware voice haptics exist in source | Biometric enrollment/lockout/process proof and physical lock-screen/Bluetooth/haptic validation remain device work |
-| Release quality | JVM/lint/build gates are available | TalkBack/switch/keyboard/foldable tests, benchmarks, battery/performance, reproducibility, provenance, and owner device acceptance remain |
+| Android-native security/media | Secure-screen, opt-in biometric/device-credential re-entry, MediaSession controls, reduced-feedback-aware voice haptics, and profile-scoped WebSocket PCM read-aloud exist in source | Wake-word/barge-in orchestration is not exposed as a safe remote Dashboard contract; biometric and physical lock-screen/Bluetooth/haptic proof remains device work |
+| Release quality | JVM/lint/build gates, API 28/36 managed-device tests, deterministic Macrobenchmarks, checked-in accepted-baseline comparison, Baseline Profile generation, SBOM/provenance, and two-clean-build payload comparison are automated | Battery evidence, physical Samsung/accessibility matrix, signing-certificate review, Play App Signing handoff, and owner acceptance remain runtime/promotion gates |
 
 ## Work completed during this audit
 
@@ -79,6 +79,16 @@ integration, full device accessibility, and release proof remain incomplete.
   route through validated Hermes destinations. Background delivery and inline
   actions remain absent until Hermes advertises device registration and
   short-lived action-token contracts.
+- Added profile-scoped `/api/audio/speak-stream` playback with dashboard
+  single-use ticket authentication, bounded mono int16 PCM assembly, AudioTrack
+  streaming, MediaSession controls, cancellation, and pre-audio buffered-speech
+  fallback without replaying a partially spoken reply.
+- Added a credential-free benchmark-only fixture with 500 mixed
+  messages, continuous streaming, core-surface journeys, API 28/36 managed
+  device CI, Baseline Profile generation, SBOM/provenance retention, and
+  deterministic unsigned APK/AAB payload comparison.
+- Added the Android home-screen New chat widget, reusing the validated explicit
+  entry intent so the widget carries no session, profile, or message data.
 
 The practical conclusion is not “Android is missing most of Desktop.” The
 foreground client is broad and functional. The remaining distance is

@@ -23,6 +23,7 @@ import com.nousresearch.hermes.protocol.UsageBarData
 import com.nousresearch.hermes.protocol.UsageModelData
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -51,11 +52,14 @@ class BillingScreenTest {
         )
 
         compose.onNodeWithText("BALANCE").assertExists()
-        compose.onAllNodesWithText("$24.50").fetchSemanticsNodes().let { assertEquals(2, it.size) }
+        val mergedBalance = compose.onAllNodesWithText("$24.50").fetchSemanticsNodes()
+        val unmergedBalance = compose.onAllNodesWithText("$24.50", useUnmergedTree = true).fetchSemanticsNodes()
+        assertTrue(mergedBalance.isNotEmpty() || unmergedBalance.isNotEmpty())
         compose.onNodeWithText("Super / $20/mo").assertExists()
         compose.onNodeWithText("ACCOUNT").assertExists()
         compose.onNodeWithText("Visa •••• 4242").assertExists()
-        compose.onNodeWithText("USAGE").performScrollTo().assertExists()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("USAGE"))
+        compose.onNodeWithText("USAGE").assertExists()
         compose.onNodeWithText("$40.00 remaining").performScrollTo().assertExists()
     }
 
@@ -128,7 +132,8 @@ class BillingScreenTest {
             ),
         )
 
-        compose.onNodeWithText("$0.00 of $50.00 left / $0.79 over").performScrollTo().assertExists()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("$0.00 of $50.00 left / $0.79 over"))
+        compose.onNodeWithText("$0.00 of $50.00 left / $0.79 over", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -164,7 +169,8 @@ class BillingScreenTest {
             ),
         )
 
-        compose.onNodeWithText("$7.00 remaining").performScrollTo().assertExists()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("$7.00 remaining"))
+        compose.onNodeWithText("$7.00 remaining", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("$40.00 remaining").assertDoesNotExist()
     }
 

@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui.navigation
 
+import androidx.annotation.Keep
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -63,6 +64,7 @@ sealed interface HermesRoute {
 }
 
 @Serializable
+@Keep
 enum class ManagementDestination {
     SKILLS,
     CRON,
@@ -149,6 +151,7 @@ sealed interface HermesDestinationRoute : HermesRoute {
 }
 
 @Serializable
+@Keep
 enum class ManageSection {
     CAPABILITIES,
     PROFILES_AND_MODELS,
@@ -158,6 +161,7 @@ enum class ManageSection {
 }
 
 @Serializable
+@Keep
 enum class AutomationDestination {
     CRON,
     AGENTS,
@@ -166,6 +170,7 @@ enum class AutomationDestination {
 }
 
 @Serializable
+@Keep
 enum class ManageDestination(val section: ManageSection) {
     SKILLS(ManageSection.CAPABILITIES),
     MCP(ManageSection.CAPABILITIES),
@@ -182,6 +187,7 @@ enum class ManageDestination(val section: ManageSection) {
 }
 
 @Serializable
+@Keep
 enum class AppSettingsSection {
     APPEARANCE,
     PRIVACY_AND_SECURITY,

@@ -14,7 +14,7 @@ class VoiceMediaActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             AndroidVoicePlayer.ACTION_PLAY -> player.resume()
             AndroidVoicePlayer.ACTION_PAUSE -> player.pause()
-            AndroidVoicePlayer.ACTION_STOP -> player.stop()
+            AndroidVoicePlayer.ACTION_STOP -> player.stopFromMediaControl()
         }
     }
 }

@@ -41,12 +41,13 @@ class HermesNotificationsTest {
         assertEquals(HermesNotificationPermission.SETTINGS, hermesNotificationPermission(context))
         shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         assertEquals(HermesNotificationPermission.GRANTED, hermesNotificationPermission(context))
+        val destination = HermesDestinationRoute.Chats("backend", "profile", "session")
         assertTrue(
             postHermesNotification(
                 context,
                 id = 42,
                 kind = HermesNotificationKind.ACTION_REQUIRED,
-                destination = HermesDestinationRoute.Chats("backend", "profile", "session"),
+                destination = destination,
             ),
         )
         val notification = manager.activeNotifications.single { it.id == 42 }.notification
@@ -55,5 +56,7 @@ class HermesNotificationsTest {
         assertEquals("Hermes", notification.publicVersion.extras.getString(Notification.EXTRA_TITLE))
         assertEquals(Notification.VISIBILITY_PRIVATE, notification.visibility)
         assertTrue(notification.actions.isNullOrEmpty())
+        val request = parseHermesEntryRequest(shadowOf(notification.contentIntent).savedIntent, context.packageName)
+        assertEquals(destination, (request as HermesEntryRequest.OpenDestination).route)
     }
 }

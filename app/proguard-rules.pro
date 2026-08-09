@@ -1,4 +1,4 @@
 -keepattributes Signature,*Annotation*
 -keep class com.nousresearch.hermes.protocol.** { *; }
+-keep class com.nousresearch.hermes.benchmark.BenchmarkFixtureActivity { *; }
 -dontwarn org.conscrypt.**
-

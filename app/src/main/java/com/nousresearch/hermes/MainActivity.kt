@@ -13,13 +13,16 @@ import android.os.CancellationSignal
 import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nousresearch.hermes.data.PrivacyPreferences
@@ -42,6 +45,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     @Inject lateinit var privacyPreferences: PrivacyPreferences
     @Inject lateinit var entryRequestStore: HermesEntryRequestStore
+    private var workspaceReady by mutableStateOf(false)
     private val privacyGate: PrivacyGateViewModel by viewModels()
     private var biometricPromptActive = false
     private var biometricCancellation: CancellationSignal? = null
@@ -80,6 +84,9 @@ class MainActivity : ComponentActivity() {
             val entryRequests by entryRequestStore.deliveries.collectAsStateWithLifecycle()
             val biometricAvailable = authenticationAvailable()
             val locked = biometricReentry == true && privacyGate.isLocked(enabled = true)
+            ReportDrawnWhen {
+                biometricReentry != null && (locked || workspaceReady)
+            }
             when {
                 biometricReentry == null -> HermesTheme(skin) { }
                 locked -> {
@@ -106,6 +113,7 @@ class MainActivity : ComponentActivity() {
                         lifecycleScope.launch { privacyPreferences.setSkin(selected) }
                     },
                     entryDelivery = entryRequests.firstOrNull(),
+                    onWorkspaceReady = { workspaceReady = true },
                     onEntryConsumed = ::consumeEntryRequest,
                     onEntryFailed = entryRequestStore::fail,
                     onEntryRetry = entryRequestStore::retry,
