@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 
 private const val TARGET_PACKAGE_NAME = "com.nousresearch.hermes"
 private const val FIXTURE_ACTIVITY_NAME = "com.nousresearch.hermes.benchmark.BenchmarkFixtureActivity"
+private const val FIXTURE_RESET_EXTRA = "hermes.benchmark.fixture_reset"
 
 @RunWith(AndroidJUnit4::class)
 class BaselineProfileGenerator {
@@ -32,15 +33,16 @@ class BaselineProfileGenerator {
     @Test
     fun fixturePrimarySurfaces() {
         baselineProfileRule.collect(packageName = TARGET_PACKAGE_NAME) {
-            pressHome()
-            startActivityAndWait(Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME)))
             val uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-            uiDevice.waitForIdle()
-            uiDevice.clickText("Atlas")
-            uiDevice.clickText("Chats")
-            uiDevice.clickText("Files")
-            uiDevice.clickText("Artifacts")
-            uiDevice.clickText("Manage")
+            listOf("Atlas", "Chats", "Files", "Artifacts", "Manage").forEach { surface ->
+                pressHome()
+                startActivityAndWait(
+                    Intent().setComponent(ComponentName(TARGET_PACKAGE_NAME, FIXTURE_ACTIVITY_NAME))
+                        .putExtra(FIXTURE_RESET_EXTRA, System.nanoTime()),
+                )
+                uiDevice.waitForIdle()
+                uiDevice.clickText(surface)
+            }
         }
     }
 }
