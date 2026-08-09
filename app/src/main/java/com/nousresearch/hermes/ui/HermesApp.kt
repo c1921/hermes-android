@@ -174,6 +174,8 @@ import androidx.compose.ui.input.key.type
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -628,12 +630,9 @@ fun HermesApp(
         currentEntry?.destination?.route,
     ) {
         val destination = currentEntry?.destination ?: return@LaunchedEffect
-        val routeName = destination.route.orEmpty()
-        val onboarding = routeName.startsWith(HermesRoute.Onboarding::class.qualifiedName.orEmpty())
-        val appSettings = routeName.startsWith(
-            HermesDestinationRoute.AppSettings::class.qualifiedName.orEmpty(),
-        )
-        val backendPicker = if (routeName.startsWith(HermesRoute.BackendPicker::class.qualifiedName.orEmpty())) {
+        val onboarding = destination.hasRoute<HermesRoute.Onboarding>()
+        val appSettings = destination.hasRoute<HermesDestinationRoute.AppSettings>()
+        val backendPicker = if (destination.hasRoute<HermesRoute.BackendPicker>()) {
             currentEntry?.toRoute<HermesRoute.BackendPicker>()
         } else {
             null
