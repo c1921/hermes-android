@@ -597,6 +597,61 @@ class HermesRepositoryBillingTest {
     }
 
     @Test
+    fun `archived session reopens only after the server advertises it`() = runBlocking {
+        MockWebServer().use { server ->
+            val advertiseSession = AtomicInteger()
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
+                    "/api/status" -> MockResponse().setBody("""{"status":"ready","hermes_version":"0.18.2"}""")
+                    "/api/profiles/sessions" -> MockResponse().setBody(
+                        if (advertiseSession.get() == 0) {
+                            """{"sessions":[]}"""
+                        } else {
+                            """{"sessions":[{"session_id":"session-archived","profile":"default","title":"Returned"}]}"""
+                        },
+                    )
+                    "/api/sessions/session-archived" -> MockResponse().setBody("{}")
+                    "/api/sessions/session-archived/messages" -> MockResponse().setBody(
+                        """{"session_id":"session-archived","messages":[]}""",
+                    )
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            server.start()
+            val context = RuntimeEnvironment.getApplication()
+            val backend = backend(server)
+            val registry = BackendRegistry(context, json)
+            val credentials = InMemoryCredentialStore()
+            val gateway = RecordingGateway(json)
+            val session = StoredSession(sessionId = "session-archived")
+            registry.save(backend)
+            credentials.put(backend.id, SESSION_COOKIE)
+            val repository = repository(context, registry, credentials, BillingPendingChargeStore(context, json), gateway)
+            awaitReady(repository, backend.id)
+            gateway.enqueue(
+                "session.resume",
+                json.parseToJsonElement(
+                    """{"session_id":"live-archived","session_key":"session-archived","messages":[]}""",
+                ),
+            )
+            gateway.enqueue("model.options", json.parseToJsonElement("""{"providers":[]}"""))
+
+            repository.archiveSession(backend.id, session)
+            repository.openSession(session)
+
+            assertFalse(gateway.requests.any { it.method == "session.resume" })
+            assertEquals(null, repository.state.value.activeStoredSession)
+
+            advertiseSession.incrementAndGet()
+            repository.refreshSessions()
+            repository.openSession(session)
+
+            assertTrue(gateway.requests.any { it.method == "session.resume" })
+            assertEquals("session-archived", repository.state.value.activeStoredSession?.durableId)
+        }
+    }
+
+    @Test
     fun `session preflight failure leaves restoration in explicit authentication recovery`() = runBlocking {
         MockWebServer().use { server ->
             server.dispatcher = readyDashboardDispatcher()

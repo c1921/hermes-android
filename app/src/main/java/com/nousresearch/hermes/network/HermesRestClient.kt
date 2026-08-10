@@ -519,6 +519,26 @@ class HermesRestClient(
         )
     }
 
+    suspend fun pinSession(
+        config: BackendConfig,
+        token: String,
+        sessionId: String,
+        pinned: Boolean,
+        profile: String?,
+    ) {
+        val body = buildJsonObject {
+            put("pinned", pinned)
+            profile?.let { put("profile", it) }
+        }
+        request(
+            config,
+            token,
+            "/api/sessions/${encodePathSegment(sessionId)}",
+            method = "PATCH",
+            body = body,
+        )
+    }
+
     suspend fun getJson(config: BackendConfig, token: String, path: String): JsonElement =
         request(config, token, path)
 

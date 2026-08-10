@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HermesRestClientSessionsTest {
@@ -47,6 +48,41 @@ class HermesRestClientSessionsTest {
                 "/api/profiles/sessions?limit=50&offset=0&order=recent&profile=all&exclude_sources=cron",
                 server.takeRequest().path,
             )
+        }
+    }
+
+    @Test
+    fun `session rows without a pin field remain unsupported`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"sessions":[{"session_id":"legacy"}],"total":1}"""))
+
+            val page = HermesRestClient(OkHttpClient(), Json { ignoreUnknownKeys = true }).sessions(
+                config(server),
+                "secret",
+            )
+
+            assertNull(page.sessions.single().pinned)
+        }
+    }
+
+    @Test
+    fun `pin session patches the requested profile and flag`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"ok":true,"pinned":true}"""))
+
+            HermesRestClient(OkHttpClient(), Json { ignoreUnknownKeys = true }).pinSession(
+                config(server),
+                "secret",
+                "session-1",
+                pinned = true,
+                profile = "research profile",
+            )
+
+            val request = server.takeRequest()
+            assertEquals("/api/sessions/session-1", request.path)
+            assertEquals("{\"pinned\":true,\"profile\":\"research profile\"}", request.body.readUtf8())
         }
     }
 
