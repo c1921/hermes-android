@@ -2179,6 +2179,11 @@ private fun SessionRow(
     val actionWidthPx = with(LocalDensity.current) { actionWidth.toPx() }
     val layoutDirection = LocalLayoutDirection.current
     val openOffset = if (layoutDirection == LayoutDirection.Rtl) actionWidthPx else -actionWidthPx
+    val sessionDescription = listOfNotNull(
+        session.displayTitle,
+        session.profile?.takeIf(String::isNotBlank),
+        session.model?.takeIf(String::isNotBlank),
+    ).joinToString(", ")
     val anchors = remember(actionWidthPx, openOffset) {
         DraggableAnchors<Boolean> {
             false at 0f
@@ -2256,7 +2261,7 @@ private fun SessionRow(
                 }
                 .clearAndSetSemantics {
                     role = Role.Button
-                    contentDescription = session.displayTitle
+                    contentDescription = sessionDescription
                     onClick {
                         if (swipeState.currentValue) {
                             actionScope.launch { swipeState.animateTo(false) }

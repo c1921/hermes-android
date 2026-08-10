@@ -4101,11 +4101,12 @@ class HermesRepository @Inject constructor(
         }
         val (backend, token) = credentials
         if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
-        runCatching {
+        try {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
-        }.getOrElse { error ->
-            if (error is CancellationException) throw error
-            if (isCurrentBackendMutationFailure(backend.id, token, credentialGeneration)) fail(error)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            failCurrentBackendMutation(error, backend.id, token, credentialGeneration)
             return
         }
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
@@ -4152,11 +4153,12 @@ class HermesRepository @Inject constructor(
             return
         }
         if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
-        runCatching {
+        try {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
-        }.getOrElse { error ->
-            if (error is CancellationException) throw error
-            if (isCurrentBackendMutationFailure(backend.id, token, credentialGeneration)) fail(error)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            failCurrentBackendMutation(error, backend.id, token, credentialGeneration)
             return
         }
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
@@ -4278,12 +4280,21 @@ class HermesRepository @Inject constructor(
     ): Boolean = mutableState.value.backend?.id == backendId &&
         backendCredentialGeneration.get() == credentialGeneration
 
-    private fun isCurrentBackendMutationFailure(
+    private suspend fun failCurrentBackendMutation(
+        error: Throwable,
         backendId: String,
         token: String,
         credentialGeneration: Long,
-    ): Boolean = isCurrentBackendMutation(backendId, credentialGeneration) &&
-        tokenStore.get(backendId)?.headerValue == token
+    ) {
+        billingAccountMutex.withLock {
+            if (
+                isCurrentBackendMutation(backendId, credentialGeneration) &&
+                tokenStore.get(backendId)?.headerValue == token
+            ) {
+                fail(error)
+            }
+        }
+    }
 
     private fun invalidateSessionSearch(
         backendId: String,
@@ -4348,42 +4359,43 @@ class HermesRepository @Inject constructor(
             return
         }
         if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
-        runCatching {
+        try {
             restClient.pinSession(backend, token, session.durableId, pinned, session.profile)
-        }.onSuccess {
-            if (isCurrentBackendMutation(backend.id, credentialGeneration)) {
-                markSessionListMutation(backend.id, credentialGeneration)
-                invalidateSessionSearch(backend.id, session, credentialGeneration)
-                mutableState.update { current ->
-                    if (
-                        current.backend?.id != backend.id ||
-                        backendCredentialGeneration.get() != credentialGeneration
-                    ) {
-                        current
-                    } else {
-                        current.copy(
-                            sessions = current.sessions.map {
-                                if (it.durableId == session.durableId && it.profile == session.profile) {
-                                    it.copy(pinned = pinned)
-                                } else {
-                                    it
-                                }
-                            },
-                            activeStoredSession = current.activeStoredSession?.let { active ->
-                                if (active.durableId == session.durableId && active.profile == session.profile) {
-                                    active.copy(pinned = pinned)
-                                } else {
-                                    active
-                                }
-                            },
-                            error = null,
-                        )
-                    }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            failCurrentBackendMutation(error, backend.id, token, credentialGeneration)
+            return
+        }
+        if (isCurrentBackendMutation(backend.id, credentialGeneration)) {
+            markSessionListMutation(backend.id, credentialGeneration)
+            invalidateSessionSearch(backend.id, session, credentialGeneration)
+            mutableState.update { current ->
+                if (
+                    current.backend?.id != backend.id ||
+                    backendCredentialGeneration.get() != credentialGeneration
+                ) {
+                    current
+                } else {
+                    current.copy(
+                        sessions = current.sessions.map {
+                            if (it.durableId == session.durableId && it.profile == session.profile) {
+                                it.copy(pinned = pinned)
+                            } else {
+                                it
+                            }
+                        },
+                        activeStoredSession = current.activeStoredSession?.let { active ->
+                            if (active.durableId == session.durableId && active.profile == session.profile) {
+                                active.copy(pinned = pinned)
+                            } else {
+                                active
+                            }
+                        },
+                        error = null,
+                    )
                 }
             }
-        }.onFailure { error ->
-            if (error is CancellationException) throw error
-            if (isCurrentBackendMutationFailure(backend.id, token, credentialGeneration)) fail(error)
         }
     }
 
