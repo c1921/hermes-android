@@ -352,6 +352,12 @@ class HermesViewModel @Inject constructor(
     fun clarify(answer: String) = viewModelScope.launch { repository.respondToClarification(answer) }
     fun submitSensitiveInput(value: String) = viewModelScope.launch { repository.respondToSensitiveInput(value) }
     fun archiveActive() = viewModelScope.launch { repository.archiveActive() }
+    fun archiveSession(backendId: String, session: StoredSession) = viewModelScope.launch {
+        repository.archiveSession(backendId, session)
+    }
+    fun pinSession(backendId: String, session: StoredSession) = viewModelScope.launch {
+        repository.pinSession(backendId, session)
+    }
     fun deleteSession(session: StoredSession) = viewModelScope.launch { repository.deleteSession(session) }
     fun renameActive(title: String) = viewModelScope.launch { repository.renameActive(title) }
     fun branchActive(name: String) = viewModelScope.launch { repository.branchActive(name) }
