@@ -4155,6 +4155,7 @@ class HermesRepository @Inject constructor(
         runCatching {
             restClient.pinSession(backend, token, session.durableId, pinned, session.profile)
         }.onSuccess {
+            markSessionListMutation(backend.id)
             mutableState.update { current ->
                 if (current.backend?.id != backend.id) {
                     current
@@ -4174,11 +4175,14 @@ class HermesRepository @Inject constructor(
                                 active
                             }
                         },
+                        loading = false,
                         error = null,
                     )
                 }
             }
-        }.onFailure(::fail)
+        }.onFailure { error ->
+            if (mutableState.value.backend?.id == backend.id) fail(error)
+        }
     }
 
     suspend fun deleteSession(session: StoredSession) {

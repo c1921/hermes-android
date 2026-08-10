@@ -156,8 +156,10 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -2246,6 +2248,26 @@ private fun SessionRow(
                     } else {
                         onClick()
                     }
+                }
+                .semantics {
+                    customActions = listOfNotNull(
+                        onPin?.let { pin ->
+                            CustomAccessibilityAction(
+                                label = if (session.pinned == true) "Unpin ${session.displayTitle}" else "Pin ${session.displayTitle}",
+                                action = { pin(); true },
+                            )
+                        },
+                        CustomAccessibilityAction(
+                            label = "Archive ${session.displayTitle}",
+                            action = { onArchive(); true },
+                        ),
+                        onDelete?.let { delete ->
+                            CustomAccessibilityAction(
+                                label = "Delete ${session.displayTitle}",
+                                action = { delete(); true },
+                            )
+                        },
+                    )
                 }
                 .padding(horizontal = 20.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
