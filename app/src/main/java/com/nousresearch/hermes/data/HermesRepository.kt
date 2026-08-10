@@ -4081,11 +4081,26 @@ class HermesRepository @Inject constructor(
         )
     }
 
-    suspend fun archiveActive() {
+    suspend fun archiveActive(
+        expectedBackendId: String? = null,
+        expectedSession: StoredSession? = null,
+    ) {
         invalidatePendingAttachments()
-        val session = mutableState.value.activeStoredSession ?: return
+        val current = mutableState.value
+        val session = current.activeStoredSession ?: return
+        if (
+            expectedBackendId != null && expectedSession != null &&
+            (
+                current.backend?.id != expectedBackendId ||
+                    session.durableId != expectedSession.durableId ||
+                    session.profile.normalizedProfile() != expectedSession.profile.normalizedProfile()
+                )
+        ) {
+            archiveSessionMutation(expectedBackendId, expectedSession, allowActiveDelegation = false)
+            return
+        }
         val requestGeneration = openSessionGeneration.incrementAndGet()
-        val requestBackendId = mutableState.value.backend?.id
+        val requestBackendId = current.backend?.id
         val credentialGeneration = backendCredentialGeneration.get()
         flushDraft()
         val credentials = runCatching { activeCredentials() }.getOrElse { error ->
@@ -4131,14 +4146,22 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun archiveSession(requestBackendId: String, session: StoredSession) {
+        archiveSessionMutation(requestBackendId, session, allowActiveDelegation = true)
+    }
+
+    private suspend fun archiveSessionMutation(
+        requestBackendId: String,
+        session: StoredSession,
+        allowActiveDelegation: Boolean,
+    ) {
         require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
         if (mutableState.value.backend?.id != requestBackendId) return
-        if (mutableState.value.activeStoredSession?.let { active ->
+        if (allowActiveDelegation && mutableState.value.activeStoredSession?.let { active ->
                 active.durableId == session.durableId &&
                     active.profile.normalizedProfile() == session.profile.normalizedProfile()
             } == true
         ) {
-            archiveActive()
+            archiveActive(requestBackendId, session)
             return
         }
         val credentialGeneration = backendCredentialGeneration.get()
