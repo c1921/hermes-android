@@ -4085,7 +4085,6 @@ class HermesRepository @Inject constructor(
         expectedBackendId: String? = null,
         expectedSession: StoredSession? = null,
     ) {
-        invalidatePendingAttachments()
         val current = mutableState.value
         val session = current.activeStoredSession ?: return
         if (
@@ -4099,6 +4098,7 @@ class HermesRepository @Inject constructor(
             archiveSessionMutation(expectedBackendId, expectedSession, allowActiveDelegation = false)
             return
         }
+        invalidatePendingAttachments()
         val requestGeneration = openSessionGeneration.incrementAndGet()
         val requestBackendId = current.backend?.id
         val credentialGeneration = backendCredentialGeneration.get()
