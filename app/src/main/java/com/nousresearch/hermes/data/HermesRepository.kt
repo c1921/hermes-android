@@ -359,6 +359,7 @@ class HermesRepository @Inject constructor(
     private var reconnectJob: Job? = null
     private var draftSaveJob: Job? = null
     private var sessionSearchJob: Job? = null
+    private val sessionSearchGeneration = AtomicLong()
     private var slashCompletionJob: Job? = null
     private var queueDrainJob: Job? = null
     private var providerOAuthPollJob: Job? = null
@@ -557,6 +558,7 @@ class HermesRepository @Inject constructor(
 
     fun searchSessions(query: String) {
         val cleaned = query.trim().take(200)
+        val requestGeneration = sessionSearchGeneration.incrementAndGet()
         sessionSearchJob?.cancel()
         if (cleaned.isBlank()) {
             mutableState.value = mutableState.value.copy(
@@ -583,7 +585,10 @@ class HermesRepository @Inject constructor(
                     }
                 }.distinctBy { "${it.profile}:${it.sessionId}" }.take(MAX_SESSION_SEARCH_RESULTS)
             }.onSuccess { results ->
-                if (mutableState.value.sessionSearchQuery == cleaned) {
+                if (
+                    sessionSearchGeneration.get() == requestGeneration &&
+                    mutableState.value.sessionSearchQuery == cleaned
+                ) {
                     mutableState.value = mutableState.value.copy(
                         sessionSearchResults = results,
                         sessionSearchLoading = false,
@@ -591,7 +596,11 @@ class HermesRepository @Inject constructor(
                     )
                 }
             }.onFailure { error ->
-                if (error !is CancellationException && mutableState.value.sessionSearchQuery == cleaned) {
+                if (
+                    error !is CancellationException &&
+                    sessionSearchGeneration.get() == requestGeneration &&
+                    mutableState.value.sessionSearchQuery == cleaned
+                ) {
                     mutableState.value = mutableState.value.copy(sessionSearchLoading = false)
                     fail(error)
                 }
@@ -3991,6 +4000,7 @@ class HermesRepository @Inject constructor(
         }
         val (backend, token) = credentials
         restClient.archiveSession(backend, token, session.durableId, true, session.profile)
+        invalidateSessionSearch(session)
         clearArchivedActiveSession(requestGeneration, backend.id, session)
     }
 
@@ -4013,6 +4023,7 @@ class HermesRepository @Inject constructor(
             fail(it)
             return
         }
+        invalidateSessionSearch(session)
         val activeNow = mutableState.value.let { current ->
             current.backend?.id == backend.id && current.activeStoredSession?.let { active ->
                 active.durableId == session.durableId && active.profile == session.profile
@@ -4073,30 +4084,53 @@ class HermesRepository @Inject constructor(
         return true
     }
 
+    private fun invalidateSessionSearch(session: StoredSession) {
+        sessionSearchGeneration.incrementAndGet()
+        sessionSearchJob?.cancel()
+        sessionSearchJob = null
+        mutableState.update { current ->
+            current.copy(
+                sessionSearchResults = current.sessionSearchResults.filterNot {
+                    it.sessionId == session.durableId && it.profile == session.profile
+                },
+                sessionSearchLoading = false,
+            )
+        }
+    }
+
     suspend fun pinSession(session: StoredSession) {
         require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
         val pinned = !requireNotNull(session.pinned) { "Hermes did not advertise session pinning" }
+        val (backend, token) = runCatching { activeCredentials() }.getOrElse {
+            fail(it)
+            return
+        }
         runCatching {
-            val (backend, token) = activeCredentials()
             restClient.pinSession(backend, token, session.durableId, pinned, session.profile)
         }.onSuccess {
-            mutableState.value = mutableState.value.copy(
-                sessions = mutableState.value.sessions.map {
-                    if (it.durableId == session.durableId && it.profile == session.profile) {
-                        it.copy(pinned = pinned)
-                    } else {
-                        it
-                    }
-                },
-                activeStoredSession = mutableState.value.activeStoredSession?.let { active ->
-                    if (active.durableId == session.durableId && active.profile == session.profile) {
-                        active.copy(pinned = pinned)
-                    } else {
-                        active
-                    }
-                },
-                error = null,
-            )
+            mutableState.update { current ->
+                if (current.backend?.id != backend.id) {
+                    current
+                } else {
+                    current.copy(
+                        sessions = current.sessions.map {
+                            if (it.durableId == session.durableId && it.profile == session.profile) {
+                                it.copy(pinned = pinned)
+                            } else {
+                                it
+                            }
+                        },
+                        activeStoredSession = current.activeStoredSession?.let { active ->
+                            if (active.durableId == session.durableId && active.profile == session.profile) {
+                                active.copy(pinned = pinned)
+                            } else {
+                                active
+                            }
+                        },
+                        error = null,
+                    )
+                }
+            }
         }.onFailure(::fail)
     }
 
