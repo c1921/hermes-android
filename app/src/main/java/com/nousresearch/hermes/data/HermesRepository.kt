@@ -786,7 +786,6 @@ class HermesRepository @Inject constructor(
                         checkpointsLoading = false,
                         checkpointNotice = null,
                         checkpointError = null,
-                        loading = false,
                         error = null,
                     )
                 }
@@ -1562,6 +1561,7 @@ class HermesRepository @Inject constructor(
                         checkpointsLoading = false,
                         checkpointNotice = null,
                         checkpointError = null,
+                        loading = false,
                         error = null,
                     )
                 }
