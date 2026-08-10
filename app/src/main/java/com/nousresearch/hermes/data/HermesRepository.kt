@@ -707,7 +707,9 @@ class HermesRepository @Inject constructor(
 
     suspend fun openSession(session: StoredSession) {
         invalidatePendingAttachments()
-        val requestGeneration = openSessionGeneration.incrementAndGet()
+        val requestGeneration = sessionTargetMutex.withLock {
+            openSessionGeneration.incrementAndGet()
+        }
         val credentials = runCatching {
             activeCredentials(allowRecovery = true, allowRehydrating = true)
         }.getOrElse { error ->
@@ -719,35 +721,37 @@ class HermesRepository @Inject constructor(
         var previousTimeline = TimelineState()
         var previousRuntimeSessionId: String? = null
         var selected = false
-        mutableState.update { live ->
-            if (openSessionGeneration.get() != requestGeneration || live.backend?.id != backend.id) {
-                live
-            } else {
-                selected = true
-                val reopeningCurrent = live.activeStoredSession?.let {
-                    it.durableId == session.durableId && it.profile == session.profile
-                } == true
-                previousTimeline = if (reopeningCurrent) live.timeline else TimelineState()
-                previousRuntimeSessionId = live.runtimeSessionId
-                live.copy(
-                    activeStoredSession = session,
-                    runtimeSessionId = null,
-                    runtimeInfo = SessionRuntimeInfo(),
-                    restoration = SessionRestorationState(
-                        status = SessionRestorationStatus.REHYDRATING,
-                        target = sessionTarget(backend.id, session),
-                    ),
-                    timeline = previousTimeline,
-                    pendingAttachments = emptyList(),
-                    loading = true,
-                    checkpointsEnabled = null,
-                    checkpoints = emptyList(),
-                    checkpointPreview = null,
-                    checkpointsLoading = false,
-                    checkpointNotice = null,
-                    checkpointError = null,
-                    error = null,
-                )
+        sessionTargetMutex.withLock {
+            mutableState.update { live ->
+                if (openSessionGeneration.get() != requestGeneration || live.backend?.id != backend.id) {
+                    live
+                } else {
+                    selected = true
+                    val reopeningCurrent = live.activeStoredSession?.let {
+                        it.durableId == session.durableId && it.profile == session.profile
+                    } == true
+                    previousTimeline = if (reopeningCurrent) live.timeline else TimelineState()
+                    previousRuntimeSessionId = live.runtimeSessionId
+                    live.copy(
+                        activeStoredSession = session,
+                        runtimeSessionId = null,
+                        runtimeInfo = SessionRuntimeInfo(),
+                        restoration = SessionRestorationState(
+                            status = SessionRestorationStatus.REHYDRATING,
+                            target = sessionTarget(backend.id, session),
+                        ),
+                        timeline = previousTimeline,
+                        pendingAttachments = emptyList(),
+                        loading = true,
+                        checkpointsEnabled = null,
+                        checkpoints = emptyList(),
+                        checkpointPreview = null,
+                        checkpointsLoading = false,
+                        checkpointNotice = null,
+                        checkpointError = null,
+                        error = null,
+                    )
+                }
             }
         }
         if (!selected) return
@@ -4196,26 +4200,48 @@ class HermesRepository @Inject constructor(
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
         markSessionListMutation(backend.id, credentialGeneration)
         invalidateSessionSearch(backend.id, session, credentialGeneration)
-        val cleanupGeneration = mutableState.value.let { current ->
-            if (
-                current.backend?.id == backend.id &&
-                backendCredentialGeneration.get() == credentialGeneration &&
-                current.activeStoredSession?.let { active ->
+        if (
+            cleanupArchivedSessionState(
+                backend.id,
+                session,
+                credentialGeneration,
+            )
+        ) return
+    }
+
+    private suspend fun cleanupArchivedSessionState(
+        backendId: String,
+        session: StoredSession,
+        credentialGeneration: Long,
+    ): Boolean {
+        var clearedActive = false
+        sessionTargetMutex.withLock {
+            if (!isCurrentBackendMutation(backendId, credentialGeneration)) return@withLock
+            val requestGeneration = openSessionGeneration.incrementAndGet()
+            val current = mutableState.value
+            val activeMatches = current.activeStoredSession?.let { active ->
+                current.backend?.id == backendId &&
                     active.durableId == session.durableId &&
-                        active.profile.normalizedProfile() == session.profile.normalizedProfile()
-                } == true
-            ) {
-                openSessionGeneration.get()
-            } else {
-                null
+                    active.profile.normalizedProfile() == session.profile.normalizedProfile()
+            } == true
+            if (activeMatches) {
+                invalidatePendingAttachments()
+                flushDraft()
+                clearedActive = clearArchivedActiveSessionLocked(
+                    requestGeneration,
+                    backendId,
+                    session,
+                    credentialGeneration,
+                )
+            }
+            if (!clearedActive) {
+                removeArchivedSessionFromState(backendId, session, credentialGeneration)
             }
         }
-        if (cleanupGeneration != null) {
-            invalidatePendingAttachments()
-            flushDraft()
-            if (clearArchivedActiveSession(cleanupGeneration, backend.id, session, credentialGeneration)) return
-        }
-        removeArchivedSessionFromState(backend.id, session, credentialGeneration)
+        if (!clearedActive) return false
+        loadComposerState()
+        refreshSessions()
+        return true
     }
 
     private suspend fun clearArchivedActiveSession(
@@ -4225,49 +4251,57 @@ class HermesRepository @Inject constructor(
         credentialGeneration: Long,
     ): Boolean {
         val cleared = sessionTargetMutex.withLock {
-            val current = mutableState.value
-            if (
-                openSessionGeneration.get() != requestGeneration ||
-                backendCredentialGeneration.get() != credentialGeneration ||
-                current.backend?.id != backendId ||
-                current.activeStoredSession?.durableId != session.durableId ||
-                current.activeStoredSession?.profile.normalizedProfile() != session.profile.normalizedProfile()
-            ) {
-                return@withLock false
-            }
-            backendRegistry.clearSessionTarget(backendId)
-            var applied = false
-            while (true) {
-                val live = mutableState.value
-                if (
-                    openSessionGeneration.get() != requestGeneration ||
-                    backendCredentialGeneration.get() != credentialGeneration ||
-                    live.backend?.id != backendId ||
-                    live.activeStoredSession?.durableId != session.durableId ||
-                    live.activeStoredSession?.profile.normalizedProfile() != session.profile.normalizedProfile()
-                ) {
-                    break
-                } else {
-                    val next = live.copy(
-                        activeStoredSession = null,
-                        runtimeSessionId = null,
-                        runtimeInfo = SessionRuntimeInfo(),
-                        timeline = TimelineState(),
-                        pendingAttachments = emptyList(),
-                        restoration = SessionRestorationState(status = SessionRestorationStatus.READY),
-                    )
-                    if (mutableState.compareAndSet(live, next)) {
-                        applied = true
-                        break
-                    }
-                }
-            }
-            applied
+            clearArchivedActiveSessionLocked(
+                requestGeneration,
+                backendId,
+                session,
+                credentialGeneration,
+            )
         }
         if (!cleared) return false
         loadComposerState()
         refreshSessions()
         return true
+    }
+
+    private fun clearArchivedActiveSessionLocked(
+        requestGeneration: Long,
+        backendId: String,
+        session: StoredSession,
+        credentialGeneration: Long,
+    ): Boolean {
+        val current = mutableState.value
+        if (
+            openSessionGeneration.get() != requestGeneration ||
+            backendCredentialGeneration.get() != credentialGeneration ||
+            current.backend?.id != backendId ||
+            current.activeStoredSession?.durableId != session.durableId ||
+            current.activeStoredSession?.profile.normalizedProfile() != session.profile.normalizedProfile()
+        ) {
+            return false
+        }
+        backendRegistry.clearSessionTarget(backendId)
+        while (true) {
+            val live = mutableState.value
+            if (
+                openSessionGeneration.get() != requestGeneration ||
+                backendCredentialGeneration.get() != credentialGeneration ||
+                live.backend?.id != backendId ||
+                live.activeStoredSession?.durableId != session.durableId ||
+                live.activeStoredSession?.profile.normalizedProfile() != session.profile.normalizedProfile()
+            ) {
+                return false
+            }
+            val next = live.copy(
+                activeStoredSession = null,
+                runtimeSessionId = null,
+                runtimeInfo = SessionRuntimeInfo(),
+                timeline = TimelineState(),
+                pendingAttachments = emptyList(),
+                restoration = SessionRestorationState(status = SessionRestorationStatus.READY),
+            )
+            if (mutableState.compareAndSet(live, next)) return true
+        }
     }
 
     private fun markSessionListMutation(backendId: String, credentialGeneration: Long) {
