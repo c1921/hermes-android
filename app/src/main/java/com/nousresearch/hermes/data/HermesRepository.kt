@@ -4098,8 +4098,6 @@ class HermesRepository @Inject constructor(
             archiveSessionMutation(expectedBackendId, expectedSession, allowActiveDelegation = false)
             return
         }
-        invalidatePendingAttachments()
-        val requestGeneration = openSessionGeneration.incrementAndGet()
         val requestBackendId = current.backend?.id
         val credentialGeneration = backendCredentialGeneration.get()
         flushDraft()
@@ -4110,6 +4108,8 @@ class HermesRepository @Inject constructor(
         }
         val (backend, token) = credentials
         if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
+        invalidatePendingAttachments()
+        val requestGeneration = openSessionGeneration.incrementAndGet()
         try {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         } catch (cancelled: CancellationException) {
