@@ -385,6 +385,7 @@ class HermesRepository @Inject constructor(
     private var intentionalDisconnect = false
     private var gatewayBackendId: String? = null
     private val openSessionGeneration = AtomicLong()
+    private val archivedSessionTargets = mutableMapOf<SessionTarget, Long>()
     private var pendingOpenSession: SessionTarget? = null
     private var pendingOpenSessionGeneration: Long? = null
     val state = mutableState.asStateFlow()
@@ -711,13 +712,17 @@ class HermesRepository @Inject constructor(
     suspend fun openSession(session: StoredSession) {
         invalidatePendingAttachments()
         val requestGeneration = sessionTargetMutex.withLock {
-            val generation = openSessionGeneration.incrementAndGet()
-            pendingOpenSession = mutableState.value.backend?.id?.let { backendId ->
+            val target = mutableState.value.backend?.id?.let { backendId ->
                 if (session.durableId.isBlank()) null else sessionTarget(backendId, session)
             }
+            if (target != null && archivedSessionTargets[target] == backendCredentialGeneration.get()) {
+                return@withLock null
+            }
+            val generation = openSessionGeneration.incrementAndGet()
+            pendingOpenSession = target
             pendingOpenSessionGeneration = generation
             generation
-        }
+        } ?: return
         val credentials = try {
             activeCredentials(allowRecovery = true, allowRehydrating = true)
         } catch (error: Throwable) {
@@ -4238,6 +4243,8 @@ class HermesRepository @Inject constructor(
         sessionTargetMutex.withLock {
             if (!isCurrentBackendMutation(backendId, credentialGeneration)) return@withLock
             val current = mutableState.value
+            val target = sessionTarget(backendId, session)
+            archivedSessionTargets[target] = credentialGeneration
             val activeMatches = current.activeStoredSession?.let { active ->
                 current.backend?.id == backendId &&
                     active.durableId == session.durableId &&
@@ -4245,7 +4252,7 @@ class HermesRepository @Inject constructor(
             } == true
             val pendingMatches =
                 pendingOpenSessionGeneration == openSessionGeneration.get() &&
-                    pendingOpenSession == sessionTarget(backendId, session)
+                    pendingOpenSession == target
             val requestGeneration = if (activeMatches || pendingMatches) {
                 openSessionGeneration.incrementAndGet()
             } else {
@@ -4282,8 +4289,22 @@ class HermesRepository @Inject constructor(
         credentialGeneration: Long,
     ): Boolean {
         val cleared = sessionTargetMutex.withLock {
+            if (!isCurrentBackendMutation(backendId, credentialGeneration)) return@withLock false
+            val target = sessionTarget(backendId, session)
+            archivedSessionTargets[target] = credentialGeneration
+            val pendingMatches =
+                pendingOpenSessionGeneration == openSessionGeneration.get() &&
+                    pendingOpenSession == target
+            val effectiveRequestGeneration = if (pendingMatches) {
+                openSessionGeneration.incrementAndGet().also {
+                    pendingOpenSession = null
+                    pendingOpenSessionGeneration = null
+                }
+            } else {
+                requestGeneration
+            }
             clearArchivedActiveSessionLocked(
-                requestGeneration,
+                effectiveRequestGeneration,
                 backendId,
                 session,
                 credentialGeneration,
@@ -4643,6 +4664,7 @@ class HermesRepository @Inject constructor(
 
     private suspend fun connect(backend: BackendConfig) {
         sessionListMutationMutex.withLock { backendCredentialGeneration.incrementAndGet() }
+        sessionTargetMutex.withLock { archivedSessionTargets.clear() }
         invalidatePendingAttachments()
         providerOAuthPollJob?.cancelAndJoin()
         providerOAuthPollJob = null
