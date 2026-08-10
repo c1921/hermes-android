@@ -4025,15 +4025,19 @@ class HermesRepository @Inject constructor(
             if (clearArchivedActiveSession(cleanupGeneration, backend.id, session)) return
         }
         mutableState.update { current ->
-            current.copy(
-                sessions = current.sessions.filterNot {
-                    it.durableId == session.durableId && it.profile == session.profile
-                },
-                sessionSearchResults = current.sessionSearchResults.filterNot {
-                    it.sessionId == session.durableId && it.profile == session.profile
-                },
-                error = null,
-            )
+            if (current.backend?.id != backend.id) {
+                current
+            } else {
+                current.copy(
+                    sessions = current.sessions.filterNot {
+                        it.durableId == session.durableId && it.profile == session.profile
+                    },
+                    sessionSearchResults = current.sessionSearchResults.filterNot {
+                        it.sessionId == session.durableId && it.profile == session.profile
+                    },
+                    error = null,
+                )
+            }
         }
     }
 
