@@ -150,6 +150,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
@@ -177,6 +178,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.key.Key
@@ -2175,13 +2177,15 @@ private fun SessionRow(
 ) {
     val actionWidth = (56 * ((if (onPin != null) 1 else 0) + 1 + if (onDelete != null) 1 else 0)).dp
     val actionWidthPx = with(LocalDensity.current) { actionWidth.toPx() }
-    val anchors = remember(actionWidthPx) {
+    val layoutDirection = LocalLayoutDirection.current
+    val openOffset = if (layoutDirection == LayoutDirection.Rtl) actionWidthPx else -actionWidthPx
+    val anchors = remember(actionWidthPx, openOffset) {
         DraggableAnchors<Boolean> {
             false at 0f
-            true at -actionWidthPx
+            true at openOffset
         }
     }
-    val swipeState = remember(actionWidthPx) { AnchoredDraggableState(false, anchors) }
+    val swipeState = remember(actionWidthPx, layoutDirection) { AnchoredDraggableState(false, anchors) }
     val actionScope = rememberCoroutineScope()
     Box(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
