@@ -360,6 +360,7 @@ class HermesRepository @Inject constructor(
     private var draftSaveJob: Job? = null
     private var sessionSearchJob: Job? = null
     private val sessionSearchGeneration = AtomicLong()
+    private val sessionListGeneration = AtomicLong()
     private var slashCompletionJob: Job? = null
     private var queueDrainJob: Job? = null
     private var providerOAuthPollJob: Job? = null
@@ -550,15 +551,37 @@ class HermesRepository @Inject constructor(
 
     suspend fun refreshSessions() {
         val (backend, token) = activeCredentials(allowRecovery = true)
-        setLoading(true)
+        val requestGeneration = sessionListGeneration.get()
+        mutableState.update { current ->
+            if (current.backend?.id == backend.id) current.copy(loading = true) else current
+        }
         runCatching { restClient.sessions(backend, token).sessions }
-            .onSuccess { sessions -> mutableState.value = mutableState.value.copy(sessions = sessions, loading = false, error = null) }
-            .onFailure { fail(it) }
+            .onSuccess { sessions ->
+                mutableState.update { current ->
+                    if (
+                        current.backend?.id != backend.id ||
+                        sessionListGeneration.get() != requestGeneration
+                    ) {
+                        current
+                    } else {
+                        current.copy(sessions = sessions, loading = false, error = null)
+                    }
+                }
+            }
+            .onFailure { error ->
+                if (
+                    mutableState.value.backend?.id == backend.id &&
+                    sessionListGeneration.get() == requestGeneration
+                ) {
+                    fail(error)
+                }
+            }
     }
 
     fun searchSessions(query: String) {
         val cleaned = query.trim().take(200)
         val requestGeneration = sessionSearchGeneration.incrementAndGet()
+        val requestBackendId = mutableState.value.backend?.id
         sessionSearchJob?.cancel()
         if (cleaned.isBlank()) {
             mutableState.value = mutableState.value.copy(
@@ -583,10 +606,14 @@ class HermesRepository @Inject constructor(
                     restClient.searchSessions(backend, token, cleaned, profile).results.map {
                         it.copy(profile = profile)
                     }
-                }.distinctBy { "${it.profile}:${it.sessionId}" }.take(MAX_SESSION_SEARCH_RESULTS)
-            }.onSuccess { results ->
+                }.distinctBy { "${it.profile}:${it.sessionId}" }.take(MAX_SESSION_SEARCH_RESULTS).let {
+                    backend.id to it
+                }
+            }.onSuccess { (backendId, results) ->
                 if (
                     sessionSearchGeneration.get() == requestGeneration &&
+                    backendId == requestBackendId &&
+                    mutableState.value.backend?.id == backendId &&
                     mutableState.value.sessionSearchQuery == cleaned
                 ) {
                     mutableState.value = mutableState.value.copy(
@@ -599,6 +626,7 @@ class HermesRepository @Inject constructor(
                 if (
                     error !is CancellationException &&
                     sessionSearchGeneration.get() == requestGeneration &&
+                    mutableState.value.backend?.id == requestBackendId &&
                     mutableState.value.sessionSearchQuery == cleaned
                 ) {
                     mutableState.value = mutableState.value.copy(sessionSearchLoading = false)
@@ -4000,7 +4028,8 @@ class HermesRepository @Inject constructor(
         }
         val (backend, token) = credentials
         restClient.archiveSession(backend, token, session.durableId, true, session.profile)
-        invalidateSessionSearch(session)
+        markSessionListMutation(backend.id)
+        invalidateSessionSearch(backend.id, session)
         clearArchivedActiveSession(requestGeneration, backend.id, session)
     }
 
@@ -4019,11 +4048,12 @@ class HermesRepository @Inject constructor(
         }
         runCatching {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
-        }.getOrElse {
-            fail(it)
+        }.getOrElse { error ->
+            if (mutableState.value.backend?.id == backend.id) fail(error)
             return
         }
-        invalidateSessionSearch(session)
+        markSessionListMutation(backend.id)
+        invalidateSessionSearch(backend.id, session)
         val activeNow = mutableState.value.let { current ->
             current.backend?.id == backend.id && current.activeStoredSession?.let { active ->
                 active.durableId == session.durableId && active.profile == session.profile
@@ -4046,6 +4076,7 @@ class HermesRepository @Inject constructor(
                     sessionSearchResults = current.sessionSearchResults.filterNot {
                         it.sessionId == session.durableId && it.profile == session.profile
                     },
+                    loading = false,
                     error = null,
                 )
             }
@@ -4084,17 +4115,33 @@ class HermesRepository @Inject constructor(
         return true
     }
 
-    private fun invalidateSessionSearch(session: StoredSession) {
+    private fun markSessionListMutation(backendId: String) {
+        if (mutableState.value.backend?.id == backendId) sessionListGeneration.incrementAndGet()
+    }
+
+    private fun invalidateSessionSearch(backendId: String, session: StoredSession) {
+        if (mutableState.value.backend?.id != backendId) return
         sessionSearchGeneration.incrementAndGet()
         sessionSearchJob?.cancel()
         sessionSearchJob = null
+        var query = ""
+        var invalidated = false
         mutableState.update { current ->
-            current.copy(
-                sessionSearchResults = current.sessionSearchResults.filterNot {
-                    it.sessionId == session.durableId && it.profile == session.profile
-                },
-                sessionSearchLoading = false,
-            )
+            if (current.backend?.id != backendId) {
+                current
+            } else {
+                invalidated = true
+                query = current.sessionSearchQuery
+                current.copy(
+                    sessionSearchResults = current.sessionSearchResults.filterNot {
+                        it.sessionId == session.durableId && it.profile == session.profile
+                    },
+                    sessionSearchLoading = false,
+                )
+            }
+        }
+        if (invalidated && query.isNotBlank() && mutableState.value.backend?.id == backendId) {
+            searchSessions(query)
         }
     }
 
