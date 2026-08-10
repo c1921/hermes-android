@@ -553,11 +553,16 @@ class HermesRepository @Inject constructor(
         dashboardConnector.discoverPasswordProviders(config)
 
     suspend fun refreshSessions() {
+        val requestCredentialGeneration = backendCredentialGeneration.get()
         val (backend, token) = activeCredentials(allowRecovery = true)
+        if (
+            backendCredentialGeneration.get() != requestCredentialGeneration ||
+            mutableState.value.backend?.id != backend.id
+        ) return
         val requestGeneration = sessionListGeneration.get()
         val refreshGeneration = sessionListRefreshGeneration.incrementAndGet()
         val requestOpenSessionGeneration = openSessionGeneration.get()
-        val credentialGeneration = backendCredentialGeneration.get()
+        val credentialGeneration = requestCredentialGeneration
         mutableState.update { current ->
             if (
                 current.backend?.id == backend.id &&
