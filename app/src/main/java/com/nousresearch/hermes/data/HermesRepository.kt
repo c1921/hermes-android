@@ -4108,6 +4108,21 @@ class HermesRepository @Inject constructor(
         }
         val (backend, token) = credentials
         if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
+        val activeStillCurrent = mutableState.value.let { live ->
+            live.backend?.id == requestBackendId && live.activeStoredSession?.let { active ->
+                active.durableId == session.durableId &&
+                    active.profile.normalizedProfile() == session.profile.normalizedProfile()
+            } == true
+        }
+        if (!activeStillCurrent) {
+            val fallbackBackendId = expectedBackendId ?: requestBackendId ?: return
+            archiveSessionMutation(
+                fallbackBackendId,
+                expectedSession ?: session,
+                allowActiveDelegation = false,
+            )
+            return
+        }
         invalidatePendingAttachments()
         val requestGeneration = openSessionGeneration.incrementAndGet()
         try {
