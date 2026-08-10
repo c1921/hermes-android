@@ -347,6 +347,7 @@ data class StoredSession(
     val model: String? = null,
     val provider: String? = null,
     val archived: Boolean = false,
+    val pinned: Boolean = false,
     @SerialName("is_active") val isActive: Boolean = false,
     @SerialName("message_count") val messageCount: Int = 0,
     @SerialName("started_at") val startedAt: Double = 0.0,

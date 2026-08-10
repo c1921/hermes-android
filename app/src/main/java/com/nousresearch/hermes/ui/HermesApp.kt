@@ -24,8 +24,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +50,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -63,6 +69,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.BarChart
@@ -96,6 +103,7 @@ import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -137,6 +145,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -163,6 +172,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.key.Key
@@ -235,6 +245,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private const val MAX_VISIBLE_COMPOSER_HISTORY = 20
 private const val MAX_PENDING_ATTACHMENTS = 5
@@ -683,6 +694,8 @@ fun HermesApp(
             onSearchSessions = viewModel::searchSessions,
             onSession = viewModel::openSession,
             onDeleteSession = viewModel::deleteSession,
+            onArchiveSession = viewModel::archiveSession,
+            onPinSession = viewModel::pinSession,
             onNewSession = viewModel::newSession,
             onSend = viewModel::send,
             onSteer = viewModel::steer,
@@ -1068,6 +1081,8 @@ private fun HermesWorkspace(
     onSearchSessions: (String) -> Unit,
     onSession: (StoredSession) -> Unit,
     onDeleteSession: (StoredSession) -> Unit,
+    onArchiveSession: (StoredSession) -> Unit,
+    onPinSession: (StoredSession) -> Unit,
     onNewSession: (String?) -> Unit,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
@@ -1516,6 +1531,8 @@ private fun HermesWorkspace(
                             state, connection, onRefresh, onSearchSessions,
                             onSession = openStoredSession,
                             onDeleteSession = onDeleteSession,
+                            onArchiveSession = onArchiveSession,
+                            onPinSession = onPinSession,
                             onNewSession = { createConversation(null) },
                             onArtifacts = { navigator.openArtifacts(backendId, profileId) },
                             onAutomations = { navigator.openAutomations(backendId, profileId) },
@@ -1556,6 +1573,8 @@ private fun HermesWorkspace(
                         state, connection, onRefresh, onSearchSessions,
                         onSession = openStoredSession,
                         onDeleteSession = onDeleteSession,
+                        onArchiveSession = onArchiveSession,
+                        onPinSession = onPinSession,
                         onNewSession = { createConversation(null) },
                         onArtifacts = { navigator.openArtifacts(backendId, profileId) },
                         onAutomations = { navigator.openAutomations(backendId, profileId) },
@@ -1828,6 +1847,8 @@ private fun SessionRail(
     onSearchSessions: (String) -> Unit,
     onSession: (StoredSession) -> Unit,
     onDeleteSession: (StoredSession) -> Unit,
+    onArchiveSession: (StoredSession) -> Unit,
+    onPinSession: (StoredSession) -> Unit,
     onNewSession: () -> Unit,
     onArtifacts: () -> Unit,
     onAutomations: () -> Unit,
@@ -1848,7 +1869,7 @@ private fun SessionRail(
             session.provider,
             session.source,
         ).filterNotNull().any { it.contains(query.trim(), ignoreCase = true) }
-    }
+    }.sortedWith(compareByDescending<StoredSession> { it.pinned }.thenByDescending { it.lastActive })
     val remoteResults = if (query.isBlank()) emptyList() else state.sessionSearchResults.filterNot { result ->
         visibleSessions.any { it.durableId == result.sessionId && it.profile == result.profile }
     }
@@ -1947,6 +1968,8 @@ private fun SessionRail(
                     session = session,
                     selected = selected,
                     onClick = { onSession(session) },
+                    onPin = { onPinSession(session) },
+                    onArchive = { onArchiveSession(session) },
                     onDelete = if (!selected) ({ pendingDelete = session }) else null,
                 )
             }
@@ -2141,26 +2164,114 @@ private fun SessionRow(
     session: StoredSession,
     selected: Boolean,
     onClick: () -> Unit,
+    onPin: () -> Unit,
+    onArchive: () -> Unit,
     onDelete: (() -> Unit)?,
 ) {
-    Row(
+    val actionWidth = (56 * (2 + if (onDelete != null) 1 else 0)).dp
+    val actionWidthPx = with(LocalDensity.current) { actionWidth.toPx() }
+    val anchors = remember(actionWidthPx) {
+        DraggableAnchors<Boolean> {
+            false at 0f
+            true at -actionWidthPx
+        }
+    }
+    val swipeState = remember(actionWidthPx) { AnchoredDraggableState(false, anchors) }
+    val actionScope = rememberCoroutineScope()
+    Box(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(session.displayTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                session.profile?.let { Text(it.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
-                session.model?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        Row(
+            Modifier.matchParentSize().padding(end = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SessionSwipeAction(
+                icon = Icons.Outlined.PushPin,
+                contentDescription = if (session.pinned) "Unpin ${session.displayTitle}" else "Pin ${session.displayTitle}",
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                onClick = {
+                    onPin()
+                    actionScope.launch { swipeState.animateTo(false) }
+                },
+            )
+            SessionSwipeAction(
+                icon = Icons.Outlined.Archive,
+                contentDescription = "Archive ${session.displayTitle}",
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                onClick = {
+                    onArchive()
+                    actionScope.launch { swipeState.animateTo(false) }
+                },
+            )
+            onDelete?.let { delete ->
+                SessionSwipeAction(
+                    icon = Icons.Outlined.Delete,
+                    contentDescription = "Delete ${session.displayTitle}",
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    onClick = {
+                        delete()
+                        actionScope.launch { swipeState.animateTo(false) }
+                    },
+                )
             }
         }
-        if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary))
-        onDelete?.let {
-            IconButton(onClick = it) { Icon(Icons.Outlined.Delete, "Delete ${session.displayTitle}") }
+        Row(
+            Modifier.fillMaxWidth()
+                .offset {
+                    val offset = swipeState.offset
+                    IntOffset(if (offset.isNaN()) 0 else offset.roundToInt(), 0)
+                }
+                .anchoredDraggable(
+                    state = swipeState,
+                    orientation = Orientation.Horizontal,
+                )
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                .clickable {
+                    if (swipeState.currentValue) {
+                        actionScope.launch { swipeState.animateTo(false) }
+                    } else {
+                        onClick()
+                    }
+                }
+                .padding(horizontal = 20.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(session.displayTitle, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    session.profile?.let { Text(it.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+                    session.model?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
+            }
+            if (session.pinned) {
+                Icon(Icons.Outlined.PushPin, "Pinned ${session.displayTitle}", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            }
+            if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary))
+        }
+    }
+}
+
+@Composable
+private fun RowScope.SessionSwipeAction(
+    icon: ImageVector,
+    contentDescription: String,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(56.dp)) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(containerColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription, tint = contentColor, modifier = Modifier.size(22.dp))
         }
     }
 }

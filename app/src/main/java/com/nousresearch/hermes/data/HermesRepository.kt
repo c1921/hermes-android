@@ -4004,6 +4004,55 @@ class HermesRepository @Inject constructor(
         refreshSessions()
     }
 
+    suspend fun archiveSession(session: StoredSession) {
+        require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
+        if (mutableState.value.activeStoredSession?.let { active ->
+                active.durableId == session.durableId && active.profile == session.profile
+            } == true
+        ) {
+            archiveActive()
+            return
+        }
+        runCatching {
+            val (backend, token) = activeCredentials()
+            restClient.archiveSession(backend, token, session.durableId, true, session.profile)
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(
+                sessions = mutableState.value.sessions.filterNot {
+                    it.durableId == session.durableId && it.profile == session.profile
+                },
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
+    suspend fun pinSession(session: StoredSession) {
+        require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
+        val pinned = !session.pinned
+        runCatching {
+            val (backend, token) = activeCredentials()
+            restClient.pinSession(backend, token, session.durableId, pinned, session.profile)
+        }.onSuccess {
+            mutableState.value = mutableState.value.copy(
+                sessions = mutableState.value.sessions.map {
+                    if (it.durableId == session.durableId && it.profile == session.profile) {
+                        it.copy(pinned = pinned)
+                    } else {
+                        it
+                    }
+                },
+                activeStoredSession = mutableState.value.activeStoredSession?.let { active ->
+                    if (active.durableId == session.durableId && active.profile == session.profile) {
+                        active.copy(pinned = pinned)
+                    } else {
+                        active
+                    }
+                },
+                error = null,
+            )
+        }.onFailure(::fail)
+    }
+
     suspend fun deleteSession(session: StoredSession) {
         require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
         require(

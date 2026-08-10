@@ -50,6 +50,26 @@ class HermesRestClientSessionsTest {
         }
     }
 
+    @Test
+    fun `pin session patches the requested profile and flag`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setBody("""{"ok":true,"pinned":true}"""))
+
+            HermesRestClient(OkHttpClient(), Json { ignoreUnknownKeys = true }).pinSession(
+                config(server),
+                "secret",
+                "session-1",
+                pinned = true,
+                profile = "research profile",
+            )
+
+            val request = server.takeRequest()
+            assertEquals("/api/sessions/session-1", request.path)
+            assertEquals("{\"pinned\":true,\"profile\":\"research profile\"}", request.body.readUtf8())
+        }
+    }
+
     private fun config(server: MockWebServer) = BackendConfig(
         id = "fake",
         label = "Fake Hermes",
