@@ -2241,7 +2241,7 @@ private fun SessionRow(
                     orientation = Orientation.Horizontal,
                 )
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
                 .clickable {
                     if (swipeState.currentValue) {
                         actionScope.launch { swipeState.animateTo(false) }
@@ -2249,7 +2249,7 @@ private fun SessionRow(
                         onClick()
                     }
                 }
-                .semantics {
+                .semantics(mergeDescendants = true) {
                     customActions = listOfNotNull(
                         onPin?.let { pin ->
                             CustomAccessibilityAction(
