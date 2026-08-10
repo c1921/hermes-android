@@ -4064,6 +4064,7 @@ class HermesRepository @Inject constructor(
         val credentialGeneration = backendCredentialGeneration.get()
         flushDraft()
         val credentials = runCatching { activeCredentials() }.getOrElse { error ->
+            if (error is CancellationException) throw error
             if (
                 openSessionGeneration.get() == requestGeneration &&
                 backendCredentialGeneration.get() == credentialGeneration &&
@@ -4077,6 +4078,7 @@ class HermesRepository @Inject constructor(
         runCatching {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         }.getOrElse { error ->
+            if (error is CancellationException) throw error
             if (isCurrentBackendMutationFailure(backend.id, token, credentialGeneration)) fail(error)
             return
         }
@@ -4092,6 +4094,7 @@ class HermesRepository @Inject constructor(
             }
             if (reopened) {
                 invalidatePendingAttachments()
+                flushDraft()
                 if (clearArchivedActiveSession(openSessionGeneration.get(), backend.id, session, credentialGeneration)) {
                     return
                 }
@@ -4113,6 +4116,7 @@ class HermesRepository @Inject constructor(
         val requestBackendId = mutableState.value.backend?.id
         val credentialGeneration = backendCredentialGeneration.get()
         val (backend, token) = runCatching { activeCredentials() }.getOrElse { error ->
+            if (error is CancellationException) throw error
             if (
                 backendCredentialGeneration.get() == credentialGeneration &&
                 mutableState.value.backend?.id == requestBackendId
@@ -4124,6 +4128,7 @@ class HermesRepository @Inject constructor(
         runCatching {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         }.getOrElse { error ->
+            if (error is CancellationException) throw error
             if (isCurrentBackendMutationFailure(backend.id, token, credentialGeneration)) fail(error)
             return
         }
@@ -4295,6 +4300,7 @@ class HermesRepository @Inject constructor(
         val requestBackendId = mutableState.value.backend?.id
         val credentialGeneration = backendCredentialGeneration.get()
         val (backend, token) = runCatching { activeCredentials() }.getOrElse { error ->
+            if (error is CancellationException) throw error
             if (
                 backendCredentialGeneration.get() == credentialGeneration &&
                 mutableState.value.backend?.id == requestBackendId
@@ -4337,6 +4343,7 @@ class HermesRepository @Inject constructor(
                 }
             }
         }.onFailure { error ->
+            if (error is CancellationException) throw error
             if (isCurrentBackendMutationFailure(backend.id, token, credentialGeneration)) fail(error)
         }
     }
@@ -4363,11 +4370,15 @@ class HermesRepository @Inject constructor(
             }
             mutableState.value = mutableState.value.copy(
                 sessions = mutableState.value.sessions.filterNot {
-                    it.durableId == session.durableId && it.profile == session.profile
+                    it.durableId == session.durableId &&
+                        it.profile.normalizedProfile() == session.profile.normalizedProfile()
                 },
                 error = null,
             )
-        }.onFailure(::fail)
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            fail(error)
+        }
     }
 
     suspend fun disconnectAndForget() {
