@@ -4121,7 +4121,7 @@ class HermesRepository @Inject constructor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
-            failCurrentBackendMutation(error, backend.id, token, credentialGeneration)
+            reportCurrentBackendMutationFailure(error, backend.id, token, credentialGeneration)
             return
         }
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
@@ -4181,7 +4181,7 @@ class HermesRepository @Inject constructor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
-            failCurrentBackendMutation(error, backend.id, token, credentialGeneration)
+            reportCurrentBackendMutationFailure(error, backend.id, token, credentialGeneration)
             return
         }
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
@@ -4303,7 +4303,7 @@ class HermesRepository @Inject constructor(
     ): Boolean = mutableState.value.backend?.id == backendId &&
         backendCredentialGeneration.get() == credentialGeneration
 
-    private suspend fun failCurrentBackendMutation(
+    private suspend fun reportCurrentBackendMutationFailure(
         error: Throwable,
         backendId: String,
         token: String,
@@ -4314,7 +4314,25 @@ class HermesRepository @Inject constructor(
                 isCurrentBackendMutation(backendId, credentialGeneration) &&
                 tokenStore.get(backendId)?.headerValue == token
             ) {
-                fail(error)
+                val message = if (
+                    error is ReconnectRequiredException ||
+                    (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
+                ) {
+                    "Dashboard authentication was rejected while updating the session."
+                } else {
+                    DiagnosticRedactor.redact(error.message.orEmpty())
+                        .ifBlank { "Hermes could not update the session." }
+                }
+                mutableState.update { current ->
+                    if (
+                        current.backend?.id == backendId &&
+                        backendCredentialGeneration.get() == credentialGeneration
+                    ) {
+                        current.copy(error = message)
+                    } else {
+                        current
+                    }
+                }
             }
         }
     }
@@ -4387,7 +4405,7 @@ class HermesRepository @Inject constructor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
-            failCurrentBackendMutation(error, backend.id, token, credentialGeneration)
+            reportCurrentBackendMutationFailure(error, backend.id, token, credentialGeneration)
             return
         }
         if (isCurrentBackendMutation(backend.id, credentialGeneration)) {
