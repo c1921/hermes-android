@@ -4084,6 +4084,18 @@ class HermesRepository @Inject constructor(
         markSessionListMutation(backend.id, credentialGeneration)
         invalidateSessionSearch(backend.id, session, credentialGeneration)
         if (!clearArchivedActiveSession(requestGeneration, backend.id, session, credentialGeneration)) {
+            val reopened = mutableState.value.let { current ->
+                current.backend?.id == backend.id && current.activeStoredSession?.let { active ->
+                    active.durableId == session.durableId &&
+                        active.profile.normalizedProfile() == session.profile.normalizedProfile()
+                } == true
+            }
+            if (reopened) {
+                invalidatePendingAttachments()
+                if (clearArchivedActiveSession(openSessionGeneration.get(), backend.id, session, credentialGeneration)) {
+                    return
+                }
+            }
             removeArchivedSessionFromState(backend.id, session, credentialGeneration)
         }
     }
