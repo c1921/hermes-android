@@ -559,7 +559,14 @@ class HermesRepository @Inject constructor(
         val requestOpenSessionGeneration = openSessionGeneration.get()
         val credentialGeneration = backendCredentialGeneration.get()
         mutableState.update { current ->
-            if (current.backend?.id == backend.id) current.copy(loading = true) else current
+            if (
+                current.backend?.id == backend.id &&
+                backendCredentialGeneration.get() == credentialGeneration
+            ) {
+                current.copy(loading = true)
+            } else {
+                current
+            }
         }
         runCatching { restClient.sessions(backend, token).sessions }
             .onSuccess { sessions ->
@@ -591,7 +598,14 @@ class HermesRepository @Inject constructor(
                         current.copy(loading = false)
                     }
                 }
-                if (currentRequest) {
+                if (
+                    currentRequest &&
+                    mutableState.value.backend?.id == backend.id &&
+                    sessionListRefreshGeneration.get() == refreshGeneration &&
+                    openSessionGeneration.get() == requestOpenSessionGeneration &&
+                    backendCredentialGeneration.get() == credentialGeneration &&
+                    sessionListGeneration.get() == requestGeneration
+                ) {
                     fail(error)
                 }
             }
@@ -603,6 +617,7 @@ class HermesRepository @Inject constructor(
             val requestGeneration = sessionSearchGeneration.incrementAndGet()
             val requestListGeneration = sessionListGeneration.get()
             val requestBackendId = mutableState.value.backend?.id
+            val requestCredentialGeneration = backendCredentialGeneration.get()
             sessionSearchJob?.cancel()
             if (cleaned.isBlank()) {
                 mutableState.value = mutableState.value.copy(
@@ -636,6 +651,7 @@ class HermesRepository @Inject constructor(
                             if (
                                 sessionSearchGeneration.get() == requestGeneration &&
                                 sessionListGeneration.get() == requestListGeneration &&
+                                backendCredentialGeneration.get() == requestCredentialGeneration &&
                                 backendId == requestBackendId &&
                                 current.backend?.id == backendId &&
                                 current.sessionSearchQuery == cleaned
@@ -667,7 +683,16 @@ class HermesRepository @Inject constructor(
                                     current
                                 }
                             }
-                            if (currentRequest) fail(error)
+                            if (
+                                currentRequest &&
+                                sessionSearchGeneration.get() == requestGeneration &&
+                                sessionListGeneration.get() == requestListGeneration &&
+                                backendCredentialGeneration.get() == requestCredentialGeneration &&
+                                mutableState.value.backend?.id == requestBackendId &&
+                                mutableState.value.sessionSearchQuery == cleaned
+                            ) {
+                                fail(error)
+                            }
                         }
                     }
                 }
@@ -4103,8 +4128,9 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    suspend fun archiveSession(session: StoredSession) {
+    suspend fun archiveSession(requestBackendId: String, session: StoredSession) {
         require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
+        if (mutableState.value.backend?.id != requestBackendId) return
         if (mutableState.value.activeStoredSession?.let { active ->
                 active.durableId == session.durableId &&
                     active.profile.normalizedProfile() == session.profile.normalizedProfile()
@@ -4113,7 +4139,6 @@ class HermesRepository @Inject constructor(
             archiveActive()
             return
         }
-        val requestBackendId = mutableState.value.backend?.id
         val credentialGeneration = backendCredentialGeneration.get()
         val (backend, token) = runCatching { activeCredentials() }.getOrElse { error ->
             if (error is CancellationException) throw error
@@ -4125,6 +4150,7 @@ class HermesRepository @Inject constructor(
             }
             return
         }
+        if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
         runCatching {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         }.getOrElse { error ->
@@ -4169,7 +4195,8 @@ class HermesRepository @Inject constructor(
             }
             backendRegistry.clearSessionTarget(backendId)
             var applied = false
-            mutableState.update { live ->
+            while (true) {
+                val live = mutableState.value
                 if (
                     openSessionGeneration.get() != requestGeneration ||
                     backendCredentialGeneration.get() != credentialGeneration ||
@@ -4177,10 +4204,9 @@ class HermesRepository @Inject constructor(
                     live.activeStoredSession?.durableId != session.durableId ||
                     live.activeStoredSession?.profile.normalizedProfile() != session.profile.normalizedProfile()
                 ) {
-                    live
+                    break
                 } else {
-                    applied = true
-                    live.copy(
+                    val next = live.copy(
                         activeStoredSession = null,
                         runtimeSessionId = null,
                         runtimeInfo = SessionRuntimeInfo(),
@@ -4188,6 +4214,10 @@ class HermesRepository @Inject constructor(
                         pendingAttachments = emptyList(),
                         restoration = SessionRestorationState(status = SessionRestorationStatus.READY),
                     )
+                    if (mutableState.compareAndSet(live, next)) {
+                        applied = true
+                        break
+                    }
                 }
             }
             applied
@@ -4294,10 +4324,10 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    suspend fun pinSession(session: StoredSession) {
+    suspend fun pinSession(requestBackendId: String, session: StoredSession) {
         require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
         val pinned = !requireNotNull(session.pinned) { "Hermes did not advertise session pinning" }
-        val requestBackendId = mutableState.value.backend?.id
+        if (mutableState.value.backend?.id != requestBackendId) return
         val credentialGeneration = backendCredentialGeneration.get()
         val (backend, token) = runCatching { activeCredentials() }.getOrElse { error ->
             if (error is CancellationException) throw error
@@ -4309,6 +4339,7 @@ class HermesRepository @Inject constructor(
             }
             return
         }
+        if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
         runCatching {
             restClient.pinSession(backend, token, session.durableId, pinned, session.profile)
         }.onSuccess {

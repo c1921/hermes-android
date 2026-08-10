@@ -1085,8 +1085,8 @@ private fun HermesWorkspace(
     onSearchSessions: (String) -> Unit,
     onSession: (StoredSession) -> Unit,
     onDeleteSession: (StoredSession) -> Unit,
-    onArchiveSession: (StoredSession) -> Unit,
-    onPinSession: (StoredSession) -> Unit,
+    onArchiveSession: (String, StoredSession) -> Unit,
+    onPinSession: (String, StoredSession) -> Unit,
     onNewSession: (String?) -> Unit,
     onSend: (String) -> Unit,
     onSteer: (String) -> Unit,
@@ -1851,8 +1851,8 @@ private fun SessionRail(
     onSearchSessions: (String) -> Unit,
     onSession: (StoredSession) -> Unit,
     onDeleteSession: (StoredSession) -> Unit,
-    onArchiveSession: (StoredSession) -> Unit,
-    onPinSession: (StoredSession) -> Unit,
+    onArchiveSession: (String, StoredSession) -> Unit,
+    onPinSession: (String, StoredSession) -> Unit,
     onNewSession: () -> Unit,
     onArtifacts: () -> Unit,
     onAutomations: () -> Unit,
@@ -1968,12 +1968,13 @@ private fun SessionRail(
         LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
             items(visibleSessions, key = { "${it.profile}:${it.durableId}" }) { session ->
                 val selected = state.activeStoredSession?.durableId == session.durableId
+                val displayedBackendId = state.backend?.id.orEmpty()
                 SessionRow(
                     session = session,
                     selected = selected,
                     onClick = { onSession(session) },
-                    onPin = if (session.pinned != null) ({ onPinSession(session) }) else null,
-                    onArchive = { onArchiveSession(session) },
+                    onPin = if (session.pinned != null) ({ onPinSession(displayedBackendId, session) }) else null,
+                    onArchive = { onArchiveSession(displayedBackendId, session) },
                     onDelete = if (!selected) ({ pendingDelete = session }) else null,
                 )
             }
