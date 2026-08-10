@@ -4264,7 +4264,7 @@ class HermesRepository @Inject constructor(
         return true
     }
 
-    private fun clearArchivedActiveSessionLocked(
+    private suspend fun clearArchivedActiveSessionLocked(
         requestGeneration: Long,
         backendId: String,
         session: StoredSession,
