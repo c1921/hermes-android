@@ -385,6 +385,8 @@ class HermesRepository @Inject constructor(
     private var intentionalDisconnect = false
     private var gatewayBackendId: String? = null
     private val openSessionGeneration = AtomicLong()
+    private var pendingOpenSession: SessionTarget? = null
+    private var pendingOpenSessionGeneration: Long? = null
     val state = mutableState.asStateFlow()
     val startupReady = mutableStartupReady.asStateFlow()
     val connectionState = gateway.connectionState
@@ -709,11 +711,22 @@ class HermesRepository @Inject constructor(
     suspend fun openSession(session: StoredSession) {
         invalidatePendingAttachments()
         val requestGeneration = sessionTargetMutex.withLock {
-            openSessionGeneration.incrementAndGet()
+            val generation = openSessionGeneration.incrementAndGet()
+            pendingOpenSession = mutableState.value.backend?.id?.let { backendId ->
+                if (session.durableId.isBlank()) null else sessionTarget(backendId, session)
+            }
+            pendingOpenSessionGeneration = generation
+            generation
         }
-        val credentials = runCatching {
+        val credentials = try {
             activeCredentials(allowRecovery = true, allowRehydrating = true)
-        }.getOrElse { error ->
+        } catch (error: Throwable) {
+            sessionTargetMutex.withLock {
+                if (pendingOpenSessionGeneration == requestGeneration) {
+                    pendingOpenSession = null
+                    pendingOpenSessionGeneration = null
+                }
+            }
             if (openSessionGeneration.get() == requestGeneration) fail(error)
             return
         }
@@ -725,8 +738,14 @@ class HermesRepository @Inject constructor(
         sessionTargetMutex.withLock {
             mutableState.update { live ->
                 if (openSessionGeneration.get() != requestGeneration || live.backend?.id != backend.id) {
+                    if (pendingOpenSessionGeneration == requestGeneration) {
+                        pendingOpenSession = null
+                        pendingOpenSessionGeneration = null
+                    }
                     live
                 } else {
+                    pendingOpenSession = null
+                    pendingOpenSessionGeneration = null
                     selected = true
                     val reopeningCurrent = live.activeStoredSession?.let {
                         it.durableId == session.durableId && it.profile == session.profile
@@ -4218,14 +4237,25 @@ class HermesRepository @Inject constructor(
         var clearedActive = false
         sessionTargetMutex.withLock {
             if (!isCurrentBackendMutation(backendId, credentialGeneration)) return@withLock
-            val requestGeneration = openSessionGeneration.incrementAndGet()
             val current = mutableState.value
             val activeMatches = current.activeStoredSession?.let { active ->
                 current.backend?.id == backendId &&
                     active.durableId == session.durableId &&
                     active.profile.normalizedProfile() == session.profile.normalizedProfile()
             } == true
-            if (activeMatches) {
+            val pendingMatches =
+                pendingOpenSessionGeneration == openSessionGeneration.get() &&
+                    pendingOpenSession == sessionTarget(backendId, session)
+            val requestGeneration = if (activeMatches || pendingMatches) {
+                openSessionGeneration.incrementAndGet()
+            } else {
+                null
+            }
+            if (pendingMatches) {
+                pendingOpenSession = null
+                pendingOpenSessionGeneration = null
+            }
+            if (activeMatches && requestGeneration != null) {
                 invalidatePendingAttachments()
                 flushDraft()
                 clearedActive = clearArchivedActiveSessionLocked(
