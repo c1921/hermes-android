@@ -579,17 +579,29 @@ class HermesRepository @Inject constructor(
         }
         runCatching { restClient.sessions(backend, token).sessions }
             .onSuccess { sessions ->
-                mutableState.update { current ->
-                    val ownsLoading = current.backend?.id == backend.id &&
-                        sessionListRefreshGeneration.get() == refreshGeneration &&
-                        openSessionGeneration.get() == requestOpenSessionGeneration &&
-                        backendCredentialGeneration.get() == credentialGeneration
-                    if (!ownsLoading) {
-                        current
-                    } else if (sessionListGeneration.get() != requestGeneration) {
-                        current.copy(loading = false)
-                    } else {
-                        current.copy(sessions = sessions, loading = false, error = null)
+                sessionTargetMutex.withLock {
+                    var published = false
+                    mutableState.update { current ->
+                        published = false
+                        val ownsLoading = current.backend?.id == backend.id &&
+                            sessionListRefreshGeneration.get() == refreshGeneration &&
+                            openSessionGeneration.get() == requestOpenSessionGeneration &&
+                            backendCredentialGeneration.get() == credentialGeneration
+                        if (!ownsLoading) {
+                            current
+                        } else if (sessionListGeneration.get() != requestGeneration) {
+                            current.copy(loading = false)
+                        } else {
+                            published = true
+                            current.copy(sessions = sessions, loading = false, error = null)
+                        }
+                    }
+                    if (published) {
+                        sessions.forEach {
+                            if (it.durableId.isNotBlank()) {
+                                archivedSessionTargets.remove(sessionTarget(backend.id, it))
+                            }
+                        }
                     }
                 }
             }
@@ -4165,6 +4177,17 @@ class HermesRepository @Inject constructor(
             throw cancelled
         } catch (error: Throwable) {
             reportCurrentBackendMutationFailure(error, backend.id, credentialGeneration)
+            mutableState.update { live ->
+                if (
+                    live.backend?.id == backend.id &&
+                    backendCredentialGeneration.get() == credentialGeneration &&
+                    openSessionGeneration.get() == requestGeneration
+                ) {
+                    live.copy(loading = false)
+                } else {
+                    live
+                }
+            }
             return
         }
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
@@ -4505,14 +4528,20 @@ class HermesRepository @Inject constructor(
                 } else {
                     current.copy(
                         sessions = current.sessions.map {
-                            if (it.durableId == session.durableId && it.profile == session.profile) {
+                            if (
+                                it.durableId == session.durableId &&
+                                it.profile.normalizedProfile() == session.profile.normalizedProfile()
+                            ) {
                                 it.copy(pinned = pinned)
                             } else {
                                 it
                             }
                         },
                         activeStoredSession = current.activeStoredSession?.let { active ->
-                            if (active.durableId == session.durableId && active.profile == session.profile) {
+                            if (
+                                active.durableId == session.durableId &&
+                                active.profile.normalizedProfile() == session.profile.normalizedProfile()
+                            ) {
                                 active.copy(pinned = pinned)
                             } else {
                                 active
