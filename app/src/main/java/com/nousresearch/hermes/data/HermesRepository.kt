@@ -722,7 +722,6 @@ class HermesRepository @Inject constructor(
     }
 
     suspend fun openSession(session: StoredSession) {
-        invalidatePendingAttachments()
         val requestGeneration = sessionTargetMutex.withLock {
             val target = mutableState.value.backend?.id?.let { backendId ->
                 if (session.durableId.isBlank()) null else sessionTarget(backendId, session)
@@ -730,6 +729,7 @@ class HermesRepository @Inject constructor(
             if (target != null && archivedSessionTargets[target] == backendCredentialGeneration.get()) {
                 return@withLock null
             }
+            invalidatePendingAttachments()
             val generation = openSessionGeneration.incrementAndGet()
             pendingOpenSession = target
             pendingOpenSessionGeneration = generation
