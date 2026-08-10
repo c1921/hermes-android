@@ -2249,7 +2249,17 @@ private fun SessionRow(
                         onClick()
                     }
                 }
-                .semantics(mergeDescendants = true) {
+                .clearAndSetSemantics {
+                    role = Role.Button
+                    contentDescription = session.displayTitle
+                    onClick {
+                        if (swipeState.currentValue) {
+                            actionScope.launch { swipeState.animateTo(false) }
+                        } else {
+                            onClick()
+                        }
+                        true
+                    }
                     customActions = listOfNotNull(
                         onPin?.let { pin ->
                             CustomAccessibilityAction(
