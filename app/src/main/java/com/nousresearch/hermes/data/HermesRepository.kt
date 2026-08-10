@@ -364,6 +364,7 @@ class HermesRepository @Inject constructor(
     private val sessionListGeneration = AtomicLong()
     private val sessionListRefreshGeneration = AtomicLong()
     private val backendCredentialGeneration = AtomicLong()
+    private val sessionListMutationMutex = Mutex()
     private var slashCompletionJob: Job? = null
     private var queueDrainJob: Job? = null
     private var providerOAuthPollJob: Job? = null
@@ -4304,12 +4305,14 @@ class HermesRepository @Inject constructor(
         }
     }
 
-    private fun markSessionListMutation(backendId: String, credentialGeneration: Long) {
-        if (
-            mutableState.value.backend?.id == backendId &&
-            backendCredentialGeneration.get() == credentialGeneration
-        ) {
-            sessionListGeneration.incrementAndGet()
+    private suspend fun markSessionListMutation(backendId: String, credentialGeneration: Long) {
+        sessionListMutationMutex.withLock {
+            if (
+                mutableState.value.backend?.id == backendId &&
+                backendCredentialGeneration.get() == credentialGeneration
+            ) {
+                sessionListGeneration.incrementAndGet()
+            }
         }
     }
 
@@ -4352,15 +4355,15 @@ class HermesRepository @Inject constructor(
         credentialGeneration: Long,
     ) {
         if (!isCurrentBackendMutation(backendId, credentialGeneration)) return
-        val message = if (
+        if (
             error is ReconnectRequiredException ||
             (error is com.nousresearch.hermes.network.HermesHttpException && error.statusCode in setOf(401, 403))
         ) {
-            "Dashboard authentication was rejected while updating the session."
-        } else {
-            DiagnosticRedactor.redact(error.message.orEmpty())
-                .ifBlank { "Hermes could not update the session." }
+            fail(error)
+            return
         }
+        val message = DiagnosticRedactor.redact(error.message.orEmpty())
+            .ifBlank { "Hermes could not update the session." }
         mutableState.update { current ->
             if (
                 current.backend?.id == backendId &&
@@ -4609,7 +4612,7 @@ class HermesRepository @Inject constructor(
     }
 
     private suspend fun connect(backend: BackendConfig) {
-        backendCredentialGeneration.incrementAndGet()
+        sessionListMutationMutex.withLock { backendCredentialGeneration.incrementAndGet() }
         invalidatePendingAttachments()
         providerOAuthPollJob?.cancelAndJoin()
         providerOAuthPollJob = null
