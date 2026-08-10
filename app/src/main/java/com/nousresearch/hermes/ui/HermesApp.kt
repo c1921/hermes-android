@@ -2249,6 +2249,7 @@ private fun SessionRow(
                 .anchoredDraggable(
                     state = swipeState,
                     orientation = Orientation.Horizontal,
+                    reverseDirection = false,
                 )
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
