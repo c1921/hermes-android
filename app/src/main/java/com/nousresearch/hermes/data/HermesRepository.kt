@@ -4100,6 +4100,7 @@ class HermesRepository @Inject constructor(
             return
         }
         val (backend, token) = credentials
+        if (backend.id != requestBackendId || !isCurrentBackendMutation(backend.id, credentialGeneration)) return
         runCatching {
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
         }.getOrElse { error ->
@@ -4161,14 +4162,21 @@ class HermesRepository @Inject constructor(
         if (!isCurrentBackendMutation(backend.id, credentialGeneration)) return
         markSessionListMutation(backend.id, credentialGeneration)
         invalidateSessionSearch(backend.id, session, credentialGeneration)
-        val activeNow = mutableState.value.let { current ->
-            current.backend?.id == backend.id && current.activeStoredSession?.let { active ->
-                active.durableId == session.durableId &&
-                    active.profile.normalizedProfile() == session.profile.normalizedProfile()
-            } == true
+        val cleanupGeneration = mutableState.value.let { current ->
+            if (
+                current.backend?.id == backend.id &&
+                backendCredentialGeneration.get() == credentialGeneration &&
+                current.activeStoredSession?.let { active ->
+                    active.durableId == session.durableId &&
+                        active.profile.normalizedProfile() == session.profile.normalizedProfile()
+                } == true
+            ) {
+                openSessionGeneration.get()
+            } else {
+                null
+            }
         }
-        if (activeNow) {
-            val cleanupGeneration = openSessionGeneration.incrementAndGet()
+        if (cleanupGeneration != null) {
             invalidatePendingAttachments()
             flushDraft()
             if (clearArchivedActiveSession(cleanupGeneration, backend.id, session, credentialGeneration)) return
