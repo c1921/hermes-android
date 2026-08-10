@@ -144,6 +144,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
@@ -155,6 +156,7 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
@@ -1869,7 +1871,7 @@ private fun SessionRail(
             session.provider,
             session.source,
         ).filterNotNull().any { it.contains(query.trim(), ignoreCase = true) }
-    }.sortedWith(compareByDescending<StoredSession> { it.pinned }.thenByDescending { it.lastActive })
+    }.sortedWith(compareByDescending<StoredSession> { it.pinned == true }.thenByDescending { it.lastActive })
     val remoteResults = if (query.isBlank()) emptyList() else state.sessionSearchResults.filterNot { result ->
         visibleSessions.any { it.durableId == result.sessionId && it.profile == result.profile }
     }
@@ -1968,7 +1970,7 @@ private fun SessionRail(
                     session = session,
                     selected = selected,
                     onClick = { onSession(session) },
-                    onPin = { onPinSession(session) },
+                    onPin = if (session.pinned != null) ({ onPinSession(session) }) else null,
                     onArchive = { onArchiveSession(session) },
                     onDelete = if (!selected) ({ pendingDelete = session }) else null,
                 )
@@ -2164,11 +2166,11 @@ private fun SessionRow(
     session: StoredSession,
     selected: Boolean,
     onClick: () -> Unit,
-    onPin: () -> Unit,
+    onPin: (() -> Unit)?,
     onArchive: () -> Unit,
     onDelete: (() -> Unit)?,
 ) {
-    val actionWidth = (56 * (2 + if (onDelete != null) 1 else 0)).dp
+    val actionWidth = (56 * ((if (onPin != null) 1 else 0) + 1 + if (onDelete != null) 1 else 0)).dp
     val actionWidthPx = with(LocalDensity.current) { actionWidth.toPx() }
     val anchors = remember(actionWidthPx) {
         DraggableAnchors<Boolean> {
@@ -2188,21 +2190,25 @@ private fun SessionRow(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SessionSwipeAction(
-                icon = Icons.Outlined.PushPin,
-                contentDescription = if (session.pinned) "Unpin ${session.displayTitle}" else "Pin ${session.displayTitle}",
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                onClick = {
-                    onPin()
-                    actionScope.launch { swipeState.animateTo(false) }
-                },
-            )
+            onPin?.let { pin ->
+                SessionSwipeAction(
+                    icon = Icons.Outlined.PushPin,
+                    contentDescription = if (session.pinned == true) "Unpin ${session.displayTitle}" else "Pin ${session.displayTitle}",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    visible = swipeState.currentValue,
+                    onClick = {
+                        pin()
+                        actionScope.launch { swipeState.animateTo(false) }
+                    },
+                )
+            }
             SessionSwipeAction(
                 icon = Icons.Outlined.Archive,
                 contentDescription = "Archive ${session.displayTitle}",
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                visible = swipeState.currentValue,
                 onClick = {
                     onArchive()
                     actionScope.launch { swipeState.animateTo(false) }
@@ -2214,6 +2220,7 @@ private fun SessionRow(
                     contentDescription = "Delete ${session.displayTitle}",
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    visible = swipeState.currentValue,
                     onClick = {
                         delete()
                         actionScope.launch { swipeState.animateTo(false) }
@@ -2250,7 +2257,7 @@ private fun SessionRow(
                     session.model?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
-            if (session.pinned) {
+            if (session.pinned == true) {
                 Icon(Icons.Outlined.PushPin, "Pinned ${session.displayTitle}", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
             if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary))
@@ -2264,9 +2271,16 @@ private fun RowScope.SessionSwipeAction(
     contentDescription: String,
     containerColor: Color,
     contentColor: Color,
+    visible: Boolean,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.size(56.dp)) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(56.dp)
+            .focusProperties { canFocus = visible }
+            .then(if (visible) Modifier else Modifier.clearAndSetSemantics {}),
+    ) {
         Box(
             Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(containerColor),
             contentAlignment = Alignment.Center,

@@ -3991,17 +3991,7 @@ class HermesRepository @Inject constructor(
         }
         val (backend, token) = credentials
         restClient.archiveSession(backend, token, session.durableId, true, session.profile)
-        if (!clearSessionTargetIfCurrent(requestGeneration, backend.id)) return
-        mutableState.value = mutableState.value.copy(
-            activeStoredSession = null,
-            runtimeSessionId = null,
-            runtimeInfo = SessionRuntimeInfo(),
-            timeline = TimelineState(),
-            pendingAttachments = emptyList(),
-            restoration = SessionRestorationState(status = SessionRestorationStatus.READY),
-        )
-        loadComposerState()
-        refreshSessions()
+        clearArchivedActiveSession(requestGeneration, backend.id, session)
     }
 
     suspend fun archiveSession(session: StoredSession) {
@@ -4013,22 +4003,75 @@ class HermesRepository @Inject constructor(
             archiveActive()
             return
         }
+        val (backend, token) = runCatching { activeCredentials() }.getOrElse {
+            fail(it)
+            return
+        }
         runCatching {
-            val (backend, token) = activeCredentials()
             restClient.archiveSession(backend, token, session.durableId, true, session.profile)
-        }.onSuccess {
-            mutableState.value = mutableState.value.copy(
-                sessions = mutableState.value.sessions.filterNot {
+        }.getOrElse {
+            fail(it)
+            return
+        }
+        val activeNow = mutableState.value.let { current ->
+            current.backend?.id == backend.id && current.activeStoredSession?.let { active ->
+                active.durableId == session.durableId && active.profile == session.profile
+            } == true
+        }
+        if (activeNow) {
+            val cleanupGeneration = openSessionGeneration.incrementAndGet()
+            invalidatePendingAttachments()
+            flushDraft()
+            if (clearArchivedActiveSession(cleanupGeneration, backend.id, session)) return
+        }
+        mutableState.update { current ->
+            current.copy(
+                sessions = current.sessions.filterNot {
                     it.durableId == session.durableId && it.profile == session.profile
+                },
+                sessionSearchResults = current.sessionSearchResults.filterNot {
+                    it.sessionId == session.durableId && it.profile == session.profile
                 },
                 error = null,
             )
-        }.onFailure(::fail)
+        }
+    }
+
+    private suspend fun clearArchivedActiveSession(
+        requestGeneration: Long,
+        backendId: String,
+        session: StoredSession,
+    ): Boolean {
+        val cleared = sessionTargetMutex.withLock {
+            val current = mutableState.value
+            if (
+                openSessionGeneration.get() != requestGeneration ||
+                current.backend?.id != backendId ||
+                current.activeStoredSession?.durableId != session.durableId ||
+                current.activeStoredSession?.profile != session.profile
+            ) {
+                return@withLock false
+            }
+            backendRegistry.clearSessionTarget(backendId)
+            mutableState.value = current.copy(
+                activeStoredSession = null,
+                runtimeSessionId = null,
+                runtimeInfo = SessionRuntimeInfo(),
+                timeline = TimelineState(),
+                pendingAttachments = emptyList(),
+                restoration = SessionRestorationState(status = SessionRestorationStatus.READY),
+            )
+            true
+        }
+        if (!cleared) return false
+        loadComposerState()
+        refreshSessions()
+        return true
     }
 
     suspend fun pinSession(session: StoredSession) {
         require(session.durableId.isNotBlank()) { "Hermes session id is missing" }
-        val pinned = !session.pinned
+        val pinned = !requireNotNull(session.pinned) { "Hermes did not advertise session pinning" }
         runCatching {
             val (backend, token) = activeCredentials()
             restClient.pinSession(backend, token, session.durableId, pinned, session.profile)
