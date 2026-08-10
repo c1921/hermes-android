@@ -359,6 +359,7 @@ class HermesRepository @Inject constructor(
     private var reconnectJob: Job? = null
     private var draftSaveJob: Job? = null
     private var sessionSearchJob: Job? = null
+    private val sessionSearchLock = Any()
     private val sessionSearchGeneration = AtomicLong()
     private val sessionListGeneration = AtomicLong()
     private var slashCompletionJob: Job? = null
@@ -580,57 +581,74 @@ class HermesRepository @Inject constructor(
 
     fun searchSessions(query: String) {
         val cleaned = query.trim().take(200)
-        val requestGeneration = sessionSearchGeneration.incrementAndGet()
-        val requestBackendId = mutableState.value.backend?.id
-        sessionSearchJob?.cancel()
-        if (cleaned.isBlank()) {
+        synchronized(sessionSearchLock) {
+            val requestGeneration = sessionSearchGeneration.incrementAndGet()
+            val requestBackendId = mutableState.value.backend?.id
+            sessionSearchJob?.cancel()
+            if (cleaned.isBlank()) {
+                mutableState.value = mutableState.value.copy(
+                    sessionSearchResults = emptyList(),
+                    sessionSearchLoading = false,
+                    sessionSearchQuery = "",
+                )
+                return@synchronized
+            }
             mutableState.value = mutableState.value.copy(
-                sessionSearchResults = emptyList(),
-                sessionSearchLoading = false,
-                sessionSearchQuery = "",
+                sessionSearchLoading = true,
+                sessionSearchQuery = cleaned,
             )
-            return
-        }
-        mutableState.value = mutableState.value.copy(
-            sessionSearchLoading = true,
-            sessionSearchQuery = cleaned,
-        )
-        sessionSearchJob = scope.launch {
-            delay(SESSION_SEARCH_DEBOUNCE_MILLIS)
-            runCatching {
-                val (backend, token) = activeCredentials(allowRecovery = true)
-                val profiles = restClient.profiles(backend, token).profiles
-                    .map(ProfileInfo::name)
-                    .ifEmpty { listOf("default") }
-                profiles.flatMap { profile ->
-                    restClient.searchSessions(backend, token, cleaned, profile).results.map {
-                        it.copy(profile = profile)
+            sessionSearchJob = scope.launch {
+                delay(SESSION_SEARCH_DEBOUNCE_MILLIS)
+                runCatching {
+                    val (backend, token) = activeCredentials(allowRecovery = true)
+                    val profiles = restClient.profiles(backend, token).profiles
+                        .map(ProfileInfo::name)
+                        .ifEmpty { listOf("default") }
+                    profiles.flatMap { profile ->
+                        restClient.searchSessions(backend, token, cleaned, profile).results.map {
+                            it.copy(profile = profile)
+                        }
+                    }.distinctBy { "${it.profile}:${it.sessionId}" }.take(MAX_SESSION_SEARCH_RESULTS).let {
+                        backend.id to it
                     }
-                }.distinctBy { "${it.profile}:${it.sessionId}" }.take(MAX_SESSION_SEARCH_RESULTS).let {
-                    backend.id to it
-                }
-            }.onSuccess { (backendId, results) ->
-                if (
-                    sessionSearchGeneration.get() == requestGeneration &&
-                    backendId == requestBackendId &&
-                    mutableState.value.backend?.id == backendId &&
-                    mutableState.value.sessionSearchQuery == cleaned
-                ) {
-                    mutableState.value = mutableState.value.copy(
-                        sessionSearchResults = results,
-                        sessionSearchLoading = false,
-                        error = null,
-                    )
-                }
-            }.onFailure { error ->
-                if (
-                    error !is CancellationException &&
-                    sessionSearchGeneration.get() == requestGeneration &&
-                    mutableState.value.backend?.id == requestBackendId &&
-                    mutableState.value.sessionSearchQuery == cleaned
-                ) {
-                    mutableState.value = mutableState.value.copy(sessionSearchLoading = false)
-                    fail(error)
+                }.onSuccess { (backendId, results) ->
+                    synchronized(sessionSearchLock) {
+                        mutableState.update { current ->
+                            if (
+                                sessionSearchGeneration.get() == requestGeneration &&
+                                backendId == requestBackendId &&
+                                current.backend?.id == backendId &&
+                                current.sessionSearchQuery == cleaned
+                            ) {
+                                current.copy(
+                                    sessionSearchResults = results,
+                                    sessionSearchLoading = false,
+                                    error = null,
+                                )
+                            } else {
+                                current
+                            }
+                        }
+                    }
+                }.onFailure { error ->
+                    if (error !is CancellationException) {
+                        synchronized(sessionSearchLock) {
+                            var currentRequest = false
+                            mutableState.update { current ->
+                                if (
+                                    sessionSearchGeneration.get() == requestGeneration &&
+                                    current.backend?.id == requestBackendId &&
+                                    current.sessionSearchQuery == cleaned
+                                ) {
+                                    currentRequest = true
+                                    current.copy(sessionSearchLoading = false)
+                                } else {
+                                    current
+                                }
+                            }
+                            if (currentRequest) fail(error)
+                        }
+                    }
                 }
             }
         }
@@ -4120,24 +4138,26 @@ class HermesRepository @Inject constructor(
     }
 
     private fun invalidateSessionSearch(backendId: String, session: StoredSession) {
-        if (mutableState.value.backend?.id != backendId) return
-        sessionSearchGeneration.incrementAndGet()
-        sessionSearchJob?.cancel()
-        sessionSearchJob = null
         var query = ""
         var invalidated = false
-        mutableState.update { current ->
-            if (current.backend?.id != backendId) {
-                current
-            } else {
-                invalidated = true
-                query = current.sessionSearchQuery
-                current.copy(
-                    sessionSearchResults = current.sessionSearchResults.filterNot {
-                        it.sessionId == session.durableId && it.profile == session.profile
-                    },
-                    sessionSearchLoading = false,
-                )
+        synchronized(sessionSearchLock) {
+            if (mutableState.value.backend?.id != backendId) return@synchronized
+            sessionSearchGeneration.incrementAndGet()
+            sessionSearchJob?.cancel()
+            sessionSearchJob = null
+            mutableState.update { current ->
+                if (current.backend?.id != backendId) {
+                    current
+                } else {
+                    invalidated = true
+                    query = current.sessionSearchQuery
+                    current.copy(
+                        sessionSearchResults = current.sessionSearchResults.filterNot {
+                            it.sessionId == session.durableId && it.profile == session.profile
+                        },
+                        sessionSearchLoading = false,
+                    )
+                }
             }
         }
         if (invalidated && query.isNotBlank() && mutableState.value.backend?.id == backendId) {
