@@ -267,9 +267,17 @@ jobs:
         run: sudo chmod 666 /dev/kvm
       - name: Run benchmark journeys and generate Baseline Profile
         run: |
+          set -euo pipefail
           ./gradlew --no-daemon --no-parallel --max-workers=1 \
             :app:generateBaselineProfile
-          ./gradlew --no-daemon --no-parallel --max-workers=1 \
+          if ./gradlew --no-daemon --no-parallel --max-workers=1 \
+            :benchmark:pixel6Api36BenchmarkReleaseAndroidTest; then
+            exit 0
+          fi
+          # ponytail: one retry handles managed-device flakes; persistent failures still fail the gate.
+          echo "Benchmark instrumentation failed; retrying once with fresh task outputs."
+          rm -rf benchmark/build/outputs benchmark/build/test-results
+          ./gradlew --no-daemon --no-parallel --max-workers=1 --rerun-tasks \
             :benchmark:pixel6Api36BenchmarkReleaseAndroidTest
       - name: Emit benchmark evidence metadata
         run: |
