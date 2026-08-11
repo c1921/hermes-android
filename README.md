@@ -29,9 +29,9 @@ The screenshots were captured on a Samsung SM-S906E running Android 16 in dark m
 
 ## Project status
 
-Last full QA and device verification: 7 August 2026. Version 1.0.0 was released from `main` on 9 August 2026 after its tests, lint, signed release build, signature checks, checksums, and provenance attestation passed.
+Last full QA and device verification: 7 August 2026. Releases are promoted from `main` only after the approval-gated release candidate, signed build, signature checks, checksums, and provenance attestation pass.
 
-The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly. Pushes to `dev` publish artifacts under one stable debug certificate. Successful pushes to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The 7 August CI artifact completed provider discovery, password login, access/refresh/provider cookie rotation, ticket-only WebSocket validation, encrypted session restoration after process death, and expired-session recovery on a headless Android 16 Google Play emulator. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
+The current `dev` checkout passes all unit tests, Android lint, debug APK assembly, and debug app-bundle assembly. Pushes to `dev` publish artifacts under one stable debug certificate. Approved release-candidate merges to `main` publish minified APK and AAB artifacts under a separate stable release certificate, then update the fixed download links above. The 7 August CI artifact completed provider discovery, password login, access/refresh/provider cookie rotation, ticket-only WebSocket validation, encrypted session restoration after process death, and expired-session recovery on a headless Android 16 Google Play emulator. The debug APK has also been installed and exercised on a Samsung SM-S906E running Android 16 for onboarding, light/dark theme, large-text, IME, reduced-motion, saved-session reconnect, process-restarted draft restoration, full-text session search, confirmed session deletion, confirmed live-session reset, managed workspace browsing, text and sandboxed HTML previews, and real secured upstream integration QA. The upstream smoke used an isolated Hermes home at the audited commit, temporary basic-auth credentials, and no paid provider key.
 
 See [Android signing and branch flow](docs/release-signing.md) for the public certificate fingerprints, artifact names, and promotion contract.
 
@@ -220,7 +220,7 @@ Install the debug build:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Successful `dev` pushes publish update-compatible debug APK and AAB files in the `hermes-android-dev-debug` workflow artifact. Successful `main` pushes publish signed, minified APK and AAB files to the latest GitHub release. The release badges at the top of this README point directly to those stable latest-release assets.
+Successful `dev` pushes publish update-compatible debug APK and AAB files in the `hermes-android-dev-debug` workflow artifact. Approved release-candidate merges to `main` publish signed, minified APK and AAB files to the latest semantic GitHub release. The release badges at the top of this README point directly to those stable latest-release assets.
 
 ## Test coverage
 

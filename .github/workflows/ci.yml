@@ -32,6 +32,122 @@ jobs:
           ./gradlew --no-daemon --no-parallel --max-workers=2
           :app:testDebugUnitTest :app:lintDebug
 
+  release-plan:
+    name: Prepare approval-gated release candidate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_ready: ${{ steps.plan.outputs.release_ready }}
+      version: ${{ steps.plan.outputs.version }}
+      version_code: ${{ steps.plan.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Plan release or open candidate PR
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          merged_pr_title="$(gh api \
+            --header 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+            --jq '.[0].title' 2>/dev/null || true)"
+          latest_release_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 --json tagName,isLatest --jq 'map(select(.isLatest)) | .[0].tagName' 2>/dev/null || true)"
+          latest_release_version="${latest_release_tag#v}"
+
+          if [[ "$merged_pr_title" =~ ^chore\(release\):[[:space:]]v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            version="$(python3 scripts/release_version.py current --field name)"
+            version_code="$(python3 scripts/release_version.py current --field code)"
+            test "$version" = "${BASH_REMATCH[1]}"
+            if [[ "$version" == "$latest_release_version" ]]; then
+              echo "Release candidate version is already published: v$version" >&2
+              exit 1
+            fi
+            python3 scripts/release_version.py validate
+            {
+              echo "release_ready=true"
+              echo "version=$version"
+              echo "version_code=$version_code"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          bump="$(python3 scripts/release_version.py classify --title "$merged_pr_title")"
+          if [[ "$bump" == "none" ]]; then
+            echo "No release-worthy change detected; no release candidate will be opened."
+            {
+              echo "release_ready=false"
+              echo "version="
+              echo "version_code="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current_version="$(python3 scripts/release_version.py current --field name)"
+          current_code="$(python3 scripts/release_version.py current --field code)"
+          if [[ -n "$latest_release_tag" && "$current_version" != "$latest_release_version" ]]; then
+            echo "main version $current_version does not match latest release $latest_release_tag" >&2
+            exit 1
+          fi
+          version="$(python3 scripts/release_version.py next --bump "$bump")"
+          version_code=$((current_code + 1))
+          branch="release/v$version"
+
+          if gh api "/repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" >/dev/null 2>&1; then
+            existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number,url --jq '.[0] | if . then "#\(.number) \(.url)" else empty end')"
+            if [[ -n "$existing_pr" ]]; then
+              echo "Release candidate already exists: $existing_pr"
+              {
+                echo "release_ready=false"
+                echo "version=$version"
+                echo "version_code=$version_code"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Release branch exists without an open PR: $branch" >&2
+            exit 1
+          fi
+
+          git switch --create "$branch"
+          python3 scripts/release_version.py bump \
+            --version "$version" \
+            --version-code "$version_code"
+          python3 scripts/release_version.py validate
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/build.gradle.kts app/src/test/java/com/nousresearch/hermes/provenance/BuildProvenanceTest.kt
+          git commit -m "chore(release): v$version"
+          git push origin "HEAD:$branch"
+
+          body_file="$RUNNER_TEMP/release-candidate.md"
+          cat > "$body_file" <<EOF
+          Automated release candidate for v$version (versionCode $version_code), derived from $GITHUB_SHA.
+
+          This PR is intentionally not auto-merged. Review and merge it to approve the signed release.
+          EOF
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "chore(release): v$version" \
+            --body-file "$body_file"
+
+          echo "Release candidate opened for $current_version -> $version. Waiting for approval before main/tag/release writes."
+          {
+            echo "release_ready=false"
+            echo "version=$version"
+            echo "version_code=$version_code"
+          } >> "$GITHUB_OUTPUT"
+
   dev-artifacts:
     name: Dev debug APK and AAB
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
@@ -98,8 +214,13 @@ jobs:
 
   benchmark:
     name: API 36 benchmarks and Baseline Profile
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
-    needs: quality
+    if: >-
+      always() && needs.quality.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        needs.release-plan.outputs.release_ready == 'true'))
+    needs: [quality, release-plan]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -154,8 +275,13 @@ jobs:
 
   device-tests:
     name: API 28 and API 36 app tests
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.base_ref == 'main')
-    needs: quality
+    if: >-
+      always() && needs.quality.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        needs.release-plan.outputs.release_ready == 'true'))
+    needs: [quality, release-plan]
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -185,8 +311,12 @@ jobs:
 
   candidate-evidence:
     name: Reproducible release candidate
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
-    needs: quality
+    if: >-
+      always() && needs.quality.result == 'success' &&
+      ((github.event_name == 'pull_request' && github.base_ref == 'main') ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        needs.release-plan.outputs.release_ready == 'true'))
+    needs: [quality, release-plan]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -237,7 +367,7 @@ jobs:
           cp app/build/outputs/mapping/release/mapping.txt "$evidence/hermes-android-release-mapping.txt"
           cp app/build/generated/provenance/hermes-android-release.properties "$evidence/hermes-android-release.provenance.properties"
           cp "$first/hermes-android.cdx.json" "$evidence/hermes-android-release.cdx.json"
-          (cd "$evidence" && sha256sum * > hermes-android-release.sha256)
+          (cd "$evidence" && sha256sum -- * > hermes-android-release.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: hermes-android-release-candidate-evidence
@@ -247,8 +377,15 @@ jobs:
 
   release-artifacts:
     name: Main release APK and AAB
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: quality
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.release-plan.outputs.release_ready == 'true' &&
+      needs.quality.result == 'success' &&
+      needs.release-plan.result == 'success' &&
+      needs.benchmark.result == 'success' &&
+      needs.device-tests.result == 'success' &&
+      needs.candidate-evidence.result == 'success'
+    needs: [quality, release-plan, benchmark, device-tests, candidate-evidence]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release
@@ -258,6 +395,20 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate release metadata
+        id: release-metadata
+        run: |
+          set -euo pipefail
+          python3 scripts/release_version.py validate
+          version="$(python3 scripts/release_version.py current --field name)"
+          version_code="$(python3 scripts/release_version.py current --field code)"
+          {
+            echo "version=$version"
+            echo "version_code=$version_code"
+            echo "tag=v$version"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -304,6 +455,23 @@ jobs:
           cp app/build/reports/cyclonedx-direct/bom.json "$RUNNER_TEMP/hermes-release/hermes-android-release.cdx.json"
           cd "$RUNNER_TEMP/hermes-release"
           sha256sum hermes-android-release.apk hermes-android-release.aab hermes-android-release-mapping.txt hermes-android-release.provenance.properties hermes-android-release.cdx.json > hermes-android-release.sha256
+      - name: Verify release metadata and checksums
+        env:
+          RELEASE_VERSION: ${{ steps.release-metadata.outputs.version }}
+          RELEASE_VERSION_CODE: ${{ steps.release-metadata.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/hermes-release"
+          cd "$release_dir"
+          sha256sum --check hermes-android-release.sha256
+          grep -Fx "android.version=$RELEASE_VERSION" hermes-android-release.provenance.properties
+          grep -Fx "android.version_code=$RELEASE_VERSION_CODE" hermes-android-release.provenance.properties
+          grep -Fx "android.channel=release" hermes-android-release.provenance.properties
+          grep -Fx "android.commit=$GITHUB_SHA" hermes-android-release.provenance.properties
+          grep -Fx "build.package=com.nousresearch.hermes" hermes-android-release.provenance.properties
+          grep -Fx "build.signing_fingerprint=sha256:3138e711ef881291c1c39495c7b55fe816b4155a97735116bc36a72097dc202d" hermes-android-release.provenance.properties
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging hermes-android-release.apk | \
+            grep -F "package: name='com.nousresearch.hermes' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"
       - name: Attest release provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
@@ -311,9 +479,11 @@ jobs:
       - name: Publish latest release downloads
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release-metadata.outputs.version }}
+          RELEASE_VERSION_CODE: ${{ steps.release-metadata.outputs.version_code }}
         run: |
           set -euo pipefail
-          release_tag="build-${GITHUB_SHA::12}"
+          release_tag="v$RELEASE_VERSION"
           release_dir="$RUNNER_TEMP/hermes-release"
           release_files=(
             "$release_dir/hermes-android-release.apk"
@@ -326,7 +496,9 @@ jobs:
 
           notes_file="$release_dir/hermes-android-release-notes.md"
           {
-            echo "Signed Android release built from main at $GITHUB_SHA."
+            echo "Signed Hermes Android $RELEASE_VERSION release built from main at $GITHUB_SHA."
+            echo
+            echo "Android versionCode: $RELEASE_VERSION_CODE"
             echo
             echo "Build provenance:"
             echo
@@ -335,16 +507,35 @@ jobs:
             echo '```'
           } > "$notes_file"
 
-          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$release_tag" "${release_files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
-            gh release edit "$release_tag" --notes-file "$notes_file" --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$release_tag" "${release_files[@]}" \
-              --draft \
-              --target "$GITHUB_SHA" \
-              --title "Hermes Android ${GITHUB_SHA::12}" \
-              --notes-file "$notes_file" \
-              --repo "$GITHUB_REPOSITORY"
+          if git ls-remote --exit-code origin "refs/tags/$release_tag" >/dev/null 2>&1; then
+            echo "Release tag already exists: $release_tag" >&2
+            exit 1
           fi
 
+          git tag --annotate "$release_tag" "$GITHUB_SHA" --message "Hermes Android $RELEASE_VERSION"
+          git push origin "$release_tag"
+          test "$(git rev-list -n 1 "$release_tag")" = "$GITHUB_SHA"
+
+          gh release create "$release_tag" "${release_files[@]}" \
+            --draft \
+            --verify-tag \
+            --target "$GITHUB_SHA" \
+            --title "Hermes Android $RELEASE_VERSION" \
+            --notes-file "$notes_file" \
+            --repo "$GITHUB_REPOSITORY"
+
           gh release edit "$release_tag" --draft=false --latest --repo "$GITHUB_REPOSITORY"
+
+          public_dir="$RUNNER_TEMP/hermes-public-release"
+          mkdir -p "$public_dir"
+          gh release download "$release_tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$public_dir" \
+            --pattern 'hermes-android-release.*'
+          (
+            cd "$public_dir"
+            sha256sum --check hermes-android-release.sha256
+            grep -Fx "android.version=$RELEASE_VERSION" hermes-android-release.provenance.properties
+            grep -Fx "android.version_code=$RELEASE_VERSION_CODE" hermes-android-release.provenance.properties
+            grep -Fx "android.commit=$GITHUB_SHA" hermes-android-release.provenance.properties
+          )
