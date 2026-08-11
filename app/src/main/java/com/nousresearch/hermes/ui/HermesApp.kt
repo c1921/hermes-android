@@ -2952,6 +2952,29 @@ internal fun composerKeyAction(type: KeyEventType, key: Key, ctrlPressed: Boolea
     else -> ComposerKeyAction.NONE
 }
 
+@Composable
+internal fun ComposerInputLayout(
+    sending: Boolean,
+    input: @Composable RowScope.() -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        input()
+        if (!sending) actions()
+    }
+    if (sending) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            content = actions,
+        )
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
@@ -3177,140 +3200,149 @@ private fun Composer(
             onOutput = voiceViewModel::showOutputSwitcher,
             onDismissError = voiceViewModel::clearSpeechError,
         )
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (attachmentEnabled) {
-                IconButton(
-                    onClick = { documentPicker.launch(arrayOf("*/*")) },
-                    enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
-                ) {
-                    Icon(Icons.Outlined.AttachFile, "Attach files")
-                }
-                IconButton(
-                    onClick = {
-                        cameraError = null
-                        runCatching {
-                            newCameraCaptureUri(context).also { uri ->
-                                capturedCameraUri = uri.toString()
-                                camera.launch(uri)
+        ComposerInputLayout(
+            sending = sending,
+            input = {
+                if (attachmentEnabled) {
+                    IconButton(
+                        onClick = { documentPicker.launch(arrayOf("*/*")) },
+                        enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
+                    ) {
+                        Icon(Icons.Outlined.AttachFile, "Attach files")
+                    }
+                    IconButton(
+                        onClick = {
+                            cameraError = null
+                            runCatching {
+                                newCameraCaptureUri(context).also { uri ->
+                                    capturedCameraUri = uri.toString()
+                                    camera.launch(uri)
+                                }
+                            }.onFailure { error ->
+                                capturedCameraUri?.let(Uri::parse)?.let { context.contentResolver.delete(it, null, null) }
+                                capturedCameraUri = null
+                                cameraError = error.message ?: "Android could not open the camera"
                             }
-                        }.onFailure { error ->
-                            capturedCameraUri?.let(Uri::parse)?.let { context.contentResolver.delete(it, null, null) }
-                            capturedCameraUri = null
-                            cameraError = error.message ?: "Android could not open the camera"
-                        }
-                    },
-                    enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
-                ) {
-                    Icon(Icons.Outlined.PhotoCamera, "Take a photo")
-                }
-            }
-            Box {
-                IconButton(
-                    onClick = { historyMenuOpen = true },
-                    enabled = connected && userHistory.isNotEmpty(),
-                    modifier = Modifier.semantics { contentDescription = "Open message history" },
-                ) { Icon(Icons.Outlined.History, null) }
-                DropdownMenu(
-                    expanded = historyMenuOpen,
-                    onDismissRequest = { historyMenuOpen = false },
-                ) {
-                    userHistory.take(MAX_VISIBLE_COMPOSER_HISTORY).forEach { message ->
-                        DropdownMenuItem(
-                            text = { Text(message, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                            onClick = {
-                                resetHistoryBrowse()
-                                onDraftChange(message)
-                                historyMenuOpen = false
-                            },
-                        )
+                        },
+                        enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
+                    ) {
+                        Icon(Icons.Outlined.PhotoCamera, "Take a photo")
                     }
                 }
-            }
-            OutlinedTextField(
-                value = draft,
-                onValueChange = {
-                    resetHistoryBrowse()
-                    onDraftChange(it)
-                },
-                placeholder = {
-                    Text(
-                        when {
-                            !connected -> "Reconnect to send"
-                            sending -> "Steer the current run"
-                            else -> "Message Hermes"
-                        },
-                    )
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .preserveFocusAcrossAdaptiveMove(compactLayout, adaptiveFocusState)
-                    .onPreviewKeyEvent { event ->
-                        when (composerKeyAction(event.type, event.key, event.isCtrlPressed)) {
-                            ComposerKeyAction.ESCAPE -> {
-                                historyMenuOpen = false
-                                resetHistoryBrowse()
-                                focus.clearFocus(force = true)
-                                softwareKeyboard?.hide()
-                                true
-                            }
-                            ComposerKeyAction.HISTORY_BACK -> browseHistory(backward = true)
-                            ComposerKeyAction.HISTORY_FORWARD -> browseHistory(backward = false)
-                            ComposerKeyAction.NONE -> false
+                Box {
+                    IconButton(
+                        onClick = { historyMenuOpen = true },
+                        enabled = connected && userHistory.isNotEmpty(),
+                        modifier = Modifier.semantics { contentDescription = "Open message history" },
+                    ) { Icon(Icons.Outlined.History, null) }
+                    DropdownMenu(
+                        expanded = historyMenuOpen,
+                        onDismissRequest = { historyMenuOpen = false },
+                    ) {
+                        userHistory.take(MAX_VISIBLE_COMPOSER_HISTORY).forEach { message ->
+                            DropdownMenuItem(
+                                text = { Text(message, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                                onClick = {
+                                    resetHistoryBrowse()
+                                    onDraftChange(message)
+                                    historyMenuOpen = false
+                                },
+                            )
                         }
-                    },
-                enabled = connected,
-                maxLines = 6,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { submit() }),
-                trailingIcon = {
-                    VoiceRecordButton(
-                        state = voiceState,
-                        connected = connected,
-                        hasPermission = {
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                        },
-                        onRequestPermission = { microphonePermission.launch(Manifest.permission.RECORD_AUDIO) },
-                        onTap = ::toggleVoice,
-                        onPressStart = { voiceViewModel.startRecording(VoiceRecordingMode.PRESS_TO_TALK) },
-                        onLock = voiceViewModel::lockRecording,
-                        onRelease = voiceViewModel::stopAndTranscribe,
-                        onCancel = { voiceViewModel.cancelRecording() },
-                    )
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            )
-            if (sending) {
-                IconButton(onClick = onInterrupt, modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" }) {
-                    Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
+                    }
                 }
-                IconButton(
-                    onClick = {
-                        onQueue()
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = {
                         resetHistoryBrowse()
-                        focus.clearFocus()
+                        onDraftChange(it)
                     },
-                    enabled = connected && draft.isNotBlank() && attachments.isEmpty() &&
-                        queuedPrompts.size < ComposerQueue.MAX_ENTRIES && !queueDraining,
-                ) {
-                    Icon(Icons.Outlined.Schedule, "Queue for the next turn")
+                    placeholder = {
+                        Text(
+                            when {
+                                !connected -> "Reconnect to send"
+                                sending -> "Steer the current run"
+                                else -> "Message Hermes"
+                            },
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .preserveFocusAcrossAdaptiveMove(compactLayout, adaptiveFocusState)
+                        .onPreviewKeyEvent { event ->
+                            when (composerKeyAction(event.type, event.key, event.isCtrlPressed)) {
+                                ComposerKeyAction.ESCAPE -> {
+                                    historyMenuOpen = false
+                                    resetHistoryBrowse()
+                                    focus.clearFocus(force = true)
+                                    softwareKeyboard?.hide()
+                                    true
+                                }
+                                ComposerKeyAction.HISTORY_BACK -> browseHistory(backward = true)
+                                ComposerKeyAction.HISTORY_FORWARD -> browseHistory(backward = false)
+                                ComposerKeyAction.NONE -> false
+                            }
+                        },
+                    enabled = connected,
+                    maxLines = 6,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { submit() }),
+                    trailingIcon = {
+                        VoiceRecordButton(
+                            state = voiceState,
+                            connected = connected,
+                            hasPermission = {
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                            },
+                            onRequestPermission = { microphonePermission.launch(Manifest.permission.RECORD_AUDIO) },
+                            onTap = ::toggleVoice,
+                            onPressStart = { voiceViewModel.startRecording(VoiceRecordingMode.PRESS_TO_TALK) },
+                            onLock = voiceViewModel::lockRecording,
+                            onRelease = voiceViewModel::stopAndTranscribe,
+                            onCancel = { voiceViewModel.cancelRecording() },
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                )
+            },
+            actions = {
+                if (sending) {
+                    IconButton(
+                        onClick = onInterrupt,
+                        modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" },
+                    ) {
+                        Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
+                    }
+                    IconButton(
+                        onClick = {
+                            onQueue()
+                            resetHistoryBrowse()
+                            focus.clearFocus()
+                        },
+                        enabled = connected && draft.isNotBlank() && attachments.isEmpty() &&
+                            queuedPrompts.size < ComposerQueue.MAX_ENTRIES && !queueDraining,
+                    ) {
+                        Icon(Icons.Outlined.Schedule, "Queue for the next turn")
+                    }
+                    IconButton(
+                        onClick = ::submit,
+                        enabled = connected && draft.isNotBlank() && attachments.all { it.ready },
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.Send, "Steer the current run")
+                    }
+                } else {
+                    IconButton(
+                        onClick = ::submit,
+                        enabled = connected && draft.isNotBlank() && attachments.all { it.ready },
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.Send, "Send message")
+                    }
                 }
-                IconButton(onClick = ::submit, enabled = connected && draft.isNotBlank() && attachments.all { it.ready }) {
-                    Icon(Icons.AutoMirrored.Outlined.Send, "Steer the current run")
-                }
-            } else {
-                IconButton(
-                    onClick = ::submit,
-                    enabled = connected && draft.isNotBlank() && attachments.all { it.ready },
-                ) { Icon(Icons.AutoMirrored.Outlined.Send, "Send message") }
-            }
-        }
+            },
+        )
         if (sending && attachments.isNotEmpty()) {
             Text(
                 "Pending-message queue is text-only; send or remove attachments first.",
