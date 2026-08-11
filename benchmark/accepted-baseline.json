@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "source": {
-    "workflowRun": 31508858128,
-    "commit": "5bf47cc523549bc8fcc53084597cda4d17c826cf",
+    "workflowRun": 31518210678,
+    "commit": "c966d656f6b0d96e84cfbae21648233510d3b282",
     "device": "pixel6Api36",
     "androidApi": 36,
     "repetitions": {
@@ -12,7 +12,7 @@
   },
   "regressionLimit": 0.1,
   "metrics": {
-    "coldStartupReportsTtidTtfdAndFrames.timeToFullDisplayMs": 3278.56,
+    "coldStartupReportsTtidTtfdAndFrames.timeToFullDisplayMs": 4096.68,
     "coldStartupReportsTtidTtfdAndFrames.timeToInitialDisplayMs": 1907.82,
     "artifactsJourney.memoryHeapSizeLastKb": 11695.0,
     "artifactsJourney.memoryRssAnonLastKb": 51050.0,
@@ -20,7 +20,7 @@
     "manageJourney.memoryHeapSizeLastKb": 11997.0,
     "manageJourney.memoryRssAnonLastKb": 50314.0,
     "manageJourney.memoryRssFileLastKb": 89600.0,
-    "composerJourney.memoryHeapSizeLastKb": 9231.0,
+    "composerJourney.memoryHeapSizeLastKb": 10281.0,
     "composerJourney.memoryRssAnonLastKb": 46990.0,
     "composerJourney.memoryRssFileLastKb": 91924.0,
     "transcriptScrollDuringContinuousStreamJourney.memoryHeapSizeLastKb": 6769.0,
