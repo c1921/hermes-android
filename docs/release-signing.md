@@ -27,6 +27,13 @@ The release identity is restricted to the `release` environment and that environ
 - `HERMES_RELEASE_KEYSTORE_BASE64`
 - `HERMES_RELEASE_KEYSTORE_PASSWORD`
 
+The repository Actions settings must also allow workflows to create pull requests:
+
+- Default workflow permissions: **Read and write permissions**.
+- **Allow GitHub Actions to create and approve pull requests**: enabled.
+
+The release-planning job requests `contents: write` and `pull-requests: write` for its candidate-branch and candidate-PR operations. The repository setting is required in addition to those workflow permissions.
+
 Aliases are public workflow configuration. The workflow decodes each keystore only into the runner's temporary directory and requires signing configuration explicitly. Android Gradle signs the debug and release APKs plus the release AAB. The workflow signs the debug AAB explicitly because `bundleDebug` does not sign that output. It then verifies each APK with `apksigner`, checks every APK and AAB certificate fingerprint against the table above, and uploads artifacts only after verification succeeds.
 
 Each approved release build publishes one semantic GitHub Release tagged `vX.Y.Z` and marks it as the latest release only after the verified APK, AAB, R8 mapping, `hermes-android-release.provenance.properties`, CycloneDX SBOM, and `hermes-android-release.sha256` manifest are attached. The release job verifies the package, version, versionCode, commit, signing certificate, provenance, and public-download checksums before completing. The release notes embed the same generated provenance properties used by Diagnostics and the support export. The README uses GitHub's stable latest-release URLs for `hermes-android-release.apk` and `hermes-android-release.aab`, so non-release pushes cannot replace the current downloads.
