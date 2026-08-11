@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "source": {
-    "workflowRun": 31518210678,
-    "commit": "c966d656f6b0d96e84cfbae21648233510d3b282",
+    "workflowRun": 31522837823,
+    "commit": "447acf6cb33550c295d74f5a15b6c1b54f98b5ed",
     "device": "pixel6Api36",
     "androidApi": 36,
     "repetitions": {
@@ -12,8 +12,8 @@
   },
   "regressionLimit": 0.1,
   "metrics": {
-    "coldStartupReportsTtidTtfdAndFrames.timeToFullDisplayMs": 4096.68,
-    "coldStartupReportsTtidTtfdAndFrames.timeToInitialDisplayMs": 1907.82,
+    "coldStartupReportsTtidTtfdAndFrames.timeToFullDisplayMs": 4910.01,
+    "coldStartupReportsTtidTtfdAndFrames.timeToInitialDisplayMs": 3000.69,
     "artifactsJourney.memoryHeapSizeLastKb": 11695.0,
     "artifactsJourney.memoryRssAnonLastKb": 51050.0,
     "artifactsJourney.memoryRssFileLastKb": 89874.0,
