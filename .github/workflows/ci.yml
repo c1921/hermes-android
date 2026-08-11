@@ -8,7 +8,7 @@ on:
     branches: [main, dev]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'main-release' || github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
 
 permissions:
@@ -305,6 +305,9 @@ jobs:
           mkdir -p "$RUNNER_TEMP/hermes-benchmark/run-1"
           cp -R benchmark/build/outputs/managed_device_android_test_additional_output \
             "$RUNNER_TEMP/hermes-benchmark/run-1/"
+          mkdir -p "$RUNNER_TEMP/hermes-benchmark/evidence"
+          cp benchmark/build/outputs/hermes-evidence/benchmark-evidence.jsonl \
+            "$RUNNER_TEMP/hermes-benchmark/evidence/"
       - name: Enforce accepted API 36 benchmark baseline
         id: benchmark-gate
         continue-on-error: true
@@ -603,9 +606,14 @@ jobs:
             git push origin "$release_tag"
           fi
 
-          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$release_tag" "${release_files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          if release_is_draft="$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null)"; then
+            if [[ "$release_is_draft" == "true" ]]; then
+              gh release upload "$release_tag" "${release_files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            else
+              echo "Release $release_tag is already public; preserving its assets for verification."
+            fi
           else
+            release_is_draft=true
             gh release create "$release_tag" "${release_files[@]}" \
               --draft \
               --verify-tag \
@@ -628,4 +636,6 @@ jobs:
             grep -Fx "android.version_code=$RELEASE_VERSION_CODE" hermes-android-release.provenance.properties
             grep -Fx "android.commit=$GITHUB_SHA" hermes-android-release.provenance.properties
           )
-          gh release edit "$release_tag" --draft=false --latest --repo "$GITHUB_REPOSITORY"
+          if [[ "$release_is_draft" == "true" ]]; then
+            gh release edit "$release_tag" --draft=false --latest --repo "$GITHUB_REPOSITORY"
+          fi
