@@ -37,7 +37,6 @@ import com.nousresearch.hermes.ui.theme.HermesTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -64,9 +63,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         lifecycleScope.launch {
-            combine(privacyPreferences.secureScreen, privacyPreferences.biometricReentry) { secure, reentry ->
-                secure || reentry
-            }.collect { enabled ->
+            privacyPreferences.secureScreen.collect { enabled ->
                 if (enabled) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 } else {
