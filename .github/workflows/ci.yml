@@ -316,7 +316,6 @@ jobs:
         if: steps.benchmark-gate.outcome == 'failure'
         run: ./scripts/check-benchmark-regression.sh "$RUNNER_TEMP/hermes-benchmark" benchmark/accepted-baseline.json
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: hermes-android-api36-benchmarks
           path: |
