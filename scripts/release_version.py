@@ -82,8 +82,20 @@ def current(root, field):
     return value
 
 
+def version_parts(value):
+    if not SEMVER.fullmatch(value):
+        raise ValueError(f"invalid semantic version: {value}")
+    return tuple(int(part) for part in value.split("."))
+
+
+def compare_versions(left, right):
+    left_parts = version_parts(left)
+    right_parts = version_parts(right)
+    return (left_parts > right_parts) - (left_parts < right_parts)
+
+
 def next_version(root, bump):
-    major, minor, patch = (int(part) for part in current(root, "name").split("."))
+    major, minor, patch = version_parts(current(root, "name"))
     if bump == "major":
         major, minor, patch = major + 1, 0, 0
     elif bump == "minor":
@@ -130,6 +142,9 @@ def self_test():
     for commit_type in ("docs", "test", "ci", "chore", "style", "unknown"):
         assert classify_title(f"{commit_type}: update release flow") == "none"
     assert classify_title("Merge pull request #7 from feature/release") == "none"
+    assert compare_versions("1.2.0", "1.1.9") == 1
+    assert compare_versions("1.1.0", "1.1.0") == 0
+    assert compare_versions("1.0.9", "1.1.0") == -1
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -183,6 +198,10 @@ def build_parser():
     current_parser = commands.add_parser("current")
     current_parser.add_argument("--field", choices=("name", "code"), required=True)
 
+    compare_parser = commands.add_parser("compare")
+    compare_parser.add_argument("--left", required=True)
+    compare_parser.add_argument("--right", required=True)
+
     next_parser = commands.add_parser("next")
     next_parser.add_argument("--bump", choices=("major", "minor", "patch"), required=True)
 
@@ -206,6 +225,8 @@ def main(argv=None):
             print(classify_title(args.title))
         elif args.command == "current":
             print(current(root, args.field))
+        elif args.command == "compare":
+            print(compare_versions(args.left, args.right))
         elif args.command == "next":
             print(next_version(root, args.bump))
         elif args.command == "bump":

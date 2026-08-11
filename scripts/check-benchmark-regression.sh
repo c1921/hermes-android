@@ -17,16 +17,13 @@ baseline="$tmp_dir/baseline.tsv"
 while IFS= read -r -d '' file; do
     jq -e '(.benchmarks? | type) == "array"' "$file" >/dev/null 2>&1 || continue
     jq -r '
-        def median:
-          sort as $values |
-          if ($values | length) == 0 then null
-          elif ($values | length) % 2 == 1 then $values[(($values | length) / 2) | floor]
-          else (($values[(($values | length) / 2) - 1] + $values[(($values | length) / 2)]) / 2)
-          end;
         .benchmarks[]? as $benchmark |
         ($benchmark.metrics // {}) | to_entries[] |
         select(.key != "frameCount") |
-        (.value.median // ((.value.runs // []) | map(select(type == "number")) | median)) as $value |
+        (if ((.value.runs? | type) == "array" and (.value.runs | length) > 0)
+         then .value.runs
+         else [(.value.median // null)]
+         end)[] as $value |
         select(($value | type) == "number" and ($value | isfinite) and $value >= 0) |
         [$benchmark.name, .key, $value] | @tsv
     ' "$file" >> "$candidate"
@@ -34,12 +31,43 @@ done < <(find "$results_dir" -type f -name '*.json' -print0)
 
 test -s "$candidate" || { echo "no AndroidX benchmark JSON results found under $results_dir" >&2; exit 1; }
 
+candidate_medians="$tmp_dir/candidate-medians.tsv"
+# ponytail: O(n^2) sorting is bounded by the small managed-device sample count.
+awk -F '\t' '
+  {
+    key = $1 "." $2
+    count[key]++
+    values[key, count[key]] = $3
+  }
+  END {
+    for (key in count) {
+      n = count[key]
+      for (i = 1; i <= n; i++) {
+        for (j = i + 1; j <= n; j++) {
+          if (values[key, i] > values[key, j]) {
+            swap = values[key, i]
+            values[key, i] = values[key, j]
+            values[key, j] = swap
+          }
+        }
+      }
+      if (n % 2 == 1) {
+        median = values[key, (n + 1) / 2]
+      } else {
+        median = (values[key, n / 2] + values[key, n / 2 + 1]) / 2
+      }
+      print key "\t" median
+    }
+  }
+' "$candidate" > "$candidate_medians"
+test -s "$candidate_medians" || { echo "benchmark candidate has no numeric metrics: $results_dir" >&2; exit 1; }
+
 jq -r '.metrics | to_entries[] | [.key, .value] | @tsv' "$baseline_file" > "$baseline"
 test -s "$baseline" || { echo "benchmark baseline has no metrics: $baseline_file" >&2; exit 1; }
 
 awk -F '\t' '
   NR == FNR { baseline[$1] = $2; next }
-  { candidate[$1 "." $2] = $3 }
+  { candidate[$1] = $2 }
   END {
     failed = 0
     for (key in candidate) {
@@ -62,6 +90,6 @@ awk -F '\t' '
     }
     exit failed
   }
-' "$baseline" "$candidate"
+' "$baseline" "$candidate_medians"
 
-echo "Benchmark regression check passed: $(wc -l < "$candidate" | tr -d ' ') metrics within 10% of baseline."
+echo "Benchmark regression check passed: $(wc -l < "$candidate_medians" | tr -d ' ') metrics within 10% of baseline."
