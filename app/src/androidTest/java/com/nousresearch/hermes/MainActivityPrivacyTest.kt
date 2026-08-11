@@ -31,8 +31,8 @@ class MainActivityPrivacyTest {
             awaitWindowFlag(scenario, expected = true)
 
             runBlocking {
-                preferences.setSecureScreen(false)
                 preferences.setBiometricReentry(true)
+                preferences.setSecureScreen(false)
             }
             awaitWindowFlag(scenario, expected = false)
             scenario.onActivity { activity ->
