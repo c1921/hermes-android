@@ -1,5 +1,10 @@
 # Hermes for Android
 
+> [!IMPORTANT]
+> **This project is archived and no longer maintained.** I no longer use Hermes Agent, so this Android client will not receive further development, support, or compatibility updates. The existing code remains available for reference, but releases may no longer work with current Hermes versions.
+>
+> For my actively developed alternative, check out [HomeBot](https://github.com/luinbytes/HomeBot).
+
 <p align="center">
   <img src="docs/assets/readme/hermes-android-banner.png" alt="Hermes Agent for Android" width="100%">
 </p>
