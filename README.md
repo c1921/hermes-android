@@ -12,7 +12,7 @@
 
 Native Android client for [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent). The project targets first-party-quality integration with the same Dashboard backend, sessions, profiles, skills, tools, models, providers, and automations used by Hermes Desktop, CLI, and TUI.
 
-This repository is an independent work in progress. It is not currently an official Nous Research release. Visible controls are backed by real Hermes REST or JSON-RPC/WebSocket operations; unavailable features are omitted rather than simulated.
+This repository is an independent client for Hermes Agent, published at [c1921/hermes-android](https://github.com/c1921/hermes-android). It is a maintained fork of the archived upstream `luinbytes/hermes-android` and is not an official Nous Research release. Releasable artifacts (APK and AAB) are built, signed, and published through this repository's CI workflow. Visible controls are backed by real Hermes REST or JSON-RPC/WebSocket operations; unavailable features are omitted rather than simulated.
 
 <table>
   <tr>
