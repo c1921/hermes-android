@@ -1,6 +1,632 @@
 <resources>
-    <string name="app_name">Hermes</string>
+    <string name="app_name" translatable="false">Hermes</string>
+    <string name="ui_agents_a11y_pause_spawns_af09e1" formatted="false">Pause new subagent spawns</string>
+    <string name="ui_agents_a11y_resume_spawns_410b39" formatted="false">Resume new subagent spawns</string>
+    <string name="ui_agents_background_process_177e28" formatted="false">Background process</string>
+    <string name="ui_agents_command_center_title_122b59" formatted="false">COMMAND CENTER</string>
+    <string name="ui_agents_empty_active_eacd55" formatted="false">Hermes reports no active subagents. Live delegated work will appear here automatically.</string>
+    <string name="ui_agents_empty_no_bg_bbe5ce" formatted="false">Hermes reports no background processes for the open session.</string>
+    <string name="ui_agents_empty_no_events_ebef7a" formatted="false">No subagent events have been observed since this Android connection opened.</string>
+    <string name="ui_agents_empty_no_spawn_96fb2a" formatted="false">No TUI-persisted spawn trees were returned by this Hermes profile.</string>
+    <string name="ui_agents_empty_open_session_4b5edb" formatted="false">Open a session to inspect the background processes owned by that Hermes run.</string>
+    <string name="ui_agents_exit_27b8d8">exit %1$s</string>
+    <string name="ui_agents_metric_active_8c4f72" formatted="false">ACTIVE</string>
+    <string name="ui_agents_metric_max_depth_fa4a88" formatted="false">MAX DEPTH</string>
+    <string name="ui_agents_metric_max_parallel_a30e4c" formatted="false">MAX PARALLEL</string>
+    <string name="ui_agents_n_subagents_1d11bb">%1$s subagents</string>
+    <string name="ui_agents_n_subagents_caps_734876">%1$s SUBAGENTS</string>
+    <string name="ui_agents_n_tools_4553e7">%1$s tools</string>
+    <string name="ui_agents_section_active_be810b" formatted="false">ACTIVE WORKSTREAMS</string>
+    <string name="ui_agents_section_archive_replay_063118">ARCHIVE REPLAY / %1$s</string>
+    <string name="ui_agents_section_archived_58f99d" formatted="false">ARCHIVED SPAWN TREES</string>
+    <string name="ui_agents_section_bg_7705a5" formatted="false">BACKGROUND PROCESSES</string>
+    <string name="ui_agents_section_recent_7f8fbe" formatted="false">RECENT AGENT ACTIVITY</string>
+    <string name="ui_agents_session_570232">session %1$s</string>
+    <string name="ui_agents_spawns_enabled_550c17" formatted="false">New spawns enabled</string>
+    <string name="ui_agents_spawns_paused_010b84" formatted="false">New spawns paused</string>
+    <string name="ui_agents_subtitle_8615dc" formatted="false">Agents, delegation and current-session processes</string>
+    <string name="ui_agents_tool_d04181">Tool: %1$s</string>
+    <string name="ui_artifact_binary_inspect_hint_9e0f1a" formatted="false">Use Export or Open with to inspect this file type safely.</string>
+    <string name="ui_artifact_detected_8d4e6f" formatted="false">DETECTED</string>
+    <string name="ui_artifact_detected_in_session_5a6b7c">Detected in %1$s</string>
+    <string name="ui_artifact_export_1a2b3c" formatted="false">Export</string>
+    <string name="ui_artifact_export_failed_9c0d1e" formatted="false">Artifact export failed</string>
+    <string name="ui_artifact_from_session_3e4f5a">From: %1$s</string>
+    <string name="ui_artifact_loading_subtitle_4b5c6d" formatted="false">Loading detected origin</string>
+    <string name="ui_artifact_meta_6b7c8d">%1$s  /  %2$s  /  DETECTED</string>
+    <string name="ui_artifact_missing_body_6d7e8f" formatted="false">This artifact is no longer present in the authenticated transcript.</string>
+    <string name="ui_artifact_missing_subtitle_5c6d7e" formatted="false">Detected origin unavailable</string>
+    <string name="ui_artifact_open_chat_0f1a2b" formatted="false">Open chat</string>
+    <string name="ui_artifact_open_with_3c4d5e" formatted="false">Open with</string>
+    <string name="ui_artifact_preview_unavailable_8d9e0f" formatted="false">Artifact preview could not be loaded</string>
+    <string name="ui_artifact_relative_detected_4f5a6b">%1$s  •  DETECTED</string>
+    <string name="ui_artifact_share_2b3c4d" formatted="false">Share</string>
+    <string name="ui_artifact_share_failed_1e2f3a" formatted="false">Artifact sharing failed</string>
+    <string name="ui_artifact_title_2f3a4b" formatted="false">ARTIFACT</string>
+    <string name="ui_artifact_unknown_type_7c8d9e" formatted="false">unknown type</string>
+    <string name="ui_artifacts_title_5b7c9d" formatted="false">ARTIFACTS</string>
+    <string name="ui_entries_intro_98121e" formatted="false">Choose a remote Hermes destination. Entries marked status-only are reported by the server and have no Android operation yet.</string>
+    <string name="ui_entry_agents_desc_1a3c1f" formatted="false">Review the agents exposed by the connected Hermes backend.</string>
+    <string name="ui_entry_agents_title_67d84a" formatted="false">Agents</string>
+    <string name="ui_entry_artifact_index_desc_41f7a1" formatted="false">A canonical artifact catalogue is not exposed by the current Hermes contract.</string>
+    <string name="ui_entry_artifact_index_title_631115" formatted="false">Artifact index</string>
+    <string name="ui_entry_backends_desc_f79b7a" formatted="false">Switch between saved Hermes installations.</string>
+    <string name="ui_entry_backends_title_5f79c7" formatted="false">Backends</string>
+    <string name="ui_entry_billing_desc_4d469f" formatted="false">Review account billing information held by Hermes.</string>
+    <string name="ui_entry_billing_title_4d42b0" formatted="false">Billing</string>
+    <string name="ui_entry_command_center_desc_611887" formatted="false">Inspect agents, delegation, and background process status.</string>
+    <string name="ui_entry_command_center_title_de7d6f" formatted="false">Command Center</string>
+    <string name="ui_entry_cron_desc_7edf17" formatted="false">Create and monitor scheduled Hermes jobs.</string>
+    <string name="ui_entry_cron_title_39d6f6" formatted="false">Cron</string>
+    <string name="ui_entry_host_capabilities_desc_7501ae" formatted="false">Desktop-only capabilities are reported by Hermes and never executed locally on Android.</string>
+    <string name="ui_entry_host_capabilities_title_f27d9b" formatted="false">Host capabilities</string>
+    <string name="ui_entry_mcp_desc_50933f" formatted="false">Manage remote Model Context Protocol servers.</string>
+    <string name="ui_entry_mcp_title_4afa80" formatted="false">MCP</string>
+    <string name="ui_entry_messaging_desc_d085eb" formatted="false">Configure remote messaging channels.</string>
+    <string name="ui_entry_messaging_title_ecca9e" formatted="false">Messaging</string>
+    <string name="ui_entry_model_catalogue_desc_355f23" formatted="false">Model availability follows the connected Hermes backend.</string>
+    <string name="ui_entry_model_catalogue_title_59002b" formatted="false">Model catalogue</string>
+    <string name="ui_entry_profiles_desc_ba4d24" formatted="false">Select and manage Hermes profiles.</string>
+    <string name="ui_entry_profiles_title_9eec48" formatted="false">Profiles</string>
+    <string name="ui_entry_providers_desc_2c5aba" formatted="false">Manage provider accounts and their remote credentials.</string>
+    <string name="ui_entry_providers_title_59b6b2" formatted="false">Providers &amp; API keys</string>
+    <string name="ui_entry_remote_diagnostics_desc_9ca5c1" formatted="false">Run Hermes health and security checks on the connected backend.</string>
+    <string name="ui_entry_remote_diagnostics_title_2c558c" formatted="false">Remote diagnostics</string>
+    <string name="ui_entry_remote_files_desc_b93e6d" formatted="false">Browse, preview, download, and share files managed by Hermes.</string>
+    <string name="ui_entry_remote_files_title_0b1e5b" formatted="false">Remote Files</string>
+    <string name="ui_entry_server_settings_desc_415c80" formatted="false">Review configuration exposed by the connected Hermes server.</string>
+    <string name="ui_entry_server_settings_title_f24729" formatted="false">Server settings</string>
+    <string name="ui_entry_skills_hub_desc_d35b55" formatted="false">Browse Hermes skills and the capability hub.</string>
+    <string name="ui_entry_skills_hub_title_de269f" formatted="false">Skills &amp; Hub</string>
+    <string name="ui_entry_starmap_desc_b928f7" formatted="false">Search and maintain profile-scoped learning nodes exposed by Hermes.</string>
+    <string name="ui_entry_starmap_title_cc042e" formatted="false">Starmap / Memory Graph</string>
+    <string name="ui_entry_usage_desc_238195" formatted="false">Review remote usage and quota information.</string>
+    <string name="ui_entry_usage_title_75361a" formatted="false">Usage</string>
+    <string name="ui_entry_webhooks_desc_9fad68" formatted="false">Webhook delivery status is reported here when Hermes exposes its contract.</string>
+    <string name="ui_entry_webhooks_title_c2d65a" formatted="false">Webhooks</string>
+    <string name="ui_export_destination_open_failed_8b9c0d" formatted="false">Android could not open the export destination</string>
+    <string name="ui_filter_all_4d5e6f" formatted="false">All</string>
+    <string name="ui_filter_files_6f7a8b" formatted="false">Files</string>
+    <string name="ui_filter_images_5e6f7a" formatted="false">Images</string>
+    <string name="ui_filter_links_7a8b9c" formatted="false">Links</string>
+    <string name="ui_manage_sections_intro_8fa462" formatted="false">Manage Hermes remotely. Device-local preferences stay in App settings and never inherit backend or profile scope.</string>
+    <string name="ui_mgmt_accept_risk_and_install_415ed7" formatted="false">Accept risk and install</string>
+    <string name="ui_mgmt_automations_title_22995d" formatted="false">AUTOMATIONS</string>
+    <string name="ui_mgmt_backends_title_4283fe" formatted="false">BACKENDS</string>
+    <string name="ui_mgmt_blocked_by_hermes_e70cad" formatted="false">Blocked by Hermes</string>
+    <string name="ui_mgmt_capabilities_title_c6d07e" formatted="false">CAPABILITIES</string>
+    <string name="ui_mgmt_configured_1a5a97" formatted="false">CONFIGURED</string>
+    <string name="ui_mgmt_could_not_load_dashboard_providers_3a0000" formatted="false">Could not load Dashboard sign-in providers.</string>
+    <string name="ui_mgmt_could_not_load_profile_identity_2c44a3" formatted="false">Hermes could not load this profile identity</string>
+    <string name="ui_mgmt_could_not_save_profile_model_fb8569" formatted="false">Hermes could not save the profile model</string>
+    <string name="ui_mgmt_could_not_save_soul_aecac2" formatted="false">Hermes could not save SOUL.md</string>
+    <string name="ui_mgmt_cron_run_body_f43a1d">Run %1$s now for profile %2$s? Hermes will start backend work immediately and may deliver the configured result.</string>
+    <string name="ui_mgmt_cron_toggle_body_f72124">%1$s %2$s for profile %3$s? %4$s</string>
+    <string name="ui_mgmt_future_runs_resume_5568a8" formatted="false">Future scheduled runs will resume.</string>
+    <string name="ui_mgmt_future_runs_stop_baa397" formatted="false">Future scheduled runs will stop until resumed.</string>
+    <string name="ui_mgmt_general_e2a7c9" formatted="false">general</string>
+    <string name="ui_mgmt_hermes_version_cd0e87">HERMES %1$s</string>
+    <string name="ui_mgmt_install_194619" formatted="false">Install</string>
+    <string name="ui_mgmt_installed_skills_f7b77e" formatted="false">Installed skills</string>
+    <string name="ui_mgmt_isolated_hermes_workspaces_93e831" formatted="false">Isolated Hermes workspaces</string>
+    <string name="ui_mgmt_model_not_assigned_67b282" formatted="false">Model not assigned</string>
+    <string name="ui_mgmt_no_configurable_toolsets_5b9255" formatted="false">No configurable toolsets were returned by Hermes.</string>
+    <string name="ui_mgmt_no_cron_jobs_51c6b3" formatted="false">No cron jobs are configured on this Hermes backend.</string>
+    <string name="ui_mgmt_no_hub_results_ff309c" formatted="false">No hub results. Search by capability, tool or workflow.</string>
+    <string name="ui_mgmt_no_installed_skills_ad6838" formatted="false">No installed skills were returned by Hermes.</string>
+    <string name="ui_mgmt_no_matching_skills_6d070c" formatted="false">No matching skills.</string>
+    <string name="ui_mgmt_no_matching_toolsets_8589ea" formatted="false">No matching toolsets.</string>
+    <string name="ui_mgmt_no_profiles_167d53" formatted="false">No profiles were returned by this Hermes backend.</string>
+    <string name="ui_mgmt_pause_cron_job_9f0ac9" formatted="false">PAUSE CRON JOB?</string>
+    <string name="ui_mgmt_pause_d683cb" formatted="false">Pause</string>
+    <string name="ui_mgmt_pause_job_009bff" formatted="false">Pause job</string>
+    <string name="ui_mgmt_pid_suffix_dfbdb0"> / PID %1$s</string>
+    <string name="ui_mgmt_profile_model_saved_2ae386" formatted="false">Profile model saved</string>
+    <string name="ui_mgmt_profiles_intro_9002d3">Running profile: %1$s. Sticky default: %2$s. The sticky default affects future Hermes CLI processes; starting a session here scopes this live connection explicitly.</string>
+    <string name="ui_mgmt_profiles_title_c2728b" formatted="false">PROFILES</string>
+    <string name="ui_mgmt_resume_056a4a" formatted="false">Resume</string>
+    <string name="ui_mgmt_resume_cron_job_6d6f3c" formatted="false">RESUME CRON JOB?</string>
+    <string name="ui_mgmt_resume_job_43a255" formatted="false">Resume job</string>
+    <string name="ui_mgmt_review_before_installing_90d359" formatted="false">Review before installing</string>
+    <string name="ui_mgmt_saved_hermes_installations_fc63f0" formatted="false">Saved Hermes installations</string>
+    <string name="ui_mgmt_schedule_unavailable_7c2822" formatted="false">Schedule unavailable</string>
+    <string name="ui_mgmt_search_hermes_skills_hub_7067cb" formatted="false">Search the Hermes skills hub</string>
+    <string name="ui_mgmt_search_installed_skills_f19c55" formatted="false">Search installed skills</string>
+    <string name="ui_mgmt_search_toolsets_tools_be80c4" formatted="false">Search toolsets and tools</string>
+    <string name="ui_mgmt_server_side_hermes_cron_84016e" formatted="false">Server-side Hermes cron</string>
+    <string name="ui_mgmt_server_tools_for_3ad699">Server tools for %1$s</string>
+    <string name="ui_mgmt_setup_command_copied_c98fa3" formatted="false">Setup command copied. Run it only on the Hermes host.</string>
+    <string name="ui_mgmt_setup_may_be_required_a32770" formatted="false">SETUP MAY BE REQUIRED</string>
+    <string name="ui_mgmt_skill_op_completed_ae0755" formatted="false">Skill operation completed</string>
+    <string name="ui_mgmt_skill_op_exited_281220">Skill operation exited %1$s</string>
+    <string name="ui_mgmt_skill_op_running_6d1fb6">Skill operation running on Hermes%1$s</string>
+    <string name="ui_mgmt_soul_saved_6a1009" formatted="false">SOUL.md saved</string>
+    <string name="ui_mgmt_stored_on_for_profile_e5753d">Stored on %1$s for profile %2$s.</string>
+    <string name="ui_mgmt_tab_hub_d5bb2e" formatted="false">Hub</string>
+    <string name="ui_mgmt_tab_skills_fc1f7c" formatted="false">Skills</string>
+    <string name="ui_mgmt_tab_tools_35cbf0" formatted="false">Tools</string>
+    <string name="ui_mgmt_without_status_e08783" formatted="false">without status</string>
+    <string name="ui_native_artifacts_subtitle_608865" formatted="false">Remote files and artifact status</string>
+    <string name="ui_native_artifacts_title_793cf4" formatted="false">ARTIFACTS</string>
+    <string name="ui_native_automations_subtitle_99b2ac" formatted="false">Cron, agents, and delivery status</string>
+    <string name="ui_native_automations_title_220c91" formatted="false">AUTOMATIONS</string>
+    <string name="ui_native_manage_subtitle_757f82" formatted="false">Hermes capabilities and account</string>
+    <string name="ui_native_manage_title_7b8538" formatted="false">MANAGE</string>
+    <string name="ui_no_artifacts_in_profile_1c2d3e" formatted="false">No detected artifacts in this profile.</string>
+    <string name="ui_no_artifacts_match_search_2d3e4f" formatted="false">No artifacts match this search.</string>
+    <string name="ui_no_compatible_app_installed_0d1e2f" formatted="false">No compatible app is installed</string>
+    <string name="ui_open_artifact_2f3a4b" formatted="false">Open artifact</string>
+    <string name="ui_scoped_destination_intro_d9de57" formatted="false">This destination preserves the backend, profile, and stable resource identity. Actions remain unavailable until the connected Hermes contract exposes this detail surface.</string>
+    <string name="ui_scoped_hermes_resource_90996d" formatted="false">Scoped Hermes resource</string>
+    <string name="ui_sec_capabilities_desc_1c4815" formatted="false">Remote skills, tools, and host capability reporting.</string>
+    <string name="ui_sec_capabilities_title_acf286" formatted="false">Capabilities</string>
+    <string name="ui_sec_connections_desc_fe0213" formatted="false">Backends, messaging channels, and delivery status.</string>
+    <string name="ui_sec_connections_title_c7165a" formatted="false">Connections &amp; delivery</string>
+    <string name="ui_sec_memory_desc_09b22e" formatted="false">Remote memory status without local execution or invented storage.</string>
+    <string name="ui_sec_memory_title_f841b2" formatted="false">Memory &amp; learning</string>
+    <string name="ui_sec_profiles_models_desc_65083c" formatted="false">Remote profiles, provider accounts, and model availability.</string>
+    <string name="ui_sec_profiles_models_title_efcc60" formatted="false">Profiles &amp; models</string>
+    <string name="ui_sec_server_account_desc_c323bd" formatted="false">Connected Hermes installations, settings, health, and account records.</string>
+    <string name="ui_sec_server_account_title_c69c7f" formatted="false">Server &amp; account</string>
+    <string name="ui_share_artifact_3a4b5c" formatted="false">Share artifact</string>
+    <string name="ui_starmap_learning_node_meta_a36893">%1$s / profile %2$s</string>
+    <string name="ui_starmap_learning_node_title_d7a085" formatted="false">LEARNING NODE</string>
+    <string name="ui_starmap_n_links_8d9dcb">%1$s links</string>
+    <string name="ui_starmap_n_uses_b314f6">%1$s uses</string>
+    <string name="ui_starmap_no_learning_nodes_251908" formatted="false">This Hermes profile has no learning nodes.</string>
+    <string name="ui_starmap_no_learning_nodes_match_fcdce4" formatted="false">No learning nodes match this search.</string>
+    <string name="ui_starmap_subtitle_f876ff">Remote learning graph / profile %1$s</string>
+    <string name="ui_starmap_title_74bf20" formatted="false">STARMAP</string>
+    <string name="ui_starmap_uncategorised_c474c0" formatted="false">uncategorised</string>
+    <string name="ui_status_device_remote_948c5a" formatted="false">DEVICE + REMOTE</string>
+    <string name="ui_status_not_exposed_9a0a9a" formatted="false">NOT EXPOSED</string>
+    <string name="ui_status_remote_d6e85b" formatted="false">REMOTE</string>
+    <string name="ui_status_remote_files_4d296e" formatted="false">REMOTE FILES</string>
+    <string name="ui_status_remote_jobs_9e01b2" formatted="false">REMOTE JOBS</string>
+    <string name="ui_status_remote_status_7873a5" formatted="false">REMOTE STATUS</string>
+    <string name="ui_status_status_only_da6a31" formatted="false">STATUS ONLY</string>
+    <string name="ui_unknown_time_7e8f9a" formatted="false">Unknown time</string>
     <string name="widget_new_chat_label">New chat</string>
     <string name="widget_new_chat_description">Open a new Hermes chat</string>
     <string name="widget_new_chat_content_description">Open a new Hermes chat</string>
+    <string name="back">Back</string>
+    <string name="app_settings">APP SETTINGS</string>
+    <string name="app_settings_description">Appearance, language and privacy on this device</string>
+    <string name="language">LANGUAGE</string>
+    <string name="language_description">Choose the language Hermes uses on this device.</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_simplified_chinese" translatable="false">简体中文</string>
+    <string name="appearance">APPEARANCE</string>
+    <string name="appearance_description">Official Hermes Desktop presets. Android follows the system light or dark setting.</string>
+    <string name="selected">Selected</string>
+    <string name="secure_screen">SECURE SCREEN</string>
+    <string name="secure_screen_description">Block screenshots, screen recording and the recent-app thumbnail for Hermes content on this device.</string>
+    <string name="biometric_reentry">BIOMETRIC RE-ENTRY</string>
+    <string name="biometric_reentry_available">Require biometrics or the device credential after Hermes stays in the background for five minutes.</string>
+    <string name="biometric_reentry_unavailable">Set a device screen lock before enabling biometric re-entry.</string>
+    <string name="notifications">NOTIFICATIONS</string>
+    <string name="allowed">Allowed</string>
+    <string name="not_allowed">Not allowed</string>
+    <string name="notifications_description">Allow completion, action-required, automation failure and cron result alerts. Message content stays private.</string>
+    <string name="allow_notifications">ALLOW NOTIFICATIONS</string>
+    <string name="open_notification_settings">OPEN NOTIFICATION SETTINGS</string>
+    <string name="device_preferences_description">These preferences affect only this Android device. Hermes server configuration lives under Manage.</string>
+    <string name="skin_nous" translatable="false">Nous</string>
+    <string name="skin_midnight" translatable="false">Midnight</string>
+    <string name="skin_ember" translatable="false">Ember</string>
+    <string name="skin_mono" translatable="false">Mono</string>
+    <string name="skin_cyberpunk" translatable="false">Cyberpunk</string>
+    <string name="skin_slate" translatable="false">Slate</string>
+    <string name="skin_nous_description">Glass neutrals with Nous blue accents</string>
+    <string name="skin_midnight_description">Deep blue-violet with cool accents</string>
+    <string name="skin_ember_description">Warm crimson and bronze, forge vibes</string>
+    <string name="skin_mono_description">Clean grayscale, minimal and focused</string>
+    <string name="skin_cyberpunk_description">Neon green on black, matrix terminal</string>
+    <string name="skin_slate_description">Cool slate blue, focused developer theme</string>
+    <string name="unlock_hermes">Unlock Hermes</string>
+    <string name="authenticate_protected_content">Authenticate to open protected Hermes content</string>
+    <string name="use_device_credential">Use device credential</string>
+    <string name="set_device_lock_error">Set a device screen lock before opening protected Hermes content.</string>
+    <string name="biometric_not_recognized">Biometric authentication was not recognized. Try again.</string>
+    <string name="authentication_start_error">Android could not start authentication.</string>
+    <string name="authentication_cancelled">Device credential authentication was cancelled.</string>
+    <string name="notification_channel_completions">Completions</string>
+    <string name="notification_channel_action_required">Action required</string>
+    <string name="notification_channel_automation_failures">Automation failures</string>
+    <string name="notification_channel_cron_results">Cron results</string>
+    <string name="notification_channel_completions_description">Private completion alerts from Hermes</string>
+    <string name="notification_channel_action_required_description">Private action-required alerts from Hermes</string>
+    <string name="notification_channel_automation_failures_description">Private automation-failure alerts from Hermes</string>
+    <string name="notification_channel_cron_results_description">Private cron-result alerts from Hermes</string>
+    <string name="notification_title_completion">Hermes task completed</string>
+    <string name="notification_title_action_required">Hermes needs your attention</string>
+    <string name="notification_title_automation_failure">Hermes automation failed</string>
+    <string name="notification_title_cron_result">Hermes cron run finished</string>
+    <string name="notification_open_update">Open Hermes to view this update</string>
+    <string name="notification_open_details">Open Hermes for details</string>
+    <string name="shortcut_new_chat">New chat</string>
+    <string name="shortcut_new_hermes_chat">New Hermes chat</string>
+    <string name="read_aloud">Hermes read-aloud</string>
+    <string name="preparing_spoken_reply">Preparing spoken reply</string>
+    <string name="spoken_reply">Spoken reply</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="stop">Stop</string>
+    <string name="spoken_replies">Spoken replies</string>
+    <string name="spoken_replies_description">Playback controls for Hermes read-aloud</string>
+    <string name="ui_accounts_d7cfa4" formatted="false">ACCOUNTS</string>
+    <string name="ui_active_a733b8" formatted="false">Active</string>
+    <string name="ui_active_c72633" formatted="false">ACTIVE</string>
+    <string name="ui_add_backend_88b685" formatted="false">Add backend</string>
+    <string name="ui_agent_android_b4b6b6" formatted="false">AGENT / ANDROID</string>
+    <string name="ui_all_6a7208" formatted="false">All</string>
+    <string name="ui_allow_private_network_http_2be5ea" formatted="false">Allow private-network HTTP</string>
+    <string name="ui_android_81297a" formatted="false">ANDROID</string>
+    <string name="ui_android_uses_password_providers_advertised_by_this_dash_58816b" formatted="false">Android uses password providers advertised by this Dashboard. Native OAuth stays unavailable unless Hermes </string>
+    <string name="ui_answer_a16a4e" formatted="false">Answer</string>
+    <string name="ui_api_keys_a8a10e" formatted="false">API KEYS</string>
+    <string name="ui_app_settings_d69225" formatted="false">App settings</string>
+    <string name="ui_archive_2621c6" formatted="false">Archive</string>
+    <string name="ui_artifacts_a5b79f" formatted="false">Artifacts</string>
+    <string name="ui_artifacts_unavailable_a4e165" formatted="false">ARTIFACTS UNAVAILABLE</string>
+    <string name="ui_authenticate_with_biometrics_or_your_device_credential__fdb9e0" formatted="false">Authenticate with biometrics or your device credential to open Hermes.</string>
+    <string name="ui_authorization_code_90ed55" formatted="false">Authorization code</string>
+    <string name="ui_auto_refill_80ff77" formatted="false">Auto-refill</string>
+    <string name="ui_automations_82542d" formatted="false">Automations</string>
+    <string name="ui_backend_link_67c4b1" formatted="false">BACKEND LINK</string>
+    <string name="ui_billing_23ad68" formatted="false">BILLING</string>
+    <string name="ui_branch_conversation_681a60" formatted="false">Branch conversation</string>
+    <string name="ui_buy_7ceca5" formatted="false">Buy</string>
+    <string name="ui_buy_credits_ce006b" formatted="false">Buy credits</string>
+    <string name="ui_bypass_approvals_7771b5" formatted="false">BYPASS APPROVALS?</string>
+    <string name="ui_cancel_77dfd2" formatted="false">Cancel</string>
+    <string name="ui_cancel_request_499d4e" formatted="false">CANCEL REQUEST</string>
+    <string name="ui_chats_6c9e84" formatted="false">Chats</string>
+    <string name="ui_check_now_2ce5dd" formatted="false">Check now</string>
+    <string name="ui_checkpoints_a2b3a5" formatted="false">Checkpoints</string>
+    <string name="ui_checkpoints_are_disabled_for_this_hermes_session_enable_5c6ca3" formatted="false">Checkpoints are disabled for this Hermes session. Enable Hermes checkpoints on the server, then start a new session.</string>
+    <string name="ui_clone_sessions_and_full_state_a38a73" formatted="false">Clone sessions and full state</string>
+    <string name="ui_clone_source_optional_cf5105" formatted="false">Clone source (optional)</string>
+    <string name="ui_close_bbfa77" formatted="false">Close</string>
+    <string name="ui_command_approval_93b2f6" formatted="false">COMMAND APPROVAL</string>
+    <string name="ui_compatibility_doctor_and_security_audit_26bfa1" formatted="false">Compatibility, doctor and security audit</string>
+    <string name="ui_complete_sign_in_2907d7" formatted="false">Complete sign-in</string>
+    <string name="ui_compress_context_20c9e8" formatted="false">Compress context</string>
+    <string name="ui_configured_servers_and_catalog_metadata_come_from_this__94d3ed" formatted="false">Configured servers and catalog metadata come from this Hermes profile. Connection tests run on Hermes; Android never executes MCP processes or receives their credentials.</string>
+    <string name="ui_confirm_model_cost_6769e6" formatted="false">CONFIRM MODEL COST</string>
+    <string name="ui_connect_b65463" formatted="false">Connect</string>
+    <string name="ui_connect_to_hermes_a29692" formatted="false">CONNECT TO HERMES</string>
+    <string name="ui_connected_073afc" formatted="false">CONNECTED</string>
+    <string name="ui_connection_metadata_is_stored_in_app_private_preference_401ebb" formatted="false">Connection metadata is stored in app-private preferences. Dashboard session cookies are encrypted separately with Android Keystore and are never displayed here.</string>
+    <string name="ui_connection_name_5584ef" formatted="false">Connection name</string>
+    <string name="ui_content_4f9be0" formatted="false">Content</string>
+    <string name="ui_continue_ff3dbb" formatted="false">CONTINUE</string>
+    <string name="ui_copy_code_6c1069" formatted="false">Copy code</string>
+    <string name="ui_copy_command_a8e104" formatted="false">Copy command</string>
+    <string name="ui_create_6e157c" formatted="false">Create</string>
+    <string name="ui_create_backup_60e77f" formatted="false">Create backup</string>
+    <string name="ui_create_hermes_host_backup_0a4e1f" formatted="false">CREATE HERMES HOST BACKUP?</string>
+    <string name="ui_create_job_b9a738" formatted="false">Create job</string>
+    <string name="ui_create_profile_96b8ee" formatted="false">Create profile</string>
+    <string name="ui_create_profile_ba1c80" formatted="false">CREATE PROFILE</string>
+    <string name="ui_cron_expression_or_schedule_form_accepted_by_this_herme_81b79d" formatted="false">Cron expression or schedule form accepted by this Hermes server; timezone is evaluated server-side.</string>
+    <string name="ui_custom_amount_f72192" formatted="false">Custom amount</string>
+    <string name="ui_dashboard_password_ade7f2" formatted="false">Dashboard password</string>
+    <string name="ui_dashboard_username_6e522d" formatted="false">Dashboard username</string>
+    <string name="ui_default_root_5062b2" formatted="false">DEFAULT ROOT</string>
+    <string name="ui_delegation_6d3fa6" formatted="false">DELEGATION</string>
+    <string name="ui_delete_cron_job_3c9650" formatted="false">DELETE CRON JOB?</string>
+    <string name="ui_delete_f6fdbe" formatted="false">Delete</string>
+    <string name="ui_delete_profile_99163f" formatted="false">DELETE PROFILE?</string>
+    <string name="ui_delete_session_fd5765" formatted="false">DELETE SESSION?</string>
+    <string name="ui_delivery_destination_optional_d55fe3" formatted="false">Delivery destination (optional)</string>
+    <string name="ui_deny_b87191" formatted="false">DENY</string>
+    <string name="ui_diagnostics_7563ce" formatted="false">DIAGNOSTICS</string>
+    <string name="ui_discard_36fff6" formatted="false">Discard</string>
+    <string name="ui_discard_learning_edits_7be6ca" formatted="false">DISCARD LEARNING EDITS?</string>
+    <string name="ui_discard_profile_changes_575ef6" formatted="false">DISCARD PROFILE CHANGES?</string>
+    <string name="ui_disconnect_ed28e0" formatted="false">Disconnect</string>
+    <string name="ui_edit_pending_message_a107fa" formatted="false">EDIT PENDING MESSAGE</string>
+    <string name="ui_empty_workspace_573ec1" formatted="false">EMPTY WORKSPACE</string>
+    <string name="ui_enable_for_session_fe29f1" formatted="false">Enable for session</string>
+    <string name="ui_endpoint_api_key_optional_validation_only_e0181e" formatted="false">Endpoint API key (optional, validation only)</string>
+    <string name="ui_exact_schedule_a2d1d3" formatted="false">Exact schedule</string>
+    <string name="ui_fast_8db6a2" formatted="false">Fast</string>
+    <string name="ui_files_9fb4f1" formatted="false">FILES</string>
+    <string name="ui_forget_03d5d8" formatted="false">Forget</string>
+    <string name="ui_forget_backend_ed8798" formatted="false">FORGET BACKEND?</string>
+    <string name="ui_go_f63f96" formatted="false">GO</string>
+    <string name="ui_hermes_18707d" formatted="false">HERMES</string>
+    <string name="ui_hermes_checkpoints_are_server_side_workspace_snapshots__03e9b3" formatted="false">Hermes checkpoints are server-side workspace snapshots created before file-changing tools. Preview a checkpoint before restoring it.</string>
+    <string name="ui_hermes_could_not_finish_this_request_caf6ea" formatted="false">Hermes could not finish this request</string>
+    <string name="ui_hermes_creates_the_archive_on_its_host_android_download_fbc70d" formatted="false">Hermes creates the archive on its host. Android downloads it only after the same process ID reports exit 0, directly into the document destination you choose.</string>
+    <string name="ui_hermes_did_not_report_a_category_breakdown_for_this_ses_e788ed" formatted="false">Hermes did not report a category breakdown for this session.</string>
+    <string name="ui_hermes_host_f9ccdc" formatted="false">HERMES HOST</string>
+    <string name="ui_hermes_is_checking_the_selected_checkpoint_e23d39" formatted="false">Hermes is checking the selected checkpoint…</string>
+    <string name="ui_hermes_is_transcribing_842be3" formatted="false">HERMES IS TRANSCRIBING</string>
+    <string name="ui_hermes_locked_3c096f" formatted="false">HERMES LOCKED</string>
+    <string name="ui_hermes_message_566946" formatted="false">Hermes message</string>
+    <string name="ui_hermes_needs_input_9dba98" formatted="false">HERMES NEEDS INPUT</string>
+    <string name="ui_hermes_profile_setup_command_07e096" formatted="false">Hermes profile setup command</string>
+    <string name="ui_hermes_prompt_7dc987" formatted="false">Hermes prompt</string>
+    <string name="ui_hermes_reported_no_files_in_this_directory_3355c4" formatted="false">Hermes reported no files in this directory.</string>
+    <string name="ui_hermes_returned_no_provider_accounts_for_this_profile_a76687" formatted="false">Hermes returned no provider accounts for this profile.</string>
+    <string name="ui_hermes_returned_no_providers_for_this_profile_configure_1805aa" formatted="false">Hermes returned no providers for this profile. Configure a provider on the server or refresh its catalogue.</string>
+    <string name="ui_hermes_serve_23a5b5" formatted="false">HERMES SERVE</string>
+    <string name="ui_hermes_usage_data_is_unavailable_for_this_profile_ddbf4c" formatted="false">Hermes usage data is unavailable for this profile.</string>
+    <string name="ui_hermes_will_change_files_in_the_server_workspace_to_thi_06038c" formatted="false">Hermes will change files in the server workspace to this checkpoint and remove the latest user turn with its assistant/tool output from the live session. Hermes creates a pre-rollback safety snapshot first.</string>
+    <string name="ui_hermes_will_charge_the_saved_payment_method_for_this_no_04c103" formatted="false">Hermes will charge the saved payment method for this Nous account.</string>
+    <string name="ui_hermes_will_end_the_current_live_conversation_and_open__176bb1" formatted="false">Hermes will end the current live conversation and open a clean session. Its stored transcript remains available in the session list.</string>
+    <string name="ui_hermes_will_remove_the_latest_completed_exchange_and_su_ed94c2" formatted="false">Hermes will remove the latest completed exchange and submit the same user message again.</string>
+    <string name="ui_hermes_will_remove_the_most_recent_user_turn_and_its_as_44dba9" formatted="false">Hermes will remove the most recent user turn and its assistant/tool output from this live session.</string>
+    <string name="ui_hermes_will_run_dangerous_commands_in_this_session_with_9dc3ec" formatted="false">Hermes will run dangerous commands in this session without asking. This does not change other sessions or the server-wide policy.</string>
+    <string name="ui_hermes_will_stop_automatically_adding_credits_when_the__64cb7a" formatted="false">Hermes will stop automatically adding credits when the balance is low.</string>
+    <string name="ui_host_backup_a4daac" formatted="false">HOST BACKUP</string>
+    <string name="ui_host_capabilities_30d569" formatted="false">HOST CAPABILITIES</string>
+    <string name="ui_host_setup_command_077939" formatted="false">HOST SETUP COMMAND</string>
+    <string name="ui_https_url_93e9be" formatted="false">HTTPS URL</string>
+    <string name="ui_https_wss_cf7920" formatted="false">HTTPS / WSS</string>
+    <string name="ui_i_checked_my_balance_9125a3" formatted="false">I checked my balance</string>
+    <string name="ui_install_and_authentication_require_hermes_desktop_or_cl_7e9a21" formatted="false">Install and authentication require Hermes Desktop or CLI because the current flow opens a browser on the server host.</string>
+    <string name="ui_install_and_enable_a1c74f" formatted="false">Install and enable</string>
+    <string name="ui_interrupt_d5db45" formatted="false">Interrupt</string>
+    <string name="ui_interrupt_subagent_47f8fc" formatted="false">INTERRUPT SUBAGENT?</string>
+    <string name="ui_keep_editing_d4d9e3" formatted="false">Keep editing</string>
+    <string name="ui_learn_more_824d76" formatted="false">Learn more</string>
+    <string name="ui_leave_empty_for_a_fresh_profile_use_an_exact_existing_p_d9486a" formatted="false">Leave empty for a fresh profile. Use an exact existing profile name.</string>
+    <string name="ui_loading_checkpoints_from_the_open_hermes_session_7a7052" formatted="false">Loading checkpoints from the open Hermes session…</string>
+    <string name="ui_loading_hermes_commands_fa75d1" formatted="false">Loading Hermes commands</string>
+    <string name="ui_loading_run_history_7aba72" formatted="false">Loading run history…</string>
+    <string name="ui_make_default_7b2628" formatted="false">Make default</string>
+    <string name="ui_manage_bf58d1" formatted="false">Manage</string>
+    <string name="ui_mcp_servers_a463ae" formatted="false">MCP SERVERS</string>
+    <string name="ui_message_68f414" formatted="false">Message</string>
+    <string name="ui_model_68c2cc" formatted="false">Model</string>
+    <string name="ui_model_catalogue_8ce186" formatted="false">MODEL CATALOGUE</string>
+    <string name="ui_name_709a23" formatted="false">Name</string>
+    <string name="ui_new_name_9e627c" formatted="false">New name</string>
+    <string name="ui_next_bc9819" formatted="false">Next</string>
+    <string name="ui_no_checkpoints_exist_for_this_session_workspace_yet_012df4" formatted="false">No checkpoints exist for this session workspace yet.</string>
+    <string name="ui_no_executions_have_produced_sessions_for_this_job_33c7f3" formatted="false">No executions have produced sessions for this job.</string>
+    <string name="ui_nous_portal_account_929567" formatted="false">Nous Portal account</string>
+    <string name="ui_only_literal_lan_loopback_or_tailscale_ips_f7e430" formatted="false">Only literal LAN, loopback, or Tailscale IPs.</string>
+    <string name="ui_only_literal_lan_loopback_or_tailscale_ips_https_is_req_943f31" formatted="false">Only literal LAN, loopback or Tailscale IPs. HTTPS is required otherwise.</string>
+    <string name="ui_only_the_returned_dashboard_session_cookies_are_encrypt_198460" formatted="false">Only the returned Dashboard session cookies are encrypted with Android Keystore. Your password is never saved or restored as UI state.</string>
+    <string name="ui_open_a_session_5e62c9" formatted="false">OPEN A SESSION</string>
+    <string name="ui_open_browser_4f505a" formatted="false">Open browser</string>
+    <string name="ui_open_official_setup_guide_6b45c1" formatted="false">Open official setup guide</string>
+    <string name="ui_open_session_777092" formatted="false">Open session</string>
+    <string name="ui_open_source_native_android_11ede3" formatted="false">OPEN SOURCE  ·  NATIVE ANDROID</string>
+    <string name="ui_output_4bed33" formatted="false">Output</string>
+    <string name="ui_password_provider_963784" formatted="false">PASSWORD PROVIDER</string>
+    <string name="ui_pausing_affects_only_future_delegate_task_calls_running_899136" formatted="false">Pausing affects only future delegate_task calls. Running children keep working until completion or an explicit interrupt.</string>
+    <string name="ui_pending_message_queue_is_text_only_send_or_remove_attac_70f037" formatted="false">Pending-message queue is text-only; send or remove attachments first.</string>
+    <string name="ui_pending_messages_75b592" formatted="false">PENDING MESSAGES</string>
+    <string name="ui_preview_unavailable_d197c9" formatted="false">PREVIEW UNAVAILABLE</string>
+    <string name="ui_previous_50f942" formatted="false">Previous</string>
+    <string name="ui_private_http_e0aab5" formatted="false">PRIVATE HTTP</string>
+    <string name="ui_profile_name_775747" formatted="false">Profile name</string>
+    <string name="ui_provider_7ceee3" formatted="false">Provider</string>
+    <string name="ui_provider_secrets_global_approval_bypass_private_network_200f22" formatted="false">Provider secrets, global approval bypass, private-network relaxations, model selection and toolsets stay in their dedicated guarded surfaces.</string>
+    <string name="ui_providers_1bec38" formatted="false">PROVIDERS</string>
+    <string name="ui_read_only_status_for_the_authenticated_hermes_host_andr_4c1903" formatted="false">Read-only status for the authenticated Hermes host. Android does not apply updates or infer a profile from this host-wide endpoint.</string>
+    <string name="ui_reasoning_effort_3c4fd7" formatted="false">REASONING EFFORT</string>
+    <string name="ui_recent_redacted_agent_log_4305fe" formatted="false">RECENT REDACTED AGENT LOG</string>
+    <string name="ui_recheck_1fe7b6" formatted="false">Recheck</string>
+    <string name="ui_redacted_support_report_02e644" formatted="false">REDACTED SUPPORT REPORT</string>
+    <string name="ui_refresh_56e3ba" formatted="false">Refresh</string>
+    <string name="ui_remove_e96390" formatted="false">Remove</string>
+    <string name="ui_remove_from_hermes_3193a3" formatted="false">Remove from Hermes</string>
+    <string name="ui_remove_learning_node_adb82c" formatted="false">REMOVE LEARNING NODE?</string>
+    <string name="ui_remove_mcp_server_0e798a" formatted="false">REMOVE MCP SERVER?</string>
+    <string name="ui_remove_messaging_setting_d9a6fb" formatted="false">REMOVE MESSAGING SETTING?</string>
+    <string name="ui_remove_provider_setting_b2ff0f" formatted="false">REMOVE PROVIDER SETTING</string>
+    <string name="ui_remove_skill_9ad745" formatted="false">REMOVE SKILL</string>
+    <string name="ui_rename_d3f4cb" formatted="false">Rename</string>
+    <string name="ui_rename_profile_8cb84e" formatted="false">RENAME PROFILE</string>
+    <string name="ui_requires_a_server_side_clone_bootstrap_step_android_wai_a9882f" formatted="false">Requires a server-side clone/bootstrap step. Android waits for Hermes to finish before reloading MCP.</string>
+    <string name="ui_resource_id_067bbd" formatted="false">RESOURCE ID</string>
+    <string name="ui_restart_b134bd" formatted="false">Restart</string>
+    <string name="ui_restart_messaging_gateway_76d6d5" formatted="false">RESTART MESSAGING GATEWAY?</string>
+    <string name="ui_restore_workspace_1b1c90" formatted="false">Restore workspace</string>
+    <string name="ui_retry_9f5cd8" formatted="false">Retry</string>
+    <string name="ui_retry_last_message_246ae3" formatted="false">RETRY LAST MESSAGE?</string>
+    <string name="ui_retry_last_message_823a52" formatted="false">Retry last message</string>
+    <string name="ui_retry_message_349059" formatted="false">Retry message</string>
+    <string name="ui_review_and_install_c9fdd1" formatted="false">Review and install</string>
+    <string name="ui_review_e29a79" formatted="false">Review</string>
+    <string name="ui_review_restore_fcf3c9" formatted="false">Review restore</string>
+    <string name="ui_run_cron_job_now_565765" formatted="false">RUN CRON JOB NOW?</string>
+    <string name="ui_run_now_2af00e" formatted="false">Run now</string>
+    <string name="ui_run_this_command_on_the_machine_hosting_hermes_then_rec_5942f6" formatted="false">Run this command on the machine hosting Hermes, then recheck the account status here.</string>
+    <string name="ui_save_an_allowlisted_text_report_through_android_s_docum_8cc5df" formatted="false">Save an allowlisted text report through Android\'s document picker. It excludes credentials, conversations, provider settings and raw configuration.</string>
+    <string name="ui_save_efc007" formatted="false">Save</string>
+    <string name="ui_save_model_390868" formatted="false">Save model</string>
+    <string name="ui_save_setup_1a0067" formatted="false">Save setup</string>
+    <string name="ui_save_soul_dea0b3" formatted="false">Save SOUL</string>
+    <string name="ui_save_zip_f9a419" formatted="false">Save ZIP…</string>
+    <string name="ui_schedules_execute_on_the_hermes_backend_not_on_this_and_3497ba" formatted="false">Schedules execute on the Hermes backend, not on this Android device. Android notifications are a separate delivery surface.</string>
+    <string name="ui_schema_driven_hermes_configuration_android_sends_one_ad_9b3315" formatted="false">Schema-driven Hermes configuration. Android sends one advertised field at a time; running sessions may retain their current values.</string>
+    <string name="ui_search_artifacts_200f88" formatted="false">Search artifacts</string>
+    <string name="ui_search_hub_d3545c" formatted="false">Search hub</string>
+    <string name="ui_search_learning_b4aea5" formatted="false">Search learning</string>
+    <string name="ui_search_messaging_platforms_774838" formatted="false">Search messaging platforms</string>
+    <string name="ui_search_provider_or_model_2d2496" formatted="false">Search provider or model</string>
+    <string name="ui_search_sessions_646db9" formatted="false">Search sessions</string>
+    <string name="ui_search_settings_9a6f37" formatted="false">Search settings</string>
+    <string name="ui_select_a_detected_artifact_to_preview_it_fdf933" formatted="false">Select a detected artifact to preview it.</string>
+    <string name="ui_select_an_existing_conversation_or_create_a_new_one_8ad07a" formatted="false">Select an existing conversation or create a new one.</string>
+    <string name="ui_sent_directly_to_hermes_and_never_saved_by_android_843266" formatted="false">Sent directly to Hermes and never saved by Android.</string>
+    <string name="ui_server_path_27f2f0" formatted="false">Server path</string>
+    <string name="ui_server_process_85ac55" formatted="false">SERVER PROCESS</string>
+    <string name="ui_settings_c7f73b" formatted="false">Settings</string>
+    <string name="ui_skills_and_memory_remain_on_the_selected_hermes_profile_660f01" formatted="false">Skills and memory remain on the selected Hermes profile. Editing or removal changes that remote profile only.</string>
+    <string name="ui_soul_md_808c7e" formatted="false">SOUL.md</string>
+    <string name="ui_start_fresh_449169" formatted="false">START FRESH?</string>
+    <string name="ui_start_fresh_session_73b0b5" formatted="false">Start fresh session</string>
+    <string name="ui_start_new_session_6cbc1c" formatted="false">Start new session</string>
+    <string name="ui_start_without_bundled_skills_ce6cb3" formatted="false">Start without bundled skills</string>
+    <string name="ui_sticky_default_a734d7" formatted="false">STICKY DEFAULT</string>
+    <string name="ui_stop_background_process_95afa4" formatted="false">STOP BACKGROUND PROCESS?</string>
+    <string name="ui_stop_process_48cb30" formatted="false">Stop process</string>
+    <string name="ui_test_640ab2" formatted="false">Test</string>
+    <string name="ui_test_on_hermes_57bd42" formatted="false">Test on Hermes</string>
+    <string name="ui_the_agent_that_grows_with_you_1a12d4" formatted="false">THE AGENT
+THAT GROWS
+WITH YOU</string>
+    <string name="ui_the_value_is_sent_directly_to_hermes_for_validation_and_218369" formatted="false">The value is sent directly to Hermes for validation and server-side storage. Android never writes it to app state, logs or preferences.</string>
+    <string name="ui_these_are_server_side_telegram_discord_slack_and_other__66fc87" formatted="false">These are server-side Telegram, Discord, Slack and other Hermes gateway adapters. Android controls their Hermes-owned configuration; it does not impersonate a messaging platform or run the gateway locally.</string>
+    <string name="ui_these_commands_run_on_the_selected_hermes_server_host_l_f51794" formatted="false">These commands run on the selected Hermes server. Host logs and update state describe the whole authenticated Hermes installation, not only the selected profile. Output is bounded and redacted again on Android before display; it is not uploaded by the app.</string>
+    <string name="ui_this_value_is_sent_once_to_the_active_hermes_request_an_14cd8b" formatted="false">This value is sent once to the active Hermes request. Android does not save it to drafts, restored state, logs, or local preferences.</string>
+    <string name="ui_tls_d91e18" formatted="false">TLS</string>
+    <string name="ui_transcribe_5a6353" formatted="false">Transcribe</string>
+    <string name="ui_transcript_a54856" formatted="false">TRANSCRIPT</string>
+    <string name="ui_turn_off_8807c2" formatted="false">Turn off</string>
+    <string name="ui_turn_off_auto_refill_a8f81f" formatted="false">Turn off auto-refill?</string>
+    <string name="ui_undo_last_turn_38a83f" formatted="false">Undo last turn</string>
+    <string name="ui_undo_last_turn_7bf3d0" formatted="false">UNDO LAST TURN?</string>
+    <string name="ui_undo_turn_29ab7c" formatted="false">Undo turn</string>
+    <string name="ui_unlock_908843" formatted="false">UNLOCK</string>
+    <string name="ui_unsaved_changes_to_this_remote_learning_node_will_be_lo_826a19" formatted="false">Unsaved changes to this remote learning node will be lost.</string>
+    <string name="ui_unsaved_soul_provider_or_model_edits_will_be_lost_3c721e" formatted="false">Unsaved SOUL, provider, or model edits will be lost.</string>
+    <string name="ui_unsupported_fb52c1" formatted="false">Unsupported</string>
+    <string name="ui_update_all_skills_ebb6f9" formatted="false">Update all skills</string>
+    <string name="ui_usage_cf3bfa" formatted="false">USAGE</string>
+    <string name="ui_use_device_credential_37ae7d" formatted="false">USE DEVICE CREDENTIAL</string>
+    <string name="ui_use_model_8d558c" formatted="false">Use model</string>
+    <string name="ui_use_valid_amounts_within_the_account_bounds_with_reload_8a6bb0" formatted="false">Use valid amounts within the account bounds, with reload-to greater than the threshold.</string>
+    <string name="ui_validate_and_save_424d36" formatted="false">Validate and save</string>
+    <string name="ui_value_8dce17" formatted="false">Value</string>
+    <string name="ui_verify_to_continue_080756" formatted="false">Verify to continue</string>
+    <string name="ui_waiting_for_hermes_26c6fc" formatted="false">Waiting for Hermes</string>
+    <string name="ui_what_android_can_request_remotely_and_what_stays_on_des_c7c461" formatted="false">What Android can request remotely and what stays on Desktop</string>
+    <string name="ui_workspace_checkpoints_0e2ad3" formatted="false">WORKSPACE CHECKPOINTS</string>
+    <string name="ui_yolo_26a5eb" formatted="false">YOLO</string>
+    <string name="ui_your_hermes_sessions_tools_skills_memory_and_approvals__a2ae3b" formatted="false">Your Hermes sessions, tools, skills, memory and approvals. Native on Android; agent state stays on the backend you control.</string>
+    <string name="a11y_allow_private_network_http_2be5ea" formatted="false">Allow private-network HTTP</string>
+    <string name="a11y_attach_files_137135" formatted="false">Attach files</string>
+    <string name="a11y_back_b52b36" formatted="false">Back</string>
+    <string name="a11y_back_to_sessions_e7bfae" formatted="false">Back to sessions</string>
+    <string name="a11y_cancel_download_67bb11" formatted="false">Cancel download</string>
+    <string name="a11y_clone_sessions_and_full_state_a38a73" formatted="false">Clone sessions and full state</string>
+    <string name="a11y_close_tool_transcript_78710b" formatted="false">Close tool transcript</string>
+    <string name="a11y_configured_668c5f" formatted="false">Configured</string>
+    <string name="a11y_confirm_credit_purchase_b14eaf" formatted="false">Confirm credit purchase</string>
+    <string name="a11y_confirm_disconnect_794194" formatted="false">Confirm disconnect</string>
+    <string name="a11y_connected_c2f9b7" formatted="false">Connected</string>
+    <string name="a11y_delete_job_ede40d" formatted="false">Delete job</string>
+    <string name="a11y_dismiss_spoken_reply_error_525f7d" formatted="false">Dismiss spoken reply error</string>
+    <string name="a11y_dismiss_voice_error_1c0fe3" formatted="false">Dismiss voice error</string>
+    <string name="a11y_edit_job_4b27b5" formatted="false">Edit job</string>
+    <string name="a11y_edit_pending_message_9cca47" formatted="false">Edit pending message</string>
+    <string name="a11y_hermes_agent_563803" formatted="false">Hermes Agent</string>
+    <string name="a11y_hermes_error_7454cc" formatted="false">Hermes error</string>
+    <string name="a11y_jump_to_latest_message_2de795" formatted="false">Jump to latest message</string>
+    <string name="a11y_new_session_5c881d" formatted="false">New session</string>
+    <string name="a11y_open_message_history_05b65a" formatted="false">Open message history</string>
+    <string name="a11y_open_navigation_0f53b3" formatted="false">Open navigation</string>
+    <string name="a11y_open_session_files_b7889a" formatted="false">Open session files</string>
+    <string name="a11y_pause_spoken_reply_335ed5" formatted="false">Pause spoken reply</string>
+    <string name="a11y_queue_for_the_next_turn_1cec5f" formatted="false">Queue for the next turn</string>
+    <string name="a11y_refresh_billing_6f3b72" formatted="false">Refresh billing</string>
+    <string name="a11y_refresh_detected_artifacts_5c614a" formatted="false">Refresh detected artifacts</string>
+    <string name="a11y_refresh_files_75bfab" formatted="false">Refresh files</string>
+    <string name="a11y_refresh_mcp_servers_82fdfc" formatted="false">Refresh MCP servers</string>
+    <string name="a11y_refresh_messaging_platforms_e555a5" formatted="false">Refresh messaging platforms</string>
+    <string name="a11y_refresh_model_catalogue_a9e2d5" formatted="false">Refresh model catalogue</string>
+    <string name="a11y_refresh_providers_7fdfcc" formatted="false">Refresh providers</string>
+    <string name="a11y_refresh_sessions_fd90ad" formatted="false">Refresh sessions</string>
+    <string name="a11y_refresh_usage_a4a94d" formatted="false">Refresh usage</string>
+    <string name="a11y_remove_pending_message_422a73" formatted="false">Remove pending message</string>
+    <string name="a11y_resume_spoken_reply_a61a49" formatted="false">Resume spoken reply</string>
+    <string name="a11y_retry_pending_message_64845b" formatted="false">Retry pending message</string>
+    <string name="a11y_run_job_now_e80ea6" formatted="false">Run job now</string>
+    <string name="a11y_send_message_c70a89" formatted="false">Send message</string>
+    <string name="a11y_session_actions_b086ca" formatted="false">Session actions</string>
+    <string name="a11y_share_message_c1c0e6" formatted="false">Share message</string>
+    <string name="a11y_start_without_bundled_skills_ce6cb3" formatted="false">Start without bundled skills</string>
+    <string name="a11y_steer_the_current_run_80b792" formatted="false">Steer the current run</string>
+    <string name="a11y_stop_spoken_reply_55de1b" formatted="false">Stop spoken reply</string>
+    <string name="a11y_stop_the_current_hermes_run_edca16" formatted="false">Stop the current Hermes run</string>
+    <string name="a11y_take_a_photo_229847" formatted="false">Take a photo</string>
+    <string name="a11y_unsupported_hermes_conversation_part_71384d" formatted="false">Unsupported Hermes conversation part</string>
+    <string name="checkpoint_preview">PREVIEW %1$s</string>
+    <string name="checkpoint_restore_question">RESTORE %1$s?</string>
+    <string name="artifact_detected_description">%1$s. %2$s. Detected in %3$s</string>
+    <string name="delete_session_description">%1$s and its stored transcript will be permanently removed from Hermes. This cannot be undone.</string>
+    <string name="archive_named">Archive %1$s</string>
+    <string name="delete_named">Delete %1$s</string>
+    <string name="pinned_named">Pinned %1$s</string>
+    <string name="tool_usage">TOOL USAGE · %1$s</string>
+    <string name="reasoning_expanded">REASONING −</string>
+    <string name="reasoning_collapsed">REASONING +</string>
+    <string name="environment_variable">ENVIRONMENT VARIABLE / %1$s</string>
+    <string name="interrupt_subagent_description">Hermes will ask %1$s to stop at its next safe iteration boundary. Other workstreams continue.</string>
+    <string name="stop_process_description">Hermes will terminate %1$s. This can stop a server, watcher, or long-running tool started by the open session.</string>
+    <string name="files_read">Read / %1$s</string>
+    <string name="files_written">Wrote / %1$s</string>
+    <string name="buy_credits_question">Buy %1$s credits?</string>
+    <string name="billing_remaining">%1$s remaining</string>
+    <string name="billing_spent">%1$s spent of %2$s</string>
+    <string name="saving_file">SAVING %1$s</string>
+    <string name="save_named">Save %1$s</string>
+    <string name="share_named">Share %1$s</string>
+    <string name="open_with_another_app">Open %1$s with another app</string>
+    <string name="hermes_profile">Hermes profile / %1$s</string>
+    <string name="estimated_usage">Estimated %1$s / %2$s sessions</string>
+    <plurals name="days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="reload">Reload</string><string name="replay">Replay</string>
+    <string name="previewed">Previewed</string><string name="preview">Preview</string>
+    <string name="test_http_websocket_save">Test HTTP + WebSocket and save</string><string name="check_signin_save">Check sign-in options and save</string>
+    <string name="no_sessions">NO SESSIONS</string><string name="no_matches">NO MATCHES</string>
+    <string name="restore_snapshot_question">RESTORE SNAPSHOT?</string><string name="restore_snapshot">Restore snapshot</string>
+    <string name="sudo_password_required">SUDO PASSWORD REQUIRED</string><string name="secret_required">SECRET REQUIRED</string>
+    <string name="password">Password</string><string name="secret_value">Secret value</string>
+    <string name="exporting">Exporting…</string><string name="save_report">Save report</string>
+    <string name="stop_waiting">Stop waiting</string><string name="cancel_export">Cancel export</string><string name="create_another">Create another</string>
+    <string name="run">Run</string><string name="run_again">Run again</string><string name="reconnect">Reconnect</string>
+    <string name="add_backend_title">ADD HERMES BACKEND</string><string name="reconnect_backend_title">RECONNECT HERMES BACKEND</string>
+    <string name="test_save">Test and save</string><string name="check_signin_options">Check sign-in options</string>
+    <string name="enabled">ENABLED</string><string name="paused">PAUSED</string>
+    <string name="hide_runs">Hide runs</string><string name="recent_runs">Recent runs</string>
+    <string name="create_cron_job">CREATE CRON JOB</string><string name="edit_cron_job">EDIT CRON JOB</string>
+    <string name="enable">Enable</string><string name="disable">Disable</string>
+    <string name="search_configured_servers">Search configured servers</string><string name="search_catalog">Search catalog</string>
+    <string name="replace_provider_setting">REPLACE PROVIDER SETTING</string><string name="setup_provider">SET UP PROVIDER</string>
+    <string name="remove_backend_description">%1$s will be removed from this device and its encrypted Dashboard session deleted. Nothing is deleted from the Hermes server.</string>
+    <string name="review_named">REVIEW %1$s</string><string name="files_named">FILES / %1$s</string>
+    <string name="uninstall_skill_question">Uninstall %1$s from the selected Hermes profile?</string>
+    <string name="delete_cron_description">%1$s will stop running on the Hermes backend. Existing run sessions are not deleted.</string>
+    <string name="delete_profile_description">%1$s and its isolated config, sessions, skills, and memory will be deleted from the Hermes server. This cannot be undone.</string>
+    <string name="profile_identity">PROFILE IDENTITY / %1$s</string><string name="persona_characters">Full profile persona; %1$d/131072 characters</string>
+    <string name="start_session_named">Start session in %1$s</string><string name="edit_identity_named">Edit identity for %1$s</string>
+    <string name="rename_named">Rename %1$s</string><string name="skill_count">%1$d SKILLS</string><string name="observed_actions">%1$s observed actions</string>
+    <string name="enable_named">Enable %1$s</string><string name="uninstall_named">Uninstall %1$s</string>
+    <string name="next_run">NEXT %1$s</string><string name="deliver_to">DELIVER %1$s</string><string name="last_failure">Last failure: %1$s</string>
+    <string name="home_channel">Home channel / %1$s (%2$s)</string>
+    <string name="remove_messaging_setting_description">Remove %1$s from %2$s on Hermes? The platform may disconnect after the next gateway restart.</string>
+    <string name="restart_gateway_description">Hermes will restart the %1$s profile\'s messaging gateway. Active Telegram, Discord and other messaging deliveries may pause briefly; Android chat remains separate.</string>
+    <string name="replace_saved_value">Replace %1$s</string><string name="enter_value">Enter value</string>
+    <string name="hermes_runtime">Hermes runtime / %1$s</string><string name="mcp_toggle_question">%1$s MCP SERVER?</string>
+    <string name="install_named_question">INSTALL %1$s?</string><string name="source_named">Source: %1$s</string><string name="transport_auth">%1$s / auth: %2$s</string>
+    <string name="dynamic_model_accounts">Dynamic Hermes model accounts / %1$s</string>
+    <string name="remove_provider_setting_description">Remove %1$s from the selected Hermes profile? Existing sessions may stop working.</string>
+    <string name="disconnect_provider_question">Disconnect %1$s?</string><string name="remove_provider_account_description">Hermes will remove this provider account from %1$s.</string>
+    <string name="connect_named">CONNECT %1$s</string><string name="edit_named">Edit %1$s</string><string name="remove_named">Remove %1$s</string>
+    <string name="remove_learning_description">Hermes will archive a skill or remove a memory node from profile %1$s. This cannot be undone from Android.</string>
+    <string name="forget_named">Forget %1$s</string><string name="refresh_named">Refresh %1$s</string><string name="toggle_named">Toggle %1$s</string>
+    <string name="characters_used">%1$d/262144 characters</string>
+    <string name="reference_description">Reference, %1$s</string><string name="artifact_description">Artifact, %1$s</string>
+    <string name="action_required_description">Action required, %1$s</string><string name="native_entry_description">%1$s. %2$s</string>
+    <string name="timeline_reference">REFERENCE</string><string name="timeline_artifact">ARTIFACT · %1$s</string><string name="available_from_hermes">Available from Hermes</string>
+    <string name="timeline_error_recoverable">ERROR · RECOVERABLE</string><string name="timeline_error">ERROR</string>
+    <string name="timeline_action_required">ACTION REQUIRED · %1$s</string><string name="timeline_event">HERMES EVENT</string>
+    <string name="unsupported_conversation_part">This Hermes version returned an unsupported conversation part.</string>
+    <string name="tool_running">%1$s is running</string><string name="tool_completed">%1$s completed</string><string name="tool_failed">%1$s failed</string>
+    <string name="tool_usage_accessibility">Tool usage</string><string name="show_tool_transcript">Show tool transcript</string><string name="hide_tool_transcript">Hide tool transcript</string>
+    <string name="expanded">Expanded</string><string name="collapsed">Collapsed</string>
 </resources>

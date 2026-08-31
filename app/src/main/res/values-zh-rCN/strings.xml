@@ -1,0 +1,621 @@
+<resources>
+    <string name="ui_agents_a11y_pause_spawns_af09e1" formatted="false">暂停新子代理派生</string>
+    <string name="ui_agents_a11y_resume_spawns_410b39" formatted="false">恢复新子代理派生</string>
+    <string name="ui_agents_background_process_177e28" formatted="false">后台进程</string>
+    <string name="ui_agents_command_center_title_122b59" formatted="false">命令中心</string>
+    <string name="ui_agents_empty_active_eacd55" formatted="false">Hermes 报告没有活动的子代理。实时委派的工作将自动显示在此处。</string>
+    <string name="ui_agents_empty_no_bg_bbe5ce" formatted="false">Hermes 报告打开的会话没有后台进程。</string>
+    <string name="ui_agents_empty_no_events_ebef7a" formatted="false">自此次 Android 连接打开以来，未观察到子代理事件。</string>
+    <string name="ui_agents_empty_no_spawn_96fb2a" formatted="false">此 Hermes profile 未返回 TUI 持久化的派生树。</string>
+    <string name="ui_agents_empty_open_session_4b5edb" formatted="false">打开一个会话以检查该 Hermes 运行拥有的后台进程。</string>
+    <string name="ui_agents_exit_27b8d8">exit %1$s</string>
+    <string name="ui_agents_metric_active_8c4f72" formatted="false">活动</string>
+    <string name="ui_agents_metric_max_depth_fa4a88" formatted="false">最大深度</string>
+    <string name="ui_agents_metric_max_parallel_a30e4c" formatted="false">最大并行</string>
+    <string name="ui_agents_n_subagents_1d11bb">%1$s 个子代理</string>
+    <string name="ui_agents_n_subagents_caps_734876">%1$s 个子代理</string>
+    <string name="ui_agents_n_tools_4553e7">%1$s 个工具</string>
+    <string name="ui_agents_section_active_be810b" formatted="false">活动工作流</string>
+    <string name="ui_agents_section_archive_replay_063118">存档回放 / %1$s</string>
+    <string name="ui_agents_section_archived_58f99d" formatted="false">已归档的派生树</string>
+    <string name="ui_agents_section_bg_7705a5" formatted="false">后台进程</string>
+    <string name="ui_agents_section_recent_7f8fbe" formatted="false">近期代理活动</string>
+    <string name="ui_agents_session_570232">会话 %1$s</string>
+    <string name="ui_agents_spawns_enabled_550c17" formatted="false">新派生已启用</string>
+    <string name="ui_agents_spawns_paused_010b84" formatted="false">新派生已暂停</string>
+    <string name="ui_agents_subtitle_8615dc" formatted="false">代理、委派和当前会话进程</string>
+    <string name="ui_agents_tool_d04181">工具：%1$s</string>
+    <string name="ui_artifact_binary_inspect_hint_9e0f1a" formatted="false">请使用“导出”或“用其他应用打开”来安全地查看此文件类型。</string>
+    <string name="ui_artifact_detected_8d4e6f" formatted="false">DETECTED</string>
+    <string name="ui_artifact_detected_in_session_5a6b7c">检测自 %1$s</string>
+    <string name="ui_artifact_export_1a2b3c" formatted="false">导出</string>
+    <string name="ui_artifact_export_failed_9c0d1e" formatted="false">Artifact 导出失败</string>
+    <string name="ui_artifact_from_session_3e4f5a">来自：%1$s</string>
+    <string name="ui_artifact_loading_subtitle_4b5c6d" formatted="false">正在加载检测来源</string>
+    <string name="ui_artifact_meta_6b7c8d">%1$s  /  %2$s  /  已检测</string>
+    <string name="ui_artifact_missing_body_6d7e8f" formatted="false">此 Artifact 已不在已认证的会话记录中。</string>
+    <string name="ui_artifact_missing_subtitle_5c6d7e" formatted="false">检测来源不可用</string>
+    <string name="ui_artifact_open_chat_0f1a2b" formatted="false">打开对话</string>
+    <string name="ui_artifact_open_with_3c4d5e" formatted="false">用其他应用打开</string>
+    <string name="ui_artifact_preview_unavailable_8d9e0f" formatted="false">无法加载 Artifact 预览。</string>
+    <string name="ui_artifact_relative_detected_4f5a6b">%1$s  •  已检测</string>
+    <string name="ui_artifact_share_2b3c4d" formatted="false">分享</string>
+    <string name="ui_artifact_share_failed_1e2f3a" formatted="false">Artifact 分享失败</string>
+    <string name="ui_artifact_title_2f3a4b" formatted="false">ARTIFACT</string>
+    <string name="ui_artifact_unknown_type_7c8d9e" formatted="false">未知类型</string>
+    <string name="ui_artifacts_title_5b7c9d" formatted="false">ARTIFACTS</string>
+    <string name="ui_entries_intro_98121e" formatted="false">选择远程 Hermes 目的地。标记为“仅状态”的条目由服务器上报，目前尚无 Android 操作。</string>
+    <string name="ui_entry_agents_desc_1a3c1f" formatted="false">审查已连接的 Hermes 后端暴露的代理。</string>
+    <string name="ui_entry_agents_title_67d84a" formatted="false">代理</string>
+    <string name="ui_entry_artifact_index_desc_41f7a1" formatted="false">当前 Hermes 契约未暴露规范的 Artifact 目录。</string>
+    <string name="ui_entry_artifact_index_title_631115" formatted="false">Artifact 索引</string>
+    <string name="ui_entry_backends_desc_f79b7a" formatted="false">在已保存的 Hermes 安装之间切换。</string>
+    <string name="ui_entry_backends_title_5f79c7" formatted="false">后端</string>
+    <string name="ui_entry_billing_desc_4d469f" formatted="false">查看 Hermes 保存的账户账单信息。</string>
+    <string name="ui_entry_billing_title_4d42b0" formatted="false">账单</string>
+    <string name="ui_entry_command_center_desc_611887" formatted="false">检查代理、委派和后台进程状态。</string>
+    <string name="ui_entry_command_center_title_de7d6f" formatted="false">命令中心</string>
+    <string name="ui_entry_cron_desc_7edf17" formatted="false">创建并监控 Hermes 定时作业。</string>
+    <string name="ui_entry_cron_title_39d6f6" formatted="false">Cron</string>
+    <string name="ui_entry_host_capabilities_desc_7501ae" formatted="false">仅桌面端的能力由 Hermes 报告，绝不在 Android 本地执行。</string>
+    <string name="ui_entry_host_capabilities_title_f27d9b" formatted="false">主机能力</string>
+    <string name="ui_entry_mcp_desc_50933f" formatted="false">管理远程 Model Context Protocol 服务器。</string>
+    <string name="ui_entry_mcp_title_4afa80" formatted="false">MCP</string>
+    <string name="ui_entry_messaging_desc_d085eb" formatted="false">配置远程消息通道。</string>
+    <string name="ui_entry_messaging_title_ecca9e" formatted="false">消息传递</string>
+    <string name="ui_entry_model_catalogue_desc_355f23" formatted="false">模型可用性遵循已连接的 Hermes 后端。</string>
+    <string name="ui_entry_model_catalogue_title_59002b" formatted="false">模型目录</string>
+    <string name="ui_entry_profiles_desc_ba4d24" formatted="false">选择并管理 Hermes Profile。</string>
+    <string name="ui_entry_profiles_title_9eec48" formatted="false">Profile</string>
+    <string name="ui_entry_providers_desc_2c5aba" formatted="false">管理提供方账户及其远程凭据。</string>
+    <string name="ui_entry_providers_title_59b6b2" formatted="false">Providers 与 API 密钥</string>
+    <string name="ui_entry_remote_diagnostics_desc_9ca5c1" formatted="false">在已连接的 Hermes 后端上运行健康与安全检查。</string>
+    <string name="ui_entry_remote_diagnostics_title_2c558c" formatted="false">远程诊断</string>
+    <string name="ui_entry_remote_files_desc_b93e6d" formatted="false">浏览、预览、下载和分享由 Hermes 管理的文件。</string>
+    <string name="ui_entry_remote_files_title_0b1e5b" formatted="false">远程文件</string>
+    <string name="ui_entry_server_settings_desc_415c80" formatted="false">审查已连接的 Hermes 服务器暴露的配置。</string>
+    <string name="ui_entry_server_settings_title_f24729" formatted="false">服务器设置</string>
+    <string name="ui_entry_skills_hub_desc_d35b55" formatted="false">浏览 Hermes 技能和能力中心。</string>
+    <string name="ui_entry_skills_hub_title_de269f" formatted="false">技能与中心</string>
+    <string name="ui_entry_starmap_desc_b928f7" formatted="false">搜索并维护 Hermes 暴露的 Profile 作用域学习节点。</string>
+    <string name="ui_entry_starmap_title_cc042e" formatted="false">Starmap / 记忆图谱</string>
+    <string name="ui_entry_usage_desc_238195" formatted="false">查看远程用量和配额信息。</string>
+    <string name="ui_entry_usage_title_75361a" formatted="false">用量</string>
+    <string name="ui_entry_webhooks_desc_9fad68" formatted="false">当 Hermes 暴露其契约时，此处报告 Webhook 投递状态。</string>
+    <string name="ui_entry_webhooks_title_c2d65a" formatted="false">Webhooks</string>
+    <string name="ui_export_destination_open_failed_8b9c0d" formatted="false">Android 无法打开导出目标</string>
+    <string name="ui_filter_all_4d5e6f" formatted="false">全部</string>
+    <string name="ui_filter_files_6f7a8b" formatted="false">文件</string>
+    <string name="ui_filter_images_5e6f7a" formatted="false">图片</string>
+    <string name="ui_filter_links_7a8b9c" formatted="false">链接</string>
+    <string name="ui_manage_sections_intro_8fa462" formatted="false">远程管理 Hermes。设备本地偏好设置保留在应用设置中，绝不继承后端或 Profile 作用域。</string>
+    <string name="ui_mgmt_accept_risk_and_install_415ed7" formatted="false">接受风险并安装</string>
+    <string name="ui_mgmt_automations_title_22995d" formatted="false">AUTOMATIONS</string>
+    <string name="ui_mgmt_backends_title_4283fe" formatted="false">BACKENDS</string>
+    <string name="ui_mgmt_blocked_by_hermes_e70cad" formatted="false">被 Hermes 阻止</string>
+    <string name="ui_mgmt_capabilities_title_c6d07e" formatted="false">CAPABILITIES</string>
+    <string name="ui_mgmt_configured_1a5a97" formatted="false">已配置</string>
+    <string name="ui_mgmt_could_not_load_dashboard_providers_3a0000" formatted="false">无法加载 Dashboard 登录提供方。</string>
+    <string name="ui_mgmt_could_not_load_profile_identity_2c44a3" formatted="false">Hermes 无法加载此 Profile 的身份信息</string>
+    <string name="ui_mgmt_could_not_save_profile_model_fb8569" formatted="false">Hermes 无法保存 Profile 模型</string>
+    <string name="ui_mgmt_could_not_save_soul_aecac2" formatted="false">Hermes 无法保存 SOUL.md</string>
+    <string name="ui_mgmt_cron_run_body_f43a1d">现在为 Profile %2$s 运行 %1$s？Hermes 将立即开始后端工作，并可能投递配置好的结果。</string>
+    <string name="ui_mgmt_cron_toggle_body_f72124">%1$s %2$s 用于 Profile %3$s？%4$s</string>
+    <string name="ui_mgmt_future_runs_resume_5568a8" formatted="false">未来的定时运行将恢复。</string>
+    <string name="ui_mgmt_future_runs_stop_baa397" formatted="false">未来的定时运行将停止，直到恢复。</string>
+    <string name="ui_mgmt_general_e2a7c9" formatted="false">通用</string>
+    <string name="ui_mgmt_hermes_version_cd0e87">HERMES %1$s</string>
+    <string name="ui_mgmt_install_194619" formatted="false">安装</string>
+    <string name="ui_mgmt_installed_skills_f7b77e" formatted="false">已安装的技能</string>
+    <string name="ui_mgmt_isolated_hermes_workspaces_93e831" formatted="false">隔离的 Hermes 工作区</string>
+    <string name="ui_mgmt_model_not_assigned_67b282" formatted="false">未分配模型</string>
+    <string name="ui_mgmt_no_configurable_toolsets_5b9255" formatted="false">Hermes 未返回可配置的工具集。</string>
+    <string name="ui_mgmt_no_cron_jobs_51c6b3" formatted="false">此 Hermes 后端未配置 cron 作业。</string>
+    <string name="ui_mgmt_no_hub_results_ff309c" formatted="false">没有中心结果。请按能力、工具或工作流搜索。</string>
+    <string name="ui_mgmt_no_installed_skills_ad6838" formatted="false">Hermes 未返回已安装的技能。</string>
+    <string name="ui_mgmt_no_matching_skills_6d070c" formatted="false">没有匹配的技能。</string>
+    <string name="ui_mgmt_no_matching_toolsets_8589ea" formatted="false">没有匹配的工具集。</string>
+    <string name="ui_mgmt_no_profiles_167d53" formatted="false">此 Hermes 后端未返回 Profile。</string>
+    <string name="ui_mgmt_pause_cron_job_9f0ac9" formatted="false">暂停 cron 作业？</string>
+    <string name="ui_mgmt_pause_d683cb" formatted="false">暂停</string>
+    <string name="ui_mgmt_pause_job_009bff" formatted="false">暂停作业</string>
+    <string name="ui_mgmt_pid_suffix_dfbdb0"> / PID %1$s</string>
+    <string name="ui_mgmt_profile_model_saved_2ae386" formatted="false">Profile 模型已保存</string>
+    <string name="ui_mgmt_profiles_intro_9002d3">运行中的 Profile：%1$s。粘性默认：%2$s。粘性默认会影响未来的 Hermes CLI 进程；在此启动会话会将此实时连接显式限定作用域。</string>
+    <string name="ui_mgmt_profiles_title_c2728b" formatted="false">PROFILES</string>
+    <string name="ui_mgmt_resume_056a4a" formatted="false">恢复</string>
+    <string name="ui_mgmt_resume_cron_job_6d6f3c" formatted="false">恢复 cron 作业？</string>
+    <string name="ui_mgmt_resume_job_43a255" formatted="false">恢复作业</string>
+    <string name="ui_mgmt_review_before_installing_90d359" formatted="false">安装前审查</string>
+    <string name="ui_mgmt_saved_hermes_installations_fc63f0" formatted="false">已保存的 Hermes 安装</string>
+    <string name="ui_mgmt_schedule_unavailable_7c2822" formatted="false">时间表不可用</string>
+    <string name="ui_mgmt_search_hermes_skills_hub_7067cb" formatted="false">搜索 Hermes 技能中心</string>
+    <string name="ui_mgmt_search_installed_skills_f19c55" formatted="false">搜索已安装的技能</string>
+    <string name="ui_mgmt_search_toolsets_tools_be80c4" formatted="false">搜索工具集和工具</string>
+    <string name="ui_mgmt_server_side_hermes_cron_84016e" formatted="false">Hermes 服务端 cron</string>
+    <string name="ui_mgmt_server_tools_for_3ad699">面向 %1$s 的服务器工具</string>
+    <string name="ui_mgmt_setup_command_copied_c98fa3" formatted="false">安装命令已复制。请仅在 Hermes 主机上运行。</string>
+    <string name="ui_mgmt_setup_may_be_required_a32770" formatted="false">可能需要设置</string>
+    <string name="ui_mgmt_skill_op_completed_ae0755" formatted="false">技能操作已完成</string>
+    <string name="ui_mgmt_skill_op_exited_281220">技能操作已退出：%1$s</string>
+    <string name="ui_mgmt_skill_op_running_6d1fb6">Hermes 上正在运行技能操作%1$s</string>
+    <string name="ui_mgmt_soul_saved_6a1009" formatted="false">SOUL.md 已保存</string>
+    <string name="ui_mgmt_stored_on_for_profile_e5753d">存储于 %1$s，用于 Profile %2$s。</string>
+    <string name="ui_mgmt_tab_hub_d5bb2e" formatted="false">中心</string>
+    <string name="ui_mgmt_tab_skills_fc1f7c" formatted="false">技能</string>
+    <string name="ui_mgmt_tab_tools_35cbf0" formatted="false">工具</string>
+    <string name="ui_mgmt_without_status_e08783" formatted="false">无状态</string>
+    <string name="ui_native_artifacts_subtitle_608865" formatted="false">远程文件和 Artifact 状态</string>
+    <string name="ui_native_artifacts_title_793cf4" formatted="false">ARTIFACTS</string>
+    <string name="ui_native_automations_subtitle_99b2ac" formatted="false">Cron、代理和投递状态</string>
+    <string name="ui_native_automations_title_220c91" formatted="false">AUTOMATIONS</string>
+    <string name="ui_native_manage_subtitle_757f82" formatted="false">Hermes 能力与账户</string>
+    <string name="ui_native_manage_title_7b8538" formatted="false">MANAGE</string>
+    <string name="ui_no_artifacts_in_profile_1c2d3e" formatted="false">此配置文件中未检测到 Artifact。</string>
+    <string name="ui_no_artifacts_match_search_2d3e4f" formatted="false">没有 Artifact 匹配此搜索。</string>
+    <string name="ui_no_compatible_app_installed_0d1e2f" formatted="false">未安装兼容的应用</string>
+    <string name="ui_open_artifact_2f3a4b" formatted="false">打开 Artifact</string>
+    <string name="ui_scoped_destination_intro_d9de57" formatted="false">此目的地保留后端、Profile 和稳定的资源身份。在已连接的 Hermes 契约暴露此详情界面之前，操作仍不可用。</string>
+    <string name="ui_scoped_hermes_resource_90996d" formatted="false">限定范围的 Hermes 资源</string>
+    <string name="ui_sec_capabilities_desc_1c4815" formatted="false">远程技能、工具和主机能力报告。</string>
+    <string name="ui_sec_capabilities_title_acf286" formatted="false">能力</string>
+    <string name="ui_sec_connections_desc_fe0213" formatted="false">后端、消息通道和投递状态。</string>
+    <string name="ui_sec_connections_title_c7165a" formatted="false">连接与投递</string>
+    <string name="ui_sec_memory_desc_09b22e" formatted="false">远程记忆状态，不涉及本地执行或虚构存储。</string>
+    <string name="ui_sec_memory_title_f841b2" formatted="false">记忆与学习</string>
+    <string name="ui_sec_profiles_models_desc_65083c" formatted="false">远程 Profile、提供方账户和模型可用性。</string>
+    <string name="ui_sec_profiles_models_title_efcc60" formatted="false">Profile 与模型</string>
+    <string name="ui_sec_server_account_desc_c323bd" formatted="false">已连接的 Hermes 安装、设置、健康状态和账户记录。</string>
+    <string name="ui_sec_server_account_title_c69c7f" formatted="false">服务器与账户</string>
+    <string name="ui_share_artifact_3a4b5c" formatted="false">分享 Artifact</string>
+    <string name="ui_starmap_learning_node_meta_a36893">%1$s / profile %2$s</string>
+    <string name="ui_starmap_learning_node_title_d7a085" formatted="false">学习节点</string>
+    <string name="ui_starmap_n_links_8d9dcb">%1$s 条链接</string>
+    <string name="ui_starmap_n_uses_b314f6">%1$s 次使用</string>
+    <string name="ui_starmap_no_learning_nodes_251908" formatted="false">此 Hermes profile 没有学习节点。</string>
+    <string name="ui_starmap_no_learning_nodes_match_fcdce4" formatted="false">没有学习节点匹配此搜索。</string>
+    <string name="ui_starmap_subtitle_f876ff">远程学习图谱 / profile %1$s</string>
+    <string name="ui_starmap_title_74bf20" formatted="false">STARMAP</string>
+    <string name="ui_starmap_uncategorised_c474c0" formatted="false">未分类</string>
+    <string name="ui_status_device_remote_948c5a" formatted="false">设备 + 远程</string>
+    <string name="ui_status_not_exposed_9a0a9a" formatted="false">未暴露</string>
+    <string name="ui_status_remote_d6e85b" formatted="false">远程</string>
+    <string name="ui_status_remote_files_4d296e" formatted="false">远程文件</string>
+    <string name="ui_status_remote_jobs_9e01b2" formatted="false">远程作业</string>
+    <string name="ui_status_remote_status_7873a5" formatted="false">远程状态</string>
+    <string name="ui_status_status_only_da6a31" formatted="false">仅状态</string>
+    <string name="ui_unknown_time_7e8f9a" formatted="false">时间未知</string>
+    <string name="widget_new_chat_label">新建对话</string>
+    <string name="widget_new_chat_description">打开新的 Hermes 对话</string>
+    <string name="widget_new_chat_content_description">打开新的 Hermes 对话</string>
+    <string name="back">返回</string>
+    <string name="app_settings">应用设置</string>
+    <string name="app_settings_description">此设备上的外观、语言和隐私设置</string>
+    <string name="language">语言</string>
+    <string name="language_description">选择 Hermes 在此设备上使用的语言。</string>
+    <string name="language_system">跟随系统</string>
+    <string name="appearance">外观</string>
+    <string name="appearance_description">Hermes Desktop 官方预设。Android 会跟随系统的浅色或深色设置。</string>
+    <string name="selected">已选择</string>
+    <string name="secure_screen">安全屏幕</string>
+    <string name="secure_screen_description">禁止截屏、屏幕录制，并隐藏最近任务中的 Hermes 内容缩略图。</string>
+    <string name="biometric_reentry">生物识别重新进入</string>
+    <string name="biometric_reentry_available">Hermes 进入后台五分钟后，需要使用生物识别或设备凭据重新进入。</string>
+    <string name="biometric_reentry_unavailable">请先设置设备屏幕锁定，再启用生物识别重新进入。</string>
+    <string name="notifications">通知</string>
+    <string name="allowed">已允许</string>
+    <string name="not_allowed">未允许</string>
+    <string name="notifications_description">允许发送任务完成、需要操作、自动化失败和 cron 结果通知。消息内容会保持私密。</string>
+    <string name="allow_notifications">允许通知</string>
+    <string name="open_notification_settings">打开通知设置</string>
+    <string name="device_preferences_description">这些偏好设置仅影响此 Android 设备。Hermes 服务端配置位于“管理”中。</string>
+    <string name="skin_nous_description">采用 Nous 蓝色强调色的玻璃质感中性色</string>
+    <string name="skin_midnight_description">带冷色强调色的深蓝紫色</string>
+    <string name="skin_ember_description">暖红与古铜色的锻造氛围</string>
+    <string name="skin_mono_description">简洁灰阶，极简且专注</string>
+    <string name="skin_cyberpunk_description">黑底霓虹绿的矩阵终端风格</string>
+    <string name="skin_slate_description">冷调石板蓝，专注的开发者主题</string>
+    <string name="unlock_hermes">解锁 Hermes</string>
+    <string name="authenticate_protected_content">请验证身份以打开受保护的 Hermes 内容</string>
+    <string name="use_device_credential">使用设备凭据</string>
+    <string name="set_device_lock_error">请先设置设备屏幕锁定，再打开受保护的 Hermes 内容。</string>
+    <string name="biometric_not_recognized">未能识别生物特征，请重试。</string>
+    <string name="authentication_start_error">Android 无法启动身份验证。</string>
+    <string name="authentication_cancelled">已取消设备凭据身份验证。</string>
+    <string name="notification_channel_completions">任务完成</string>
+    <string name="notification_channel_action_required">需要操作</string>
+    <string name="notification_channel_automation_failures">自动化失败</string>
+    <string name="notification_channel_cron_results">cron 结果</string>
+    <string name="notification_channel_completions_description">来自 Hermes 的私密任务完成通知</string>
+    <string name="notification_channel_action_required_description">来自 Hermes 的私密待操作通知</string>
+    <string name="notification_channel_automation_failures_description">来自 Hermes 的私密自动化失败通知</string>
+    <string name="notification_channel_cron_results_description">来自 Hermes 的私密 cron 结果通知</string>
+    <string name="notification_title_completion">Hermes 任务已完成</string>
+    <string name="notification_title_action_required">Hermes 需要你进行操作</string>
+    <string name="notification_title_automation_failure">Hermes 自动化执行失败</string>
+    <string name="notification_title_cron_result">Hermes cron 运行已结束</string>
+    <string name="notification_open_update">打开 Hermes 查看此更新</string>
+    <string name="notification_open_details">打开 Hermes 查看详情</string>
+    <string name="shortcut_new_chat">新建对话</string>
+    <string name="shortcut_new_hermes_chat">新建 Hermes 对话</string>
+    <string name="read_aloud">Hermes 朗读</string>
+    <string name="preparing_spoken_reply">正在准备语音回复</string>
+    <string name="spoken_reply">语音回复</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="stop">停止</string>
+    <string name="spoken_replies">语音回复</string>
+    <string name="spoken_replies_description">Hermes 朗读的播放控件</string>
+    <string name="ui_accounts_d7cfa4" formatted="false">账户</string>
+    <string name="ui_active_a733b8" formatted="false">已启用</string>
+    <string name="ui_active_c72633" formatted="false">已启用</string>
+    <string name="ui_add_backend_88b685" formatted="false">添加后端</string>
+    <string name="ui_agent_android_b4b6b6" formatted="false">Agent / Android</string>
+    <string name="ui_all_6a7208" formatted="false">全部</string>
+    <string name="ui_allow_private_network_http_2be5ea" formatted="false">允许私有网络 HTTP</string>
+    <string name="ui_android_81297a" formatted="false">Android</string>
+    <string name="ui_android_uses_password_providers_advertised_by_this_dash_58816b" formatted="false">Android uses password providers advertised by this Dashboard. Native OAuth stays unavailable unless Hermes </string>
+    <string name="ui_answer_a16a4e" formatted="false">回答</string>
+    <string name="ui_api_keys_a8a10e" formatted="false">API 密钥</string>
+    <string name="ui_app_settings_d69225" formatted="false">应用设置</string>
+    <string name="ui_archive_2621c6" formatted="false">归档</string>
+    <string name="ui_artifacts_a5b79f" formatted="false">Artifacts</string>
+    <string name="ui_artifacts_unavailable_a4e165" formatted="false">Artifacts 不可用</string>
+    <string name="ui_authenticate_with_biometrics_or_your_device_credential__fdb9e0" formatted="false">使用生物识别或设备凭据打开 Hermes。</string>
+    <string name="ui_authorization_code_90ed55" formatted="false">授权码</string>
+    <string name="ui_auto_refill_80ff77" formatted="false">自动充值</string>
+    <string name="ui_automations_82542d" formatted="false">自动化</string>
+    <string name="ui_backend_link_67c4b1" formatted="false">后端连接</string>
+    <string name="ui_billing_23ad68" formatted="false">账单</string>
+    <string name="ui_branch_conversation_681a60" formatted="false">创建对话分支</string>
+    <string name="ui_buy_7ceca5" formatted="false">购买</string>
+    <string name="ui_buy_credits_ce006b" formatted="false">购买额度</string>
+    <string name="ui_bypass_approvals_7771b5" formatted="false">绕过审批？</string>
+    <string name="ui_cancel_77dfd2" formatted="false">取消</string>
+    <string name="ui_cancel_request_499d4e" formatted="false">取消请求</string>
+    <string name="ui_chats_6c9e84" formatted="false">对话</string>
+    <string name="ui_check_now_2ce5dd" formatted="false">立即检查</string>
+    <string name="ui_checkpoints_a2b3a5" formatted="false">Checkpoints</string>
+    <string name="ui_checkpoints_are_disabled_for_this_hermes_session_enable_5c6ca3" formatted="false">此 Hermes 会话已禁用 Checkpoints。请在服务端启用后开始新会话。</string>
+    <string name="ui_clone_sessions_and_full_state_a38a73" formatted="false">克隆会话和完整状态</string>
+    <string name="ui_clone_source_optional_cf5105" formatted="false">克隆来源（可选）</string>
+    <string name="ui_close_bbfa77" formatted="false">关闭</string>
+    <string name="ui_command_approval_93b2f6" formatted="false">命令审批</string>
+    <string name="ui_compatibility_doctor_and_security_audit_26bfa1" formatted="false">兼容性、诊断与安全审计</string>
+    <string name="ui_complete_sign_in_2907d7" formatted="false">完成登录</string>
+    <string name="ui_compress_context_20c9e8" formatted="false">压缩上下文</string>
+    <string name="ui_configured_servers_and_catalog_metadata_come_from_this__94d3ed" formatted="false">已配置的服务端和目录元数据来自此 Hermes Profile。连接测试在 Hermes 上运行；Android 不会执行 MCP 进程或接收其凭据。</string>
+    <string name="ui_confirm_model_cost_6769e6" formatted="false">确认模型费用</string>
+    <string name="ui_connect_b65463" formatted="false">连接</string>
+    <string name="ui_connect_to_hermes_a29692" formatted="false">连接到 Hermes</string>
+    <string name="ui_connected_073afc" formatted="false">已连接</string>
+    <string name="ui_connection_metadata_is_stored_in_app_private_preference_401ebb" formatted="false">连接元数据存储在应用私有偏好设置中。Dashboard 会话 Cookie 由 Android Keystore 单独加密，且不会在此显示。</string>
+    <string name="ui_connection_name_5584ef" formatted="false">连接名称</string>
+    <string name="ui_content_4f9be0" formatted="false">内容</string>
+    <string name="ui_continue_ff3dbb" formatted="false">继续</string>
+    <string name="ui_copy_code_6c1069" formatted="false">复制代码</string>
+    <string name="ui_copy_command_a8e104" formatted="false">复制命令</string>
+    <string name="ui_create_6e157c" formatted="false">创建</string>
+    <string name="ui_create_backup_60e77f" formatted="false">创建备份</string>
+    <string name="ui_create_hermes_host_backup_0a4e1f" formatted="false">创建 Hermes 主机备份？</string>
+    <string name="ui_create_job_b9a738" formatted="false">创建任务</string>
+    <string name="ui_create_profile_96b8ee" formatted="false">创建 Profile</string>
+    <string name="ui_create_profile_ba1c80" formatted="false">创建 Profile</string>
+    <string name="ui_cron_expression_or_schedule_form_accepted_by_this_herme_81b79d" formatted="false">输入此 Hermes 服务端接受的 cron 表达式或计划格式；时区由服务端计算。</string>
+    <string name="ui_custom_amount_f72192" formatted="false">自定义金额</string>
+    <string name="ui_dashboard_password_ade7f2" formatted="false">Dashboard 密码</string>
+    <string name="ui_dashboard_username_6e522d" formatted="false">Dashboard 用户名</string>
+    <string name="ui_default_root_5062b2" formatted="false">默认根目录</string>
+    <string name="ui_delegation_6d3fa6" formatted="false">委派</string>
+    <string name="ui_delete_cron_job_3c9650" formatted="false">删除 cron 任务？</string>
+    <string name="ui_delete_f6fdbe" formatted="false">删除</string>
+    <string name="ui_delete_profile_99163f" formatted="false">删除 Profile？</string>
+    <string name="ui_delete_session_fd5765" formatted="false">删除会话？</string>
+    <string name="ui_delivery_destination_optional_d55fe3" formatted="false">投递目标（可选）</string>
+    <string name="ui_deny_b87191" formatted="false">拒绝</string>
+    <string name="ui_diagnostics_7563ce" formatted="false">诊断</string>
+    <string name="ui_discard_36fff6" formatted="false">放弃</string>
+    <string name="ui_discard_learning_edits_7be6ca" formatted="false">放弃学习内容编辑？</string>
+    <string name="ui_discard_profile_changes_575ef6" formatted="false">放弃 Profile 更改？</string>
+    <string name="ui_disconnect_ed28e0" formatted="false">断开连接</string>
+    <string name="ui_edit_pending_message_a107fa" formatted="false">编辑待发送消息</string>
+    <string name="ui_empty_workspace_573ec1" formatted="false">工作区为空</string>
+    <string name="ui_enable_for_session_fe29f1" formatted="false">为会话启用</string>
+    <string name="ui_endpoint_api_key_optional_validation_only_e0181e" formatted="false">端点 API 密钥（可选，仅用于验证）</string>
+    <string name="ui_exact_schedule_a2d1d3" formatted="false">精确计划</string>
+    <string name="ui_fast_8db6a2" formatted="false">快速</string>
+    <string name="ui_files_9fb4f1" formatted="false">文件</string>
+    <string name="ui_forget_03d5d8" formatted="false">忘记</string>
+    <string name="ui_forget_backend_ed8798" formatted="false">忘记后端？</string>
+    <string name="ui_go_f63f96" formatted="false">前往</string>
+    <string name="ui_hermes_18707d" formatted="false">Hermes</string>
+    <string name="ui_hermes_checkpoints_are_server_side_workspace_snapshots__03e9b3" formatted="false">Hermes Checkpoints 是在修改文件的 Tools 运行前创建的服务端工作区快照。恢复前请先预览。</string>
+    <string name="ui_hermes_could_not_finish_this_request_caf6ea" formatted="false">Hermes 无法完成此请求</string>
+    <string name="ui_hermes_creates_the_archive_on_its_host_android_download_fbc70d" formatted="false">Hermes 在主机上创建归档。仅当同一进程 ID 报告退出码 0 后，Android 才会将其直接下载到你选择的文档位置。</string>
+    <string name="ui_hermes_did_not_report_a_category_breakdown_for_this_ses_e788ed" formatted="false">Hermes 未提供此会话的分类明细。</string>
+    <string name="ui_hermes_host_f9ccdc" formatted="false">Hermes 主机</string>
+    <string name="ui_hermes_is_checking_the_selected_checkpoint_e23d39" formatted="false">Hermes 正在检查所选 Checkpoint…</string>
+    <string name="ui_hermes_is_transcribing_842be3" formatted="false">Hermes 正在转写</string>
+    <string name="ui_hermes_locked_3c096f" formatted="false">Hermes 已锁定</string>
+    <string name="ui_hermes_message_566946" formatted="false">Hermes 消息</string>
+    <string name="ui_hermes_needs_input_9dba98" formatted="false">Hermes 需要输入</string>
+    <string name="ui_hermes_profile_setup_command_07e096" formatted="false">Hermes Profile 设置命令</string>
+    <string name="ui_hermes_prompt_7dc987" formatted="false">Hermes 提示词</string>
+    <string name="ui_hermes_reported_no_files_in_this_directory_3355c4" formatted="false">Hermes 报告此目录中没有文件。</string>
+    <string name="ui_hermes_returned_no_provider_accounts_for_this_profile_a76687" formatted="false">Hermes 未返回此 Profile 的 Provider 账户。</string>
+    <string name="ui_hermes_returned_no_providers_for_this_profile_configure_1805aa" formatted="false">Hermes 未返回此 Profile 的 Providers。请在服务端配置 Provider 或刷新目录。</string>
+    <string name="ui_hermes_serve_23a5b5" formatted="false">Hermes 服务</string>
+    <string name="ui_hermes_usage_data_is_unavailable_for_this_profile_ddbf4c" formatted="false">此 Profile 的 Hermes 用量数据不可用。</string>
+    <string name="ui_hermes_will_change_files_in_the_server_workspace_to_thi_06038c" formatted="false">Hermes 会将服务端工作区文件恢复到此 Checkpoint，并从实时会话中移除最近一轮用户消息及 Assistant/Tool 输出。回滚前会先创建安全快照。</string>
+    <string name="ui_hermes_will_charge_the_saved_payment_method_for_this_no_04c103" formatted="false">Hermes 将通过此 Nous 账户保存的付款方式扣款。</string>
+    <string name="ui_hermes_will_end_the_current_live_conversation_and_open__176bb1" formatted="false">Hermes 将结束当前实时对话并打开一个全新会话。已保存的记录仍可在会话列表中查看。</string>
+    <string name="ui_hermes_will_remove_the_latest_completed_exchange_and_su_ed94c2" formatted="false">Hermes 将移除最近完成的一轮交互，并重新提交相同的用户消息。</string>
+    <string name="ui_hermes_will_remove_the_most_recent_user_turn_and_its_as_44dba9" formatted="false">Hermes 将从当前实时会话中移除最近一轮用户消息及其 Assistant/Tool 输出。</string>
+    <string name="ui_hermes_will_run_dangerous_commands_in_this_session_with_9dc3ec" formatted="false">Hermes 将在此会话中直接运行危险命令而不再询问。这不会影响其他会话或服务端全局策略。</string>
+    <string name="ui_hermes_will_stop_automatically_adding_credits_when_the__64cb7a" formatted="false">余额不足时，Hermes 将停止自动充值。</string>
+    <string name="ui_host_backup_a4daac" formatted="false">主机备份</string>
+    <string name="ui_host_capabilities_30d569" formatted="false">主机能力</string>
+    <string name="ui_host_setup_command_077939" formatted="false">主机设置命令</string>
+    <string name="ui_https_url_93e9be" formatted="false">HTTPS URL</string>
+    <string name="ui_https_wss_cf7920" formatted="false">HTTPS / WSS</string>
+    <string name="ui_i_checked_my_balance_9125a3" formatted="false">我已检查余额</string>
+    <string name="ui_install_and_authentication_require_hermes_desktop_or_cl_7e9a21" formatted="false">安装和身份验证需要 Hermes Desktop 或 CLI，因为当前流程会在服务端主机上打开浏览器。</string>
+    <string name="ui_install_and_enable_a1c74f" formatted="false">安装并启用</string>
+    <string name="ui_interrupt_d5db45" formatted="false">中断</string>
+    <string name="ui_interrupt_subagent_47f8fc" formatted="false">中断 Subagent？</string>
+    <string name="ui_keep_editing_d4d9e3" formatted="false">继续编辑</string>
+    <string name="ui_learn_more_824d76" formatted="false">了解更多</string>
+    <string name="ui_leave_empty_for_a_fresh_profile_use_an_exact_existing_p_d9486a" formatted="false">留空可创建全新 Profile；如使用现有 Profile，请输入其准确名称。</string>
+    <string name="ui_loading_checkpoints_from_the_open_hermes_session_7a7052" formatted="false">正在从打开的 Hermes 会话加载 Checkpoints…</string>
+    <string name="ui_loading_hermes_commands_fa75d1" formatted="false">正在加载 Hermes 命令</string>
+    <string name="ui_loading_run_history_7aba72" formatted="false">正在加载运行历史…</string>
+    <string name="ui_make_default_7b2628" formatted="false">设为默认</string>
+    <string name="ui_manage_bf58d1" formatted="false">管理</string>
+    <string name="ui_mcp_servers_a463ae" formatted="false">MCP 服务端</string>
+    <string name="ui_message_68f414" formatted="false">消息</string>
+    <string name="ui_model_68c2cc" formatted="false">模型</string>
+    <string name="ui_model_catalogue_8ce186" formatted="false">模型目录</string>
+    <string name="ui_name_709a23" formatted="false">名称</string>
+    <string name="ui_new_name_9e627c" formatted="false">新名称</string>
+    <string name="ui_next_bc9819" formatted="false">下一步</string>
+    <string name="ui_no_checkpoints_exist_for_this_session_workspace_yet_012df4" formatted="false">此会话工作区尚无 Checkpoints。</string>
+    <string name="ui_no_executions_have_produced_sessions_for_this_job_33c7f3" formatted="false">此任务的执行尚未产生会话。</string>
+    <string name="ui_nous_portal_account_929567" formatted="false">Nous Portal 账户</string>
+    <string name="ui_only_literal_lan_loopback_or_tailscale_ips_f7e430" formatted="false">仅允许明确的局域网、回环或 Tailscale IP。</string>
+    <string name="ui_only_literal_lan_loopback_or_tailscale_ips_https_is_req_943f31" formatted="false">仅允许明确的局域网、回环或 Tailscale IP，其他地址必须使用 HTTPS。</string>
+    <string name="ui_only_the_returned_dashboard_session_cookies_are_encrypt_198460" formatted="false">只有返回的 Dashboard 会话 Cookie 会使用 Android Keystore 加密。密码绝不会保存或作为界面状态恢复。</string>
+    <string name="ui_open_a_session_5e62c9" formatted="false">打开会话</string>
+    <string name="ui_open_browser_4f505a" formatted="false">打开浏览器</string>
+    <string name="ui_open_official_setup_guide_6b45c1" formatted="false">打开官方设置指南</string>
+    <string name="ui_open_session_777092" formatted="false">打开会话</string>
+    <string name="ui_open_source_native_android_11ede3" formatted="false">开源 · 原生 Android</string>
+    <string name="ui_output_4bed33" formatted="false">输出</string>
+    <string name="ui_password_provider_963784" formatted="false">密码 Provider</string>
+    <string name="ui_pausing_affects_only_future_delegate_task_calls_running_899136" formatted="false">暂停仅影响后续 delegate_task 调用。正在运行的子任务会继续工作，直至完成或被明确中断。</string>
+    <string name="ui_pending_message_queue_is_text_only_send_or_remove_attac_70f037" formatted="false">待发送消息队列仅支持文本；请先发送或移除附件。</string>
+    <string name="ui_pending_messages_75b592" formatted="false">待发送消息</string>
+    <string name="ui_preview_unavailable_d197c9" formatted="false">预览不可用</string>
+    <string name="ui_previous_50f942" formatted="false">上一步</string>
+    <string name="ui_private_http_e0aab5" formatted="false">私有 HTTP</string>
+    <string name="ui_profile_name_775747" formatted="false">Profile 名称</string>
+    <string name="ui_provider_7ceee3" formatted="false">Provider</string>
+    <string name="ui_provider_secrets_global_approval_bypass_private_network_200f22" formatted="false">Provider 密钥、全局审批绕过、私有网络放宽、模型选择和 Toolsets 均保留在各自受保护的界面中。</string>
+    <string name="ui_providers_1bec38" formatted="false">Providers</string>
+    <string name="ui_read_only_status_for_the_authenticated_hermes_host_andr_4c1903" formatted="false">已验证 Hermes 主机的只读状态。Android 不会应用更新，也不会从此主机级端点推断 Profile。</string>
+    <string name="ui_reasoning_effort_3c4fd7" formatted="false">Reasoning 强度</string>
+    <string name="ui_recent_redacted_agent_log_4305fe" formatted="false">近期已脱敏 Agent 日志</string>
+    <string name="ui_recheck_1fe7b6" formatted="false">重新检查</string>
+    <string name="ui_redacted_support_report_02e644" formatted="false">已脱敏支持报告</string>
+    <string name="ui_refresh_56e3ba" formatted="false">刷新</string>
+    <string name="ui_remove_e96390" formatted="false">移除</string>
+    <string name="ui_remove_from_hermes_3193a3" formatted="false">从 Hermes 移除</string>
+    <string name="ui_remove_learning_node_adb82c" formatted="false">移除学习节点？</string>
+    <string name="ui_remove_mcp_server_0e798a" formatted="false">移除 MCP 服务端？</string>
+    <string name="ui_remove_messaging_setting_d9a6fb" formatted="false">移除消息设置？</string>
+    <string name="ui_remove_provider_setting_b2ff0f" formatted="false">移除 Provider 设置</string>
+    <string name="ui_remove_skill_9ad745" formatted="false">移除 Skill</string>
+    <string name="ui_rename_d3f4cb" formatted="false">重命名</string>
+    <string name="ui_rename_profile_8cb84e" formatted="false">重命名 Profile</string>
+    <string name="ui_requires_a_server_side_clone_bootstrap_step_android_wai_a9882f" formatted="false">需要服务端执行克隆或引导步骤。Android 会等待 Hermes 完成后再重新加载 MCP。</string>
+    <string name="ui_resource_id_067bbd" formatted="false">资源 ID</string>
+    <string name="ui_restart_b134bd" formatted="false">重启</string>
+    <string name="ui_restart_messaging_gateway_76d6d5" formatted="false">重启消息网关？</string>
+    <string name="ui_restore_workspace_1b1c90" formatted="false">恢复工作区</string>
+    <string name="ui_retry_9f5cd8" formatted="false">重试</string>
+    <string name="ui_retry_last_message_246ae3" formatted="false">重试上一条消息？</string>
+    <string name="ui_retry_last_message_823a52" formatted="false">重试上一条消息</string>
+    <string name="ui_retry_message_349059" formatted="false">重试消息</string>
+    <string name="ui_review_and_install_c9fdd1" formatted="false">检查并安装</string>
+    <string name="ui_review_e29a79" formatted="false">检查</string>
+    <string name="ui_review_restore_fcf3c9" formatted="false">检查恢复内容</string>
+    <string name="ui_run_cron_job_now_565765" formatted="false">立即运行 cron 任务？</string>
+    <string name="ui_run_now_2af00e" formatted="false">立即运行</string>
+    <string name="ui_run_this_command_on_the_machine_hosting_hermes_then_rec_5942f6" formatted="false">在托管 Hermes 的机器上运行此命令，然后在此重新检查账户状态。</string>
+    <string name="ui_save_an_allowlisted_text_report_through_android_s_docum_8cc5df" formatted="false">通过 Android 文档选择器保存白名单文本报告。报告不包含凭据、对话、Provider 设置和原始配置。</string>
+    <string name="ui_save_efc007" formatted="false">保存</string>
+    <string name="ui_save_model_390868" formatted="false">保存模型</string>
+    <string name="ui_save_setup_1a0067" formatted="false">保存设置</string>
+    <string name="ui_save_soul_dea0b3" formatted="false">保存 SOUL</string>
+    <string name="ui_save_zip_f9a419" formatted="false">保存 ZIP…</string>
+    <string name="ui_schedules_execute_on_the_hermes_backend_not_on_this_and_3497ba" formatted="false">计划在 Hermes 后端执行，而非此 Android 设备。Android 通知是独立的投递渠道。</string>
+    <string name="ui_schema_driven_hermes_configuration_android_sends_one_ad_9b3315" formatted="false">由 Schema 驱动的 Hermes 配置。Android 每次发送一个已声明字段；正在运行的会话可能继续使用当前值。</string>
+    <string name="ui_search_artifacts_200f88" formatted="false">搜索 Artifacts</string>
+    <string name="ui_search_hub_d3545c" formatted="false">搜索中心</string>
+    <string name="ui_search_learning_b4aea5" formatted="false">搜索学习内容</string>
+    <string name="ui_search_messaging_platforms_774838" formatted="false">搜索消息平台</string>
+    <string name="ui_search_provider_or_model_2d2496" formatted="false">搜索 Provider 或模型</string>
+    <string name="ui_search_sessions_646db9" formatted="false">搜索会话</string>
+    <string name="ui_search_settings_9a6f37" formatted="false">搜索设置</string>
+    <string name="ui_select_a_detected_artifact_to_preview_it_fdf933" formatted="false">选择检测到的 Artifact 以进行预览。</string>
+    <string name="ui_select_an_existing_conversation_or_create_a_new_one_8ad07a" formatted="false">选择现有对话或新建对话。</string>
+    <string name="ui_sent_directly_to_hermes_and_never_saved_by_android_843266" formatted="false">直接发送到 Hermes，Android 绝不保存。</string>
+    <string name="ui_server_path_27f2f0" formatted="false">服务端路径</string>
+    <string name="ui_server_process_85ac55" formatted="false">服务端进程</string>
+    <string name="ui_settings_c7f73b" formatted="false">设置</string>
+    <string name="ui_skills_and_memory_remain_on_the_selected_hermes_profile_660f01" formatted="false">Skills 和记忆保留在所选 Hermes Profile 上。编辑或移除仅影响该远程 Profile。</string>
+    <string name="ui_soul_md_808c7e" formatted="false">SOUL.md</string>
+    <string name="ui_start_fresh_449169" formatted="false">重新开始？</string>
+    <string name="ui_start_fresh_session_73b0b5" formatted="false">开始全新会话</string>
+    <string name="ui_start_new_session_6cbc1c" formatted="false">开始新会话</string>
+    <string name="ui_start_without_bundled_skills_ce6cb3" formatted="false">不使用捆绑 Skills 启动</string>
+    <string name="ui_sticky_default_a734d7" formatted="false">固定默认值</string>
+    <string name="ui_stop_background_process_95afa4" formatted="false">停止后台进程？</string>
+    <string name="ui_stop_process_48cb30" formatted="false">停止进程</string>
+    <string name="ui_test_640ab2" formatted="false">测试</string>
+    <string name="ui_test_on_hermes_57bd42" formatted="false">在 Hermes 上测试</string>
+    <string name="ui_the_agent_that_grows_with_you_1a12d4" formatted="false">与你共同成长的
+Agent</string>
+    <string name="ui_the_value_is_sent_directly_to_hermes_for_validation_and_218369" formatted="false">该值会直接发送到 Hermes 进行验证并存储在服务端。Android 不会将其写入应用状态、日志或偏好设置。</string>
+    <string name="ui_these_are_server_side_telegram_discord_slack_and_other__66fc87" formatted="false">这些是服务端的 Telegram、Discord、Slack 等 Hermes 网关适配器。Android 只管理 Hermes 所有的配置，不会冒充消息平台或在本地运行网关。</string>
+    <string name="ui_these_commands_run_on_the_selected_hermes_server_host_l_f51794" formatted="false">这些命令在所选 Hermes 服务端运行。主机日志和更新状态描述整个已验证的 Hermes 安装，而非仅所选 Profile。输出受限，并会在 Android 显示前再次脱敏；应用不会上传这些内容。</string>
+    <string name="ui_this_value_is_sent_once_to_the_active_hermes_request_an_14cd8b" formatted="false">该值仅发送一次给当前 Hermes 请求。Android 不会将其保存到草稿、恢复状态、日志或本地偏好设置。</string>
+    <string name="ui_tls_d91e18" formatted="false">TLS</string>
+    <string name="ui_transcribe_5a6353" formatted="false">转写</string>
+    <string name="ui_transcript_a54856" formatted="false">记录</string>
+    <string name="ui_turn_off_8807c2" formatted="false">关闭</string>
+    <string name="ui_turn_off_auto_refill_a8f81f" formatted="false">关闭自动充值？</string>
+    <string name="ui_undo_last_turn_38a83f" formatted="false">撤销上一轮</string>
+    <string name="ui_undo_last_turn_7bf3d0" formatted="false">撤销上一轮？</string>
+    <string name="ui_undo_turn_29ab7c" formatted="false">撤销本轮</string>
+    <string name="ui_unlock_908843" formatted="false">解锁</string>
+    <string name="ui_unsaved_changes_to_this_remote_learning_node_will_be_lo_826a19" formatted="false">对此远程学习节点的未保存更改将丢失。</string>
+    <string name="ui_unsaved_soul_provider_or_model_edits_will_be_lost_3c721e" formatted="false">未保存的 SOUL、Provider 或模型编辑将丢失。</string>
+    <string name="ui_unsupported_fb52c1" formatted="false">不支持</string>
+    <string name="ui_update_all_skills_ebb6f9" formatted="false">更新所有 Skills</string>
+    <string name="ui_usage_cf3bfa" formatted="false">用量</string>
+    <string name="ui_use_device_credential_37ae7d" formatted="false">使用设备凭据</string>
+    <string name="ui_use_model_8d558c" formatted="false">使用模型</string>
+    <string name="ui_use_valid_amounts_within_the_account_bounds_with_reload_8a6bb0" formatted="false">请输入账户允许范围内的有效金额，且充值目标必须大于阈值。</string>
+    <string name="ui_validate_and_save_424d36" formatted="false">验证并保存</string>
+    <string name="ui_value_8dce17" formatted="false">值</string>
+    <string name="ui_verify_to_continue_080756" formatted="false">验证后继续</string>
+    <string name="ui_waiting_for_hermes_26c6fc" formatted="false">正在等待 Hermes</string>
+    <string name="ui_what_android_can_request_remotely_and_what_stays_on_des_c7c461" formatted="false">Android 可远程请求的能力及仅保留在 Desktop 的能力</string>
+    <string name="ui_workspace_checkpoints_0e2ad3" formatted="false">工作区 Checkpoints</string>
+    <string name="ui_yolo_26a5eb" formatted="false">YOLO</string>
+    <string name="ui_your_hermes_sessions_tools_skills_memory_and_approvals__a2ae3b" formatted="false">你的 Hermes 会话、Tools、Skills、记忆和审批。Android 原生体验；Agent 状态保留在你控制的后端。</string>
+    <string name="a11y_allow_private_network_http_2be5ea" formatted="false">允许私有网络 HTTP</string>
+    <string name="a11y_attach_files_137135" formatted="false">添加附件</string>
+    <string name="a11y_back_b52b36" formatted="false">返回</string>
+    <string name="a11y_back_to_sessions_e7bfae" formatted="false">返回会话</string>
+    <string name="a11y_cancel_download_67bb11" formatted="false">取消下载</string>
+    <string name="a11y_clone_sessions_and_full_state_a38a73" formatted="false">克隆会话和完整状态</string>
+    <string name="a11y_close_tool_transcript_78710b" formatted="false">关闭 Tool 记录</string>
+    <string name="a11y_configured_668c5f" formatted="false">已配置</string>
+    <string name="a11y_confirm_credit_purchase_b14eaf" formatted="false">确认购买额度</string>
+    <string name="a11y_confirm_disconnect_794194" formatted="false">确认断开连接</string>
+    <string name="a11y_connected_c2f9b7" formatted="false">已连接</string>
+    <string name="a11y_delete_job_ede40d" formatted="false">删除任务</string>
+    <string name="a11y_dismiss_spoken_reply_error_525f7d" formatted="false">关闭语音回复错误</string>
+    <string name="a11y_dismiss_voice_error_1c0fe3" formatted="false">关闭语音错误</string>
+    <string name="a11y_edit_job_4b27b5" formatted="false">编辑任务</string>
+    <string name="a11y_edit_pending_message_9cca47" formatted="false">编辑待发送消息</string>
+    <string name="a11y_hermes_agent_563803" formatted="false">Hermes Agent</string>
+    <string name="a11y_hermes_error_7454cc" formatted="false">Hermes 错误</string>
+    <string name="a11y_jump_to_latest_message_2de795" formatted="false">跳至最新消息</string>
+    <string name="a11y_new_session_5c881d" formatted="false">新建会话</string>
+    <string name="a11y_open_message_history_05b65a" formatted="false">打开消息历史</string>
+    <string name="a11y_open_navigation_0f53b3" formatted="false">打开导航</string>
+    <string name="a11y_open_session_files_b7889a" formatted="false">打开会话文件</string>
+    <string name="a11y_pause_spoken_reply_335ed5" formatted="false">暂停语音回复</string>
+    <string name="a11y_queue_for_the_next_turn_1cec5f" formatted="false">加入下一轮队列</string>
+    <string name="a11y_refresh_billing_6f3b72" formatted="false">刷新账单</string>
+    <string name="a11y_refresh_detected_artifacts_5c614a" formatted="false">刷新检测到的 Artifacts</string>
+    <string name="a11y_refresh_files_75bfab" formatted="false">刷新文件</string>
+    <string name="a11y_refresh_mcp_servers_82fdfc" formatted="false">刷新 MCP 服务端</string>
+    <string name="a11y_refresh_messaging_platforms_e555a5" formatted="false">刷新消息平台</string>
+    <string name="a11y_refresh_model_catalogue_a9e2d5" formatted="false">刷新模型目录</string>
+    <string name="a11y_refresh_providers_7fdfcc" formatted="false">刷新 Providers</string>
+    <string name="a11y_refresh_sessions_fd90ad" formatted="false">刷新会话</string>
+    <string name="a11y_refresh_usage_a4a94d" formatted="false">刷新用量</string>
+    <string name="a11y_remove_pending_message_422a73" formatted="false">移除待发送消息</string>
+    <string name="a11y_resume_spoken_reply_a61a49" formatted="false">继续语音回复</string>
+    <string name="a11y_retry_pending_message_64845b" formatted="false">重试待发送消息</string>
+    <string name="a11y_run_job_now_e80ea6" formatted="false">立即运行任务</string>
+    <string name="a11y_send_message_c70a89" formatted="false">发送消息</string>
+    <string name="a11y_session_actions_b086ca" formatted="false">会话操作</string>
+    <string name="a11y_share_message_c1c0e6" formatted="false">分享消息</string>
+    <string name="a11y_start_without_bundled_skills_ce6cb3" formatted="false">不使用捆绑 Skills 启动</string>
+    <string name="a11y_steer_the_current_run_80b792" formatted="false">引导当前运行</string>
+    <string name="a11y_stop_spoken_reply_55de1b" formatted="false">停止语音回复</string>
+    <string name="a11y_stop_the_current_hermes_run_edca16" formatted="false">停止当前 Hermes 运行</string>
+    <string name="a11y_take_a_photo_229847" formatted="false">拍照</string>
+    <string name="a11y_unsupported_hermes_conversation_part_71384d" formatted="false">不支持的 Hermes 对话内容</string>
+    <string name="checkpoint_preview">预览 %1$s</string>
+    <string name="checkpoint_restore_question">恢复 %1$s？</string>
+    <string name="artifact_detected_description">%1$s，%2$s，检测自 %3$s</string>
+    <string name="delete_session_description">%1$s 及其已保存记录将从 Hermes 中永久移除。此操作无法撤销。</string>
+    <string name="archive_named">归档 %1$s</string>
+    <string name="delete_named">删除 %1$s</string>
+    <string name="pinned_named">已置顶 %1$s</string>
+    <string name="tool_usage">TOOL 使用 · %1$s</string>
+    <string name="reasoning_expanded">REASONING −</string>
+    <string name="reasoning_collapsed">REASONING +</string>
+    <string name="environment_variable">环境变量 / %1$s</string>
+    <string name="interrupt_subagent_description">Hermes 将要求 %1$s 在下一个安全迭代边界停止。其他工作流会继续运行。</string>
+    <string name="stop_process_description">Hermes 将终止 %1$s。这可能会停止当前会话启动的服务端、监视器或长时间运行的 Tool。</string>
+    <string name="files_read">已读取 / %1$s</string>
+    <string name="files_written">已写入 / %1$s</string>
+    <string name="buy_credits_question">购买 %1$s 额度？</string>
+    <string name="billing_remaining">剩余 %1$s</string>
+    <string name="billing_spent">已用 %1$s，共 %2$s</string>
+    <string name="saving_file">正在保存 %1$s</string>
+    <string name="save_named">保存 %1$s</string>
+    <string name="share_named">分享 %1$s</string>
+    <string name="open_with_another_app">使用其他应用打开 %1$s</string>
+    <string name="hermes_profile">Hermes Profile / %1$s</string>
+    <string name="estimated_usage">预计 %1$s / %2$s 个会话</string>
+    <plurals name="days">
+        <item quantity="other">%d 天</item>
+    </plurals>
+    <string name="reload">重新加载</string><string name="replay">重放</string>
+    <string name="previewed">已预览</string><string name="preview">预览</string>
+    <string name="test_http_websocket_save">测试 HTTP 和 WebSocket 并保存</string><string name="check_signin_save">检查登录选项并保存</string>
+    <string name="no_sessions">没有会话</string><string name="no_matches">没有匹配项</string>
+    <string name="restore_snapshot_question">恢复快照？</string><string name="restore_snapshot">恢复快照</string>
+    <string name="sudo_password_required">需要 SUDO 密码</string><string name="secret_required">需要密钥</string>
+    <string name="password">密码</string><string name="secret_value">密钥值</string>
+    <string name="exporting">正在导出…</string><string name="save_report">保存报告</string>
+    <string name="stop_waiting">停止等待</string><string name="cancel_export">取消导出</string><string name="create_another">再创建一个</string>
+    <string name="run">运行</string><string name="run_again">再次运行</string><string name="reconnect">重新连接</string>
+    <string name="add_backend_title">添加 HERMES 后端</string><string name="reconnect_backend_title">重新连接 HERMES 后端</string>
+    <string name="test_save">测试并保存</string><string name="check_signin_options">检查登录选项</string>
+    <string name="enabled">已启用</string><string name="paused">已暂停</string>
+    <string name="hide_runs">隐藏运行记录</string><string name="recent_runs">近期运行</string>
+    <string name="create_cron_job">创建 CRON 任务</string><string name="edit_cron_job">编辑 CRON 任务</string>
+    <string name="enable">启用</string><string name="disable">停用</string>
+    <string name="search_configured_servers">搜索已配置的服务端</string><string name="search_catalog">搜索目录</string>
+    <string name="replace_provider_setting">替换 PROVIDER 设置</string><string name="setup_provider">设置 PROVIDER</string>
+    <string name="remove_backend_description">将从此设备移除 %1$s，并删除其加密的 Dashboard 会话。Hermes 服务端不会删除任何内容。</string>
+    <string name="review_named">检查 %1$s</string><string name="files_named">文件 / %1$s</string>
+    <string name="uninstall_skill_question">从所选 Hermes Profile 卸载 %1$s？</string>
+    <string name="delete_cron_description">%1$s 将停止在 Hermes 后端运行。现有运行会话不会被删除。</string>
+    <string name="delete_profile_description">%1$s 及其独立配置、会话、Skills 和记忆将从 Hermes 服务端删除。此操作无法撤销。</string>
+    <string name="profile_identity">PROFILE 身份 / %1$s</string><string name="persona_characters">完整 Profile Persona；%1$d/131072 个字符</string>
+    <string name="start_session_named">在 %1$s 中开始会话</string><string name="edit_identity_named">编辑 %1$s 的身份</string>
+    <string name="rename_named">重命名 %1$s</string><string name="skill_count">%1$d 个 SKILLS</string><string name="observed_actions">观察到 %1$s 个操作</string>
+    <string name="enable_named">启用 %1$s</string><string name="uninstall_named">卸载 %1$s</string>
+    <string name="next_run">下次运行 %1$s</string><string name="deliver_to">投递到 %1$s</string><string name="last_failure">上次失败：%1$s</string>
+    <string name="home_channel">主频道 / %1$s（%2$s）</string>
+    <string name="remove_messaging_setting_description">从 Hermes 上的 %2$s 移除 %1$s？下次网关重启后，该平台可能会断开连接。</string>
+    <string name="restart_gateway_description">Hermes 将重启 %1$s Profile 的消息网关。活动的 Telegram、Discord 等消息投递可能短暂停止；Android 对话不受影响。</string>
+    <string name="replace_saved_value">替换 %1$s</string><string name="enter_value">输入值</string>
+    <string name="hermes_runtime">Hermes 运行环境 / %1$s</string><string name="mcp_toggle_question">%1$s MCP 服务端？</string>
+    <string name="install_named_question">安装 %1$s？</string><string name="source_named">来源：%1$s</string><string name="transport_auth">%1$s / 身份验证：%2$s</string>
+    <string name="dynamic_model_accounts">动态 Hermes 模型账户 / %1$s</string>
+    <string name="remove_provider_setting_description">从所选 Hermes Profile 移除 %1$s？现有会话可能会停止工作。</string>
+    <string name="disconnect_provider_question">断开 %1$s？</string><string name="remove_provider_account_description">Hermes 将从 %1$s 中移除此 Provider 账户。</string>
+    <string name="connect_named">连接 %1$s</string><string name="edit_named">编辑 %1$s</string><string name="remove_named">移除 %1$s</string>
+    <string name="remove_learning_description">Hermes 将归档 Skill 或从 Profile %1$s 移除记忆节点。此操作无法在 Android 上撤销。</string>
+    <string name="forget_named">忘记 %1$s</string><string name="refresh_named">刷新 %1$s</string><string name="toggle_named">切换 %1$s</string>
+    <string name="characters_used">%1$d/262144 个字符</string>
+    <string name="reference_description">引用，%1$s</string><string name="artifact_description">Artifact，%1$s</string>
+    <string name="action_required_description">需要操作，%1$s</string><string name="native_entry_description">%1$s。%2$s</string>
+    <string name="timeline_reference">引用</string><string name="timeline_artifact">ARTIFACT · %1$s</string><string name="available_from_hermes">可从 Hermes 获取</string>
+    <string name="timeline_error_recoverable">错误 · 可恢复</string><string name="timeline_error">错误</string>
+    <string name="timeline_action_required">需要操作 · %1$s</string><string name="timeline_event">HERMES 事件</string>
+    <string name="unsupported_conversation_part">此 Hermes 版本返回了不受支持的对话内容。</string>
+    <string name="tool_running">%1$s 正在运行</string><string name="tool_completed">%1$s 已完成</string><string name="tool_failed">%1$s 失败</string>
+    <string name="tool_usage_accessibility">Tool 使用情况</string><string name="show_tool_transcript">显示 Tool 记录</string><string name="hide_tool_transcript">隐藏 Tool 记录</string>
+    <string name="expanded">已展开</string><string name="collapsed">已折叠</string>
+</resources>
