@@ -12,8 +12,10 @@ The two branches use separate signing identities. Meteor's upload key is not sha
 
 | Branch | Package | Key alias | Certificate SHA-256 |
 | --- | --- | --- | --- |
-| `dev` | `com.nousresearch.hermes.debug` | `hermes-debug` | `TODO(fork): replace with your own debug keystore SHA-256 (currently unset; CI skips the check until `HERMES_DEBUG_FINGERPRINT` is configured)` |
-| `main` | `com.nousresearch.hermes` | `hermes-release` | `TODO(fork): replace with your own release keystore SHA-256 (currently unset; CI skips the check until `HERMES_RELEASE_FINGERPRINT` is configured)` |
+| `dev` | `com.c1921.hermes_android.debug` | `hermes-debug` | `BCDADE345BB649FC2A0F1130D809C09BDB49D9D494E7A3E33A0553B1E883BCB3` |
+| `main` | `com.c1921.hermes_android` | `hermes-release` | `01CF864648E9C7C0BBA2A82C7738EF3EAA6235A1D319C68138982E5C46EB2A3C` |
+
+Fingerprints above are the SHA-256 (no colons, matching the CI `apksigner`/`keytool` checks). Source keystores (`debug.p12` / `release.p12`, PKCS12, password in CI secrets) live in `C:\GitHub\hermes-android-keys\`.
 
 ## GitHub configuration
 
@@ -21,11 +23,13 @@ The stable debug identity is stored as repository Actions secrets:
 
 - `HERMES_DEBUG_KEYSTORE_BASE64`
 - `HERMES_DEBUG_KEYSTORE_PASSWORD`
+- `HERMES_DEBUG_FINGERPRINT` (# `BCDADE345BB649FC2A0F1130D809C09BDB49D9D494E7A3E33A0553B1E883BCB3`)
 
 The release identity is restricted to the `release` environment and that environment accepts deployments only from `main`:
 
 - `HERMES_RELEASE_KEYSTORE_BASE64`
 - `HERMES_RELEASE_KEYSTORE_PASSWORD`
+- `HERMES_RELEASE_FINGERPRINT` (# `01CF864648E9C7C0BBA2A82C7738EF3EAA6235A1D319C68138982E5C46EB2A3C`)
 
 The repository Actions settings must also allow workflows to create pull requests:
 
