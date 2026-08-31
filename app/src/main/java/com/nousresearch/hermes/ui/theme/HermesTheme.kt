@@ -31,15 +31,13 @@ val Warning = Color(0xFFB46800)
 
 enum class HermesSkin(
     val id: String,
-    val label: String,
-    val description: String,
 ) {
-    NOUS("nous", "Nous", "Glass neutrals with Nous blue accents"),
-    MIDNIGHT("midnight", "Midnight", "Deep blue-violet with cool accents"),
-    EMBER("ember", "Ember", "Warm crimson and bronze, forge vibes"),
-    MONO("mono", "Mono", "Clean grayscale, minimal and focused"),
-    CYBERPUNK("cyberpunk", "Cyberpunk", "Neon green on black, matrix terminal"),
-    SLATE("slate", "Slate", "Cool slate blue, focused developer theme"),
+    NOUS("nous"),
+    MIDNIGHT("midnight"),
+    EMBER("ember"),
+    MONO("mono"),
+    CYBERPUNK("cyberpunk"),
+    SLATE("slate"),
     ;
 
     companion object {

@@ -12,12 +12,12 @@ import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.SystemClock
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,9 +27,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nousresearch.hermes.data.PrivacyPreferences
 import com.nousresearch.hermes.platform.HermesEntryRequestStore
+import com.nousresearch.hermes.platform.createHermesNotificationChannels
 import com.nousresearch.hermes.platform.parseHermesEntryRequest
 import com.nousresearch.hermes.platform.publishPrivacySafeShortcuts
 import com.nousresearch.hermes.ui.HermesApp
+import com.nousresearch.hermes.ui.AppLanguage
 import com.nousresearch.hermes.ui.BiometricLockScreen
 import com.nousresearch.hermes.ui.PrivacyGateViewModel
 import com.nousresearch.hermes.ui.theme.HermesSkin
@@ -41,7 +43,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     @Inject lateinit var privacyPreferences: PrivacyPreferences
     @Inject lateinit var entryRequestStore: HermesEntryRequestStore
     private var workspaceReady by mutableStateOf(false)
@@ -52,13 +54,14 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == Activity.RESULT_OK) {
             privacyGate.unlock()
         } else {
-            privacyGate.authenticationError("Device credential authentication was cancelled.")
+            privacyGate.authenticationError(getString(R.string.authentication_cancelled))
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) publishEntryRequest(intent)
+        createHermesNotificationChannels(this)
         runCatching { publishPrivacySafeShortcuts(this) }
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -78,6 +81,7 @@ class MainActivity : ComponentActivity() {
             }
             val biometricReentry by biometricReentryFlow.collectAsStateWithLifecycle(initialValue = null)
             val skin by privacyPreferences.skin.collectAsStateWithLifecycle(initialValue = HermesSkin.NOUS)
+            val appLanguage = AppLanguage.current()
             val entryRequests by entryRequestStore.deliveries.collectAsStateWithLifecycle()
             val biometricAvailable = authenticationAvailable()
             val locked = biometricReentry == true && privacyGate.isLocked(enabled = true)
@@ -109,6 +113,8 @@ class MainActivity : ComponentActivity() {
                     onSkinChange = { selected ->
                         lifecycleScope.launch { privacyPreferences.setSkin(selected) }
                     },
+                    appLanguage = appLanguage,
+                    onAppLanguageChange = AppLanguage::apply,
                     entryDelivery = entryRequests.firstOrNull(),
                     onWorkspaceReady = { workspaceReady = true },
                     onEntryConsumed = ::consumeEntryRequest,
@@ -165,7 +171,7 @@ class MainActivity : ComponentActivity() {
     private fun authenticate() {
         if (biometricPromptActive || isFinishing) return
         if (!authenticationAvailable()) {
-            privacyGate.authenticationError("Set a device screen lock before opening protected Hermes content.")
+            privacyGate.authenticationError(getString(R.string.set_device_lock_error))
             return
         }
         biometricPromptActive = true
@@ -177,12 +183,12 @@ class MainActivity : ComponentActivity() {
         }
         val cancellation = CancellationSignal().also { biometricCancellation = it }
         val builder = BiometricPrompt.Builder(this)
-            .setTitle("Unlock Hermes")
-            .setSubtitle("Authenticate to open protected Hermes content")
+            .setTitle(getString(R.string.unlock_hermes))
+            .setSubtitle(getString(R.string.authenticate_protected_content))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setDeviceCredentialAllowed(true)
         } else {
-            builder.setNegativeButton("Use device credential", mainExecutor) { _, _ ->
+            builder.setNegativeButton(getString(R.string.use_device_credential), mainExecutor) { _, _ ->
                 biometricPromptActive = false
                 biometricCancellation = null
                 useDeviceCredential()
@@ -209,14 +215,14 @@ class MainActivity : ComponentActivity() {
                     }
 
                     override fun onAuthenticationFailed() {
-                        privacyGate.authenticationError("Biometric authentication was not recognized. Try again.")
+                        privacyGate.authenticationError(getString(R.string.biometric_not_recognized))
                     }
                 },
             )
         }.onFailure { error ->
             biometricPromptActive = false
             biometricCancellation = null
-            privacyGate.authenticationError(error.message ?: "Android could not start authentication.")
+            privacyGate.authenticationError(error.message ?: getString(R.string.authentication_start_error))
         }
     }
 
@@ -233,11 +239,11 @@ class MainActivity : ComponentActivity() {
         biometricCancellation = null
         biometricPromptActive = false
         val intent = getSystemService(KeyguardManager::class.java).createConfirmDeviceCredentialIntent(
-            "Unlock Hermes",
-            "Authenticate to open protected Hermes content",
+            getString(R.string.unlock_hermes),
+            getString(R.string.authenticate_protected_content),
         )
         if (intent == null) {
-            privacyGate.authenticationError("Set a device screen lock before opening protected Hermes content.")
+            privacyGate.authenticationError(getString(R.string.set_device_lock_error))
         } else {
             credentialLauncher.launch(intent)
         }
