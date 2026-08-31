@@ -19,7 +19,7 @@ The metadata includes:
   version ranges;
 - the SHA-256 toolchain/dependency-input digest, CI/build identity, and signing
   certificate fingerprint when a configured keystore is available; and
-- the generated author `luinbytes`.
+- the generated author `c1921`.
 
 All app configurations use Gradle dependency locking. Resolve intentional
 dependency updates with `./gradlew :app:dependencies --write-locks`, review and

@@ -18,7 +18,7 @@ class BuildProvenanceTest {
         assertEquals("b9aa9289a8083f2e9d248ad6837b2938f5ee92d7", provenance.auditedHermesCommit)
         assertEquals("0.20.0", provenance.hermesAgentVersion)
         assertEquals("0.17.0", provenance.hermesDesktopVersion)
-        assertEquals("luinbytes", provenance.author)
+        assertEquals("c1921", provenance.author)
     }
 
     @Test
@@ -42,7 +42,7 @@ class BuildProvenanceTest {
             ),
         )
 
-        assertEquals("luinbytes", provenance.author)
+        assertEquals("c1921", provenance.author)
         assertEquals("unknown", provenance.androidCommit)
         assertEquals("local", provenance.buildIdentity)
         assertEquals("unsigned", provenance.signingFingerprint)
@@ -62,10 +62,10 @@ class BuildProvenanceTest {
                 hermesDesktopVersion = "0.17.0",
                 hermesDesktopVersionRange = "=0.17.0",
                 toolchainDigest = "sha256:toolchain",
-                buildIdentity = "luinbytes/hermes-android#42",
+                buildIdentity = "c1921/hermes-android#42",
                 packageName = "com.nousresearch.hermes",
                 signingFingerprint = "sha256:signing",
-                author = "luinbytes",
+                author = "c1921",
             ),
         )
 
@@ -75,7 +75,7 @@ class BuildProvenanceTest {
         assertEquals("release", entries.getValue("Channel"))
         assertEquals("sha256:toolchain", entries.getValue("Toolchain digest"))
         assertEquals("sha256:signing", entries.getValue("Signing fingerprint"))
-        assertEquals("luinbytes", entries.getValue("Build author"))
+        assertEquals("c1921", entries.getValue("Build author"))
         assertTrue(entries.getValue("Android commit").length == 40)
     }
 
@@ -96,7 +96,7 @@ class BuildProvenanceTest {
                 buildIdentity = "local",
                 packageName = "com.nousresearch.hermes.debug",
                 signingFingerprint = "unsigned",
-                author = "luinbytes",
+                author = "c1921",
             ),
         )
 
@@ -120,6 +120,6 @@ class BuildProvenanceTest {
 
         assertTrue(report.contains("provenance_android_commit: ${"a".repeat(40)}"))
         assertTrue(report.contains("provenance_toolchain_digest: sha256:toolchain"))
-        assertTrue(report.contains("provenance_build_author: luinbytes"))
+        assertTrue(report.contains("provenance_build_author: c1921"))
     }
 }

@@ -55,7 +55,7 @@ data class BuildProvenance(
             buildIdentity = inputs.buildIdentity.ifBlank { "local" },
             packageName = inputs.packageName.ifBlank { "unknown" },
             signingFingerprint = inputs.signingFingerprint.ifBlank { "unsigned" },
-            author = inputs.author.ifBlank { "luinbytes" },
+            author = inputs.author.ifBlank { "c1921" },
         )
     }
 }

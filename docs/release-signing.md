@@ -12,8 +12,8 @@ The two branches use separate signing identities. Meteor's upload key is not sha
 
 | Branch | Package | Key alias | Certificate SHA-256 |
 | --- | --- | --- | --- |
-| `dev` | `com.nousresearch.hermes.debug` | `hermes-debug` | `2A:46:D0:02:22:F6:D6:FA:F3:0B:86:B9:FC:06:47:99:8B:25:A8:2A:2B:A1:53:1C:70:A8:4A:91:BB:B1:65:0C` |
-| `main` | `com.nousresearch.hermes` | `hermes-release` | `31:38:E7:11:EF:88:12:91:C1:C3:94:95:C7:B5:5F:E8:16:B4:15:5A:97:73:51:16:BC:36:A7:20:97:DC:20:2D` |
+| `dev` | `com.nousresearch.hermes.debug` | `hermes-debug` | `TODO(fork): replace with your own debug keystore SHA-256 (currently unset; CI skips the check until `HERMES_DEBUG_FINGERPRINT` is configured)` |
+| `main` | `com.nousresearch.hermes` | `hermes-release` | `TODO(fork): replace with your own release keystore SHA-256 (currently unset; CI skips the check until `HERMES_RELEASE_FINGERPRINT` is configured)` |
 
 ## GitHub configuration
 

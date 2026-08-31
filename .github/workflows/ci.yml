@@ -254,9 +254,16 @@ jobs:
             app/build/outputs/bundle/debug/app-debug.aab \
             hermes-debug
       - name: Verify stable debug signatures
+        env:
+          HERMES_DEBUG_FINGERPRINT: ${{ secrets.HERMES_DEBUG_FINGERPRINT }}
         run: |
           set -euo pipefail
-          debug_fingerprint="2a46d00222f6d6faf30b86b9fc0647998b25a82a2ba1531c70a84a91bbb1650c"
+          # TODO(fork): replace with your own debug keystore's SHA-256 once generated.
+          if [[ -z "${HERMES_DEBUG_FINGERPRINT:-}" ]]; then
+            echo "No debug keystore fingerprint configured; skipping signature verification."
+            exit 0
+          fi
+          debug_fingerprint="$HERMES_DEBUG_FINGERPRINT"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | grep -F "$debug_fingerprint"
           keytool -printcert -jarfile app/build/outputs/bundle/debug/app-debug.aab | tr -d ': ' | grep -iF "$debug_fingerprint"
@@ -530,9 +537,16 @@ jobs:
           HERMES_REQUIRE_RELEASE_SIGNING: "true"
         run: ./gradlew --no-daemon -Phermes.provenance.channel=release :app:writeBuildProvenance :app:assembleRelease :app:bundleRelease :app:cyclonedxDirectBom
       - name: Verify release signatures
+        env:
+          HERMES_RELEASE_FINGERPRINT: ${{ secrets.HERMES_RELEASE_FINGERPRINT }}
         run: |
           set -euo pipefail
-          release_fingerprint="3138e711ef881291c1c39495c7b55fe816b4155a97735116bc36a72097dc202d"
+          # TODO(fork): replace with your own release keystore's SHA-256 once generated.
+          if [[ -z "${HERMES_RELEASE_FINGERPRINT:-}" ]]; then
+            echo "No release keystore fingerprint configured; skipping signature verification."
+            exit 0
+          fi
+          release_fingerprint="$HERMES_RELEASE_FINGERPRINT"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -F "$release_fingerprint"
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | tr -d ': ' | grep -iF "$release_fingerprint"
@@ -551,6 +565,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.release-metadata.outputs.version }}
           RELEASE_VERSION_CODE: ${{ steps.release-metadata.outputs.version_code }}
+          HERMES_RELEASE_FINGERPRINT: ${{ secrets.HERMES_RELEASE_FINGERPRINT }}
         run: |
           set -euo pipefail
           release_dir="$RUNNER_TEMP/hermes-release"
@@ -561,7 +576,10 @@ jobs:
           grep -Fx "android.channel=release" hermes-android-release.provenance.properties
           grep -Fx "android.commit=$GITHUB_SHA" hermes-android-release.provenance.properties
           grep -Fx "build.package=com.nousresearch.hermes" hermes-android-release.provenance.properties
-          grep -Fx "build.signing_fingerprint=sha256:3138e711ef881291c1c39495c7b55fe816b4155a97735116bc36a72097dc202d" hermes-android-release.provenance.properties
+          # TODO(fork): replace with your own release keystore's SHA-256 once generated.
+          if [[ -n "${HERMES_RELEASE_FINGERPRINT:-}" ]]; then
+            grep -Fx "build.signing_fingerprint=sha256:$HERMES_RELEASE_FINGERPRINT" hermes-android-release.provenance.properties
+          fi
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging hermes-android-release.apk | \
             grep -F "package: name='com.nousresearch.hermes' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"
       - name: Attest release provenance

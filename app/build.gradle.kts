@@ -149,7 +149,7 @@ val provenanceContent = listOf(
     "build.identity=$buildIdentity",
     "build.package=$provenancePackageName",
     "build.signing_fingerprint=$provenanceSigningFingerprint",
-    "build.author=luinbytes",
+    "build.author=c1921",
 ).joinToString("\n", postfix = "\n")
 
 tasks.register("writeBuildProvenance") {
@@ -200,7 +200,7 @@ android {
         buildConfigField("String", "HERMES_DESKTOP_VERSION_RANGE", buildConfigString("=$hermesDesktopVersion"))
         buildConfigField("String", "HERMES_TOOLCHAIN_DIGEST", buildConfigString(toolchainDigest))
         buildConfigField("String", "HERMES_BUILD_IDENTITY", buildConfigString(buildIdentity))
-        buildConfigField("String", "HERMES_BUILD_AUTHOR", buildConfigString("luinbytes"))
+        buildConfigField("String", "HERMES_BUILD_AUTHOR", buildConfigString("c1921"))
     }
 
     buildFeatures {
