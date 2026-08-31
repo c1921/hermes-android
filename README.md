@@ -1,17 +1,14 @@
 # Hermes for Android
 
-> [!IMPORTANT]
-> **This project is archived and no longer maintained.** I no longer use Hermes Agent, so this Android client will not receive further development, support, or compatibility updates. The existing code remains available for reference, but releases may no longer work with current Hermes versions.
->
-> For my actively developed alternative, check out [HomeBot](https://github.com/luinbytes/HomeBot).
+> **Upstream source:** This repository is a fork of the archived [luinbytes/hermes-android](https://github.com/luinbytes/hermes-android), which is no longer maintained. This fork continues development and provides its own releases.
 
 <p align="center">
   <img src="docs/assets/readme/hermes-android-banner.png" alt="Hermes Agent for Android" width="100%">
 </p>
 
-[![Download latest release APK](https://img.shields.io/badge/download-latest%20release%20APK-0000ff?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/releases/latest/download/hermes-android-release.apk)
-[![Download latest release AAB](https://img.shields.io/badge/download-latest%20release%20AAB-0000ff?logo=googleplay&logoColor=white)](https://github.com/luinbytes/hermes-android/releases/latest/download/hermes-android-release.aab)
-[![Download latest dev APK and AAB](https://img.shields.io/badge/dev-debug%20APK%20%2B%20AAB-3158ad?logo=android&logoColor=white)](https://github.com/luinbytes/hermes-android/actions/workflows/ci.yml?query=branch%3Adev+status%3Asuccess)
+[![Download latest release APK](https://img.shields.io/badge/download-latest%20release%20APK-0000ff?logo=android&logoColor=white)](https://github.com/c1921/hermes-android/releases/latest/download/hermes-android-release.apk)
+[![Download latest release AAB](https://img.shields.io/badge/download-latest%20release%20AAB-0000ff?logo=googleplay&logoColor=white)](https://github.com/c1921/hermes-android/releases/latest/download/hermes-android-release.aab)
+[![Download latest dev APK and AAB](https://img.shields.io/badge/dev-debug%20APK%20%2B%20AAB-3158ad?logo=android&logoColor=white)](https://github.com/c1921/hermes-android/actions/workflows/ci.yml?query=branch%3Adev+status%3Asuccess)
 
 Native Android client for [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent). The project targets first-party-quality integration with the same Dashboard backend, sessions, profiles, skills, tools, models, providers, and automations used by Hermes Desktop, CLI, and TUI.
 
