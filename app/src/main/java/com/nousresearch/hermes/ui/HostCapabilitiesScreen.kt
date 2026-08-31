@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.nousresearch.hermes.R
 
 private data class HostCapability(
     val title: String,
@@ -68,15 +70,14 @@ internal fun HostCapabilitiesScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             onBack?.let {
-                IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+                IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) }
             }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(
-                    "HOST CAPABILITIES",
+                Text(stringResource(R.string.ui_host_capabilities_30d569),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.semantics { heading() },
                 )
-                Text("What Android can request remotely and what stays on Desktop", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_what_android_can_request_remotely_and_what_stays_on_des_c7c461), style = MaterialTheme.typography.bodySmall)
             }
         }
         HorizontalDivider()

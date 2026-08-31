@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.network.DashboardAuthProvider
+import com.nousresearch.hermes.R
 
 internal class DashboardProviderDiscoveryGate {
     private var generation = 0L
@@ -53,7 +55,7 @@ internal fun DashboardPasswordProviderSelector(
         modifier = modifier.semantics { selectableGroup() },
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("PASSWORD PROVIDER", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.ui_password_provider_963784), style = MaterialTheme.typography.labelMedium)
         providers.forEach { provider ->
             val selected = provider.name == selectedProvider
             Surface(
@@ -87,8 +89,7 @@ internal fun DashboardPasswordProviderSelector(
 
 @Composable
 internal fun DashboardOAuthAvailabilityNotice(modifier: Modifier = Modifier) {
-    Text(
-        "Android uses password providers advertised by this Dashboard. Native OAuth stays unavailable unless Hermes " +
+    Text(stringResource(R.string.ui_android_uses_password_providers_advertised_by_this_dash_58816b) +
             "advertises a registered Android redirect contract; complete OAuth-only sign-in in the web Dashboard. " +
             "Hermes Android never reads browser or Custom Tab cookies.",
         modifier = modifier,

@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.RollbackCheckpoint
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun CheckpointDialog(
@@ -46,14 +48,13 @@ internal fun CheckpointDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("WORKSPACE CHECKPOINTS") },
+        title = { Text(stringResource(R.string.ui_workspace_checkpoints_0e2ad3)) },
         text = {
             Column(
                 Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    "Hermes checkpoints are server-side workspace snapshots created before file-changing tools. Preview a checkpoint before restoring it.",
+                Text(stringResource(R.string.ui_hermes_checkpoints_are_server_side_workspace_snapshots__03e9b3),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 state.checkpointNotice?.let { CheckpointMessage(it, danger = false) }
@@ -63,13 +64,11 @@ internal fun CheckpointDialog(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator()
                             Spacer(Modifier.width(12.dp))
-                            Text("Loading checkpoints from the open Hermes session…")
+                            Text(stringResource(R.string.ui_loading_checkpoints_from_the_open_hermes_session_7a7052))
                         }
-                    state.checkpointsEnabled == false -> Text(
-                        "Checkpoints are disabled for this Hermes session. Enable Hermes checkpoints on the server, then start a new session.",
+                    state.checkpointsEnabled == false -> Text(stringResource(R.string.ui_checkpoints_are_disabled_for_this_hermes_session_enable_5c6ca3),
                     )
-                    state.checkpointsEnabled == true && state.checkpoints.isEmpty() -> Text(
-                        "No checkpoints exist for this session workspace yet.",
+                    state.checkpointsEnabled == true && state.checkpoints.isEmpty() -> Text(stringResource(R.string.ui_no_checkpoints_exist_for_this_session_workspace_yet_012df4),
                     )
                     else -> state.checkpoints.forEachIndexed { index, checkpoint ->
                         CheckpointRow(
@@ -82,11 +81,11 @@ internal fun CheckpointDialog(
                     }
                 }
                 if (state.checkpointsLoading && state.checkpointsEnabled != null) {
-                    Text("Hermes is checking the selected checkpoint…", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_hermes_is_checking_the_selected_checkpoint_e23d39), style = MaterialTheme.typography.bodySmall)
                 }
                 preview?.let {
                     HorizontalDivider()
-                    Text("PREVIEW ${it.hash.take(8)}", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.checkpoint_preview, it.hash.take(8)), style = MaterialTheme.typography.labelLarge)
                     if (it.stat.isNotBlank()) {
                         SelectionContainer { Text(it.stat, fontFamily = FontFamily.Monospace) }
                     }
@@ -104,22 +103,21 @@ internal fun CheckpointDialog(
                         onClick = { pendingRestore = it.hash },
                         enabled = !running && !state.checkpointsLoading,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Review restore") }
+                    ) { Text(stringResource(R.string.ui_review_restore_fcf3c9)) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onRefresh, enabled = !state.checkpointsLoading) { Text("Refresh") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onRefresh, enabled = !state.checkpointsLoading) { Text(stringResource(R.string.ui_refresh_56e3ba)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_close_bbfa77)) } },
     )
 
     pendingRestore?.let { hash ->
         val checkpoint = state.checkpoints.firstOrNull { it.hash == hash }
         AlertDialog(
             onDismissRequest = { pendingRestore = null },
-            title = { Text("RESTORE ${hash.take(8)}?") },
+            title = { Text(stringResource(R.string.checkpoint_restore_question, hash.take(8))) },
             text = {
-                Text(
-                    "Hermes will change files in the server workspace to this checkpoint and remove the latest user turn with its assistant/tool output from the live session. Hermes creates a pre-rollback safety snapshot first.",
+                Text(stringResource(R.string.ui_hermes_will_change_files_in_the_server_workspace_to_thi_06038c),
                 )
             },
             confirmButton = {
@@ -129,9 +127,9 @@ internal fun CheckpointDialog(
                         onRestore(hash)
                     },
                     enabled = checkpoint != null && state.checkpointPreview?.hash == hash && !running,
-                ) { Text("Restore workspace", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.ui_restore_workspace_1b1c90), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -151,7 +149,7 @@ private fun CheckpointRow(
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("$index · ${checkpoint.hash.take(8)}", fontFamily = FontFamily.Monospace)
-                TextButton(onClick = onPreview, enabled = enabled) { Text(if (selected) "Previewed" else "Preview") }
+                TextButton(onClick = onPreview, enabled = enabled) { Text(stringResource(if (selected) R.string.previewed else R.string.preview)) }
             }
             checkpoint.timestamp.takeIf(String::isNotBlank)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall)

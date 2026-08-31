@@ -21,6 +21,7 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import com.nousresearch.hermes.MainActivity
 import com.nousresearch.hermes.R
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -518,8 +519,8 @@ class AndroidVoicePlayer @Inject constructor(
             )
             setMetadata(
                 MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, "Hermes read-aloud")
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "Hermes")
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, localizedContext().getString(R.string.read_aloud))
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, localizedContext().getString(R.string.app_name))
                     .build(),
             )
             isActive = true
@@ -537,11 +538,12 @@ class AndroidVoicePlayer @Inject constructor(
                 .build(),
         )
         val playing = state == PlaybackState.STATE_PLAYING
+        val strings = localizedContext()
         val stopIntent = mediaActionIntent(ACTION_STOP, 3)
-        val builder = Notification.Builder(context, CHANNEL_ID)
+        val builder = Notification.Builder(strings, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_hermes)
-            .setContentTitle("Hermes read-aloud")
-            .setContentText(if (state == PlaybackState.STATE_BUFFERING) "Preparing spoken reply" else "Spoken reply")
+            .setContentTitle(strings.getString(R.string.read_aloud))
+            .setContentText(strings.getString(if (state == PlaybackState.STATE_BUFFERING) R.string.preparing_spoken_reply else R.string.spoken_reply))
             .setContentIntent(session.controller.sessionActivity)
             .setDeleteIntent(stopIntent)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
@@ -554,7 +556,7 @@ class AndroidVoicePlayer @Inject constructor(
                         context,
                         if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                     ),
-                    if (playing) "Pause" else "Play",
+                    strings.getString(if (playing) R.string.pause else R.string.play),
                     mediaActionIntent(action, if (playing) 1 else 2),
                 ).build(),
             )
@@ -563,7 +565,7 @@ class AndroidVoicePlayer @Inject constructor(
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
-                    "Stop",
+                    strings.getString(R.string.stop),
                     stopIntent,
                 ).build(),
             )
@@ -587,14 +589,17 @@ class AndroidVoicePlayer @Inject constructor(
     )
 
     private fun createNotificationChannel() {
+        val strings = localizedContext()
         notificationManager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Spoken replies", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Playback controls for Hermes read-aloud"
+            NotificationChannel(CHANNEL_ID, strings.getString(R.string.spoken_replies), NotificationManager.IMPORTANCE_LOW).apply {
+                description = strings.getString(R.string.spoken_replies_description)
                 lockscreenVisibility = Notification.VISIBILITY_PRIVATE
                 setSound(null, null)
             },
         )
     }
+
+    private fun localizedContext(): Context = ContextCompat.getContextForLanguage(context)
 
     internal companion object {
         const val ACTION_PLAY = "com.nousresearch.hermes.voice.PLAY"

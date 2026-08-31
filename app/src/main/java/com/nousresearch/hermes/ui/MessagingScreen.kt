@@ -2,6 +2,7 @@ package com.nousresearch.hermes.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.MessagingEnvVarInfo
 import com.nousresearch.hermes.protocol.MessagingPlatformInfo
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun MessagingScreen(
@@ -125,8 +127,7 @@ private fun MessagingList(
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         ) {
-            Text(
-                "These are server-side Telegram, Discord, Slack and other Hermes gateway adapters. Android controls their Hermes-owned configuration; it does not impersonate a messaging platform or run the gateway locally.",
+            Text(stringResource(R.string.ui_these_are_server_side_telegram_discord_slack_and_other__66fc87),
                 modifier = Modifier.padding(14.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -134,7 +135,7 @@ private fun MessagingList(
         OutlinedTextField(
             value = query,
             onValueChange = onQuery,
-            placeholder = { Text("Search messaging platforms") },
+            placeholder = { Text(stringResource(R.string.ui_search_messaging_platforms_774838)) },
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -231,13 +232,13 @@ private fun MessagingDetail(
                                 checked = platform.enabled,
                                 onCheckedChange = { pendingEnabled = it },
                                 enabled = !state.messagingLoading && !state.gatewayRestarting,
-                                modifier = Modifier.semantics { contentDescription = "Enable ${platform.id}" },
+                                modifier = Modifier.localizedContentDescription(R.string.enable_named, platform.id),
                             )
                         }
                         Text(platform.description.ifBlank { "Hermes messaging platform ${platform.id}." }, style = MaterialTheme.typography.bodySmall)
                         platform.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         platform.homeChannel?.let {
-                            Text("Home channel / ${it.name} (${it.chatId})", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.home_channel, it.name, it.chatId), style = MaterialTheme.typography.bodySmall)
                         }
                         if (platform.docsUrl.startsWith("https://") || platform.docsUrl.startsWith("http://")) {
                             TextButton(
@@ -245,7 +246,7 @@ private fun MessagingDetail(
                             ) {
                                 Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Open official setup guide")
+                                Text(stringResource(R.string.ui_open_official_setup_guide_6b45c1))
                             }
                         }
                     }
@@ -265,7 +266,7 @@ private fun MessagingDetail(
                         onClick = { onTest(platform.id) },
                         enabled = !state.messagingLoading && !state.gatewayRestarting,
                         modifier = Modifier.weight(1f),
-                    ) { Text("Test") }
+                    ) { Text(stringResource(R.string.ui_test_640ab2)) }
                     Button(
                         onClick = {
                             val submitted = edits.toMap()
@@ -274,7 +275,7 @@ private fun MessagingDetail(
                         },
                         enabled = edits.values.any(String::isNotBlank) && !state.messagingLoading && !state.gatewayRestarting,
                         modifier = Modifier.weight(1f),
-                    ) { Text("Save setup") }
+                    ) { Text(stringResource(R.string.ui_save_setup_1a0067)) }
                 }
             }
             state.messagingTests[platform.id]?.let { result ->
@@ -308,12 +309,12 @@ private fun MessagingDetail(
     pendingClear?.let { field ->
         AlertDialog(
             onDismissRequest = { pendingClear = null },
-            title = { Text("REMOVE MESSAGING SETTING?") },
-            text = { Text("Remove ${field.key} from ${platform.name} on Hermes? The platform may disconnect after the next gateway restart.") },
+            title = { Text(stringResource(R.string.ui_remove_messaging_setting_d9a6fb)) },
+            text = { Text(stringResource(R.string.remove_messaging_setting_description, field.key, platform.name)) },
             confirmButton = {
-                TextButton(onClick = { pendingClear = null; onClear(platform.id, field.key) }) { Text("Remove") }
+                TextButton(onClick = { pendingClear = null; onClear(platform.id, field.key) }) { Text(stringResource(R.string.ui_remove_e96390)) }
             },
-            dismissButton = { TextButton(onClick = { pendingClear = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingClear = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     pendingEnabled?.let { enabled ->
@@ -332,18 +333,18 @@ private fun MessagingDetail(
                     Text(if (enabled) "Enable" else "Disable")
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingEnabled = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingEnabled = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     if (confirmRestart) {
         AlertDialog(
             onDismissRequest = { confirmRestart = false },
-            title = { Text("RESTART MESSAGING GATEWAY?") },
-            text = { Text("Hermes will restart the ${state.activeProfile} profile's messaging gateway. Active Telegram, Discord and other messaging deliveries may pause briefly; Android chat remains separate.") },
+            title = { Text(stringResource(R.string.ui_restart_messaging_gateway_76d6d5)) },
+            text = { Text(stringResource(R.string.restart_gateway_description, state.activeProfile)) },
             confirmButton = {
-                TextButton(onClick = { confirmRestart = false; onRestartGateway() }) { Text("Restart") }
+                TextButton(onClick = { confirmRestart = false; onRestartGateway() }) { Text(stringResource(R.string.ui_restart_b134bd)) }
             },
-            dismissButton = { TextButton(onClick = { confirmRestart = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmRestart = false }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -370,20 +371,19 @@ private fun MessagingSettingField(
                     )
                 }
                 onClear?.let {
-                    IconButton(onClick = it) { Icon(Icons.Outlined.Delete, "Remove ${field.key}") }
+                    IconButton(onClick = it) { Icon(Icons.Outlined.Delete, stringResource(R.string.remove_named, field.key)) }
                 }
             }
             field.description.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             OutlinedTextField(
                 value = value,
                 onValueChange = onValue,
-                label = { Text(if (field.isSet) "Replace ${field.redactedValue ?: "saved value"}" else "Enter value") },
+                label = { Text(if (field.isSet) stringResource(R.string.replace_saved_value, field.redactedValue ?: "saved value") else stringResource(R.string.enter_value)) },
                 visualTransformation = if (field.isPassword) PasswordVisualTransformation() else VisualTransformation.None,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text(
-                "Sent directly to Hermes and never saved by Android.",
+            Text(stringResource(R.string.ui_sent_directly_to_hermes_and_never_saved_by_android_843266),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -400,13 +400,13 @@ private fun MessagingHeader(
     onBack: (() -> Unit)?,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } }
+        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
             Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (loading) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
-        else onRefresh?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Refresh, "Refresh messaging platforms") } }
+        else onRefresh?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_messaging_platforms_e555a5)) } }
     }
     HorizontalDivider()
 }

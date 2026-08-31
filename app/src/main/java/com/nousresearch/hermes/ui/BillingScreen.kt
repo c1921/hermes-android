@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -50,6 +51,10 @@ import com.nousresearch.hermes.data.validateBillingAmount
 import com.nousresearch.hermes.protocol.BillingStateResponse
 import com.nousresearch.hermes.protocol.SubscriptionStateResponse
 import com.nousresearch.hermes.protocol.UsageBarData
+import com.nousresearch.hermes.R
+import java.text.NumberFormat
+import java.util.Currency
+import java.util.Locale
 
 @Composable
 internal fun BillingScreen(
@@ -76,14 +81,14 @@ internal fun BillingScreen(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } }
+            onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) } }
             Column(Modifier.weight(1f)) {
-                Text("BILLING", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                Text("Nous Portal account", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_billing_23ad68), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                Text(stringResource(R.string.ui_nous_portal_account_929567), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onRefresh, enabled = !state.billingLoading && !state.billingBusy) {
                 if (state.billingLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Outlined.Refresh, "Refresh billing")
+                else Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_billing_6f3b72))
             }
         }
 
@@ -178,7 +183,7 @@ internal fun BillingScreen(
                             ) {
                                 when (state.billingRecovery) {
                                     BillingRecovery.STEP_UP -> OutlinedButton(onClick = onStepUp, enabled = !state.billingBusy) {
-                                        Text("Verify to continue")
+                                        Text(stringResource(R.string.ui_verify_to_continue_080756))
                                     }
                                     BillingRecovery.RETRY -> OutlinedButton(
                                         onClick = {
@@ -195,7 +200,7 @@ internal fun BillingScreen(
                                         },
                                         enabled = !state.billingBusy,
                                     ) {
-                                        Text("Retry")
+                                        Text(stringResource(R.string.ui_retry_9f5cd8))
                                     }
                                     else -> Unit
                                 }
@@ -212,7 +217,7 @@ internal fun BillingScreen(
                         message = "A previous purchase may still settle. Check your Nous balance or portal before buying again.",
                         action = {
                             OutlinedButton(onClick = onAcknowledgeUnconfirmedCharge, enabled = !state.billingBusy) {
-                                Text("I checked my balance")
+                                Text(stringResource(R.string.ui_i_checked_my_balance_9125a3))
                             }
                         },
                     )
@@ -235,18 +240,18 @@ internal fun BillingScreen(
         AlertDialog(
             onDismissRequest = { pendingCharge = null },
             shape = RoundedCornerShape(24.dp),
-            title = { Text("Buy ${amount.money()} credits?") },
-            text = { Text("Hermes will charge the saved payment method for this Nous account.") },
+            title = { Text(stringResource(R.string.buy_credits_question, amount.money())) },
+            text = { Text(stringResource(R.string.ui_hermes_will_charge_the_saved_payment_method_for_this_no_04c103)) },
             confirmButton = {
                 Button(
                     onClick = {
                         pendingCharge = null
                         onCharge(amount)
                     },
-                    modifier = Modifier.semantics { contentDescription = "Confirm credit purchase" },
-                ) { Text("Buy credits") }
+                    modifier = Modifier.localizedContentDescription(R.string.a11y_confirm_credit_purchase_b14eaf),
+                ) { Text(stringResource(R.string.ui_buy_credits_ce006b)) }
             },
-            dismissButton = { TextButton(onClick = { pendingCharge = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingCharge = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -302,7 +307,7 @@ private fun BuyCreditsCard(billing: BillingStateResponse, busy: Boolean, onSelec
     }.getOrNull()
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Buy credits", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.ui_buy_credits_ce006b), style = MaterialTheme.typography.titleMedium)
             Text(
                 if (enabled) "Add top-up credits for agent runs outside your plan."
                 else "A saved card and terminal billing permission are required.",
@@ -320,8 +325,8 @@ private fun BuyCreditsCard(billing: BillingStateResponse, busy: Boolean, onSelec
                 OutlinedTextField(
                     value = customAmount,
                     onValueChange = { customAmount = it.take(12).filter { char -> char.isDigit() || char == '.' } },
-                    label = { Text("Custom amount") },
-                    prefix = { Text("$") },
+                    label = { Text(stringResource(R.string.ui_custom_amount_f72192)) },
+                    prefix = { Text(Currency.getInstance("USD").getSymbol(Locale.getDefault())) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     enabled = enabled,
@@ -329,7 +334,7 @@ private fun BuyCreditsCard(billing: BillingStateResponse, busy: Boolean, onSelec
                     shape = RoundedCornerShape(14.dp),
                 )
                 Button(onClick = { validCustomAmount?.let(onSelectAmount) }, enabled = enabled && validCustomAmount != null) {
-                    Text("Buy")
+                    Text(stringResource(R.string.ui_buy_7ceca5))
                 }
             }
             if (customAmount.isNotBlank() && validCustomAmount == null) {
@@ -391,13 +396,13 @@ private fun AutoReloadCard(
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Auto-refill", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.ui_auto_refill_80ff77), style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Refill ${auto.reloadToDisplay.orUnavailable()} when balance falls below ${auto.thresholdDisplay.orUnavailable()}.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (!editing) OutlinedButton(onClick = { editing = true }, enabled = !busy) { Text("Manage") }
+                if (!editing) OutlinedButton(onClick = { editing = true }, enabled = !busy) { Text(stringResource(R.string.ui_manage_bf58d1)) }
             }
             if (editing) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -405,19 +410,18 @@ private fun AutoReloadCard(
                     BillingAmountField("Reload to", reloadTo, { reloadTo = it }, Modifier.weight(1f), !busy)
                 }
                 if (!validPair) {
-                    Text(
-                        "Use valid amounts within the account bounds, with reload-to greater than the threshold.",
+                    Text(stringResource(R.string.ui_use_valid_amounts_within_the_account_bounds_with_reload_8a6bb0),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
                 Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { editing = false }, enabled = !busy) { Text("Cancel") }
-                    OutlinedButton(onClick = { confirmDisable = true }, enabled = validPair && !busy) { Text("Turn off") }
+                    TextButton(onClick = { editing = false }, enabled = !busy) { Text(stringResource(R.string.ui_cancel_77dfd2)) }
+                    OutlinedButton(onClick = { confirmDisable = true }, enabled = validPair && !busy) { Text(stringResource(R.string.ui_turn_off_8807c2)) }
                     Button(
                         onClick = { onSave(true, validThreshold.orEmpty(), validReloadTo.orEmpty()) },
                         enabled = validPair && !busy,
-                    ) { Text("Save") }
+                    ) { Text(stringResource(R.string.ui_save_efc007)) }
                 }
             }
         }
@@ -426,12 +430,12 @@ private fun AutoReloadCard(
         AlertDialog(
             onDismissRequest = { confirmDisable = false },
             shape = RoundedCornerShape(24.dp),
-            title = { Text("Turn off auto-refill?") },
-            text = { Text("Hermes will stop automatically adding credits when the balance is low.") },
+            title = { Text(stringResource(R.string.ui_turn_off_auto_refill_a8f81f)) },
+            text = { Text(stringResource(R.string.ui_hermes_will_stop_automatically_adding_credits_when_the__64cb7a)) },
             confirmButton = {
-                Button(onClick = { confirmDisable = false; onSave(false, threshold, reloadTo) }) { Text("Turn off") }
+                Button(onClick = { confirmDisable = false; onSave(false, threshold, reloadTo) }) { Text(stringResource(R.string.ui_turn_off_8807c2)) }
             },
-            dismissButton = { TextButton(onClick = { confirmDisable = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmDisable = false }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -442,7 +446,7 @@ private fun BillingAmountField(label: String, value: String, onValueChange: (Str
         value = value,
         onValueChange = { onValueChange(it.take(12).filter { char -> char.isDigit() || char == '.' }) },
         label = { Text(label) },
-        prefix = { Text("$") },
+        prefix = { Text(Currency.getInstance("USD").getSymbol(Locale.getDefault())) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
         enabled = enabled,
@@ -457,10 +461,10 @@ private fun BillingUsageCard(title: String, bar: UsageBarData) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                Text("${bar.remainingDisplay.orUnavailable()} remaining", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.billing_remaining, bar.remainingDisplay.orUnavailable()), style = MaterialTheme.typography.labelMedium)
             }
             LinearProgressIndicator(progress = { bar.fillFraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-            Text("${bar.spentDisplay.orUnavailable()} spent of ${bar.totalDisplay.orUnavailable()}", style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.billing_spent, bar.spentDisplay.orUnavailable(), bar.totalDisplay.orUnavailable()), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -522,7 +526,11 @@ private fun String?.orUnavailable(): String = this?.takeIf(String::isNotBlank) ?
 
 private fun String.money(): String {
     val amount = toBigDecimalOrNull() ?: return this
-    return "$" + amount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()
+    return NumberFormat.getCurrencyInstance(Locale.getDefault()).apply {
+        currency = Currency.getInstance("USD")
+        minimumFractionDigits = 2
+        maximumFractionDigits = 2
+    }.format(amount.setScale(2, java.math.RoundingMode.HALF_UP))
 }
 
 private fun billingAmountHint(billing: BillingStateResponse): String = when {

@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,7 @@ import com.nousresearch.hermes.protocol.EnvVarInfo
 import com.nousresearch.hermes.protocol.ModelProvider
 import com.nousresearch.hermes.protocol.OAuthProvider
 import kotlinx.coroutines.delay
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun ProvidersScreen(
@@ -78,13 +80,13 @@ internal fun ProvidersScreen(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sessions") } }
+            onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_to_sessions_e7bfae)) } }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text("PROVIDERS", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                Text("Dynamic Hermes model accounts / ${state.activeProfile}", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_providers_1bec38), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                Text(stringResource(R.string.dynamic_model_accounts, state.activeProfile), style = MaterialTheme.typography.bodySmall)
             }
             if (state.providersLoading) CircularProgressIndicator(Modifier.padding(12.dp), strokeWidth = 2.dp)
-            else IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh providers") }
+            else IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_providers_7fdfcc)) }
         }
         HorizontalDivider()
         if (state.providerAccountsSupported) {
@@ -93,11 +95,11 @@ internal fun ProvidersScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (accountsSelected) {
-                    Button(onClick = {}, modifier = Modifier.weight(1f)) { Text("ACCOUNTS") }
-                    OutlinedButton(onClick = { accountsSelected = false }, modifier = Modifier.weight(1f)) { Text("API KEYS") }
+                    Button(onClick = {}, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.ui_accounts_d7cfa4)) }
+                    OutlinedButton(onClick = { accountsSelected = false }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.ui_api_keys_a8a10e)) }
                 } else {
-                    OutlinedButton(onClick = { accountsSelected = true }, modifier = Modifier.weight(1f)) { Text("ACCOUNTS") }
-                    Button(onClick = {}, modifier = Modifier.weight(1f)) { Text("API KEYS") }
+                    OutlinedButton(onClick = { accountsSelected = true }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.ui_accounts_d7cfa4)) }
+                    Button(onClick = {}, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.ui_api_keys_a8a10e)) }
                 }
             }
         }
@@ -130,8 +132,7 @@ internal fun ProvidersScreen(
                 }
                 if (state.oauthProviders.isEmpty() && !state.providersLoading) {
                     item {
-                        Text(
-                            "Hermes returned no provider accounts for this profile.",
+                        Text(stringResource(R.string.ui_hermes_returned_no_provider_accounts_for_this_profile_a76687),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(20.dp),
                         )
@@ -150,8 +151,7 @@ internal fun ProvidersScreen(
                 }
                 if (providers.isEmpty() && !state.providersLoading) {
                     item {
-                        Text(
-                            "Hermes returned no providers for this profile. Configure a provider on the server or refresh its catalogue.",
+                        Text(stringResource(R.string.ui_hermes_returned_no_providers_for_this_profile_configure_1805aa),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(20.dp),
                         )
@@ -177,12 +177,12 @@ internal fun ProvidersScreen(
     deletingKey?.let { key ->
         AlertDialog(
             onDismissRequest = { deletingKey = null },
-            title = { Text("REMOVE PROVIDER SETTING") },
-            text = { Text("Remove $key from the selected Hermes profile? Existing sessions may stop working.") },
+            title = { Text(stringResource(R.string.ui_remove_provider_setting_b2ff0f)) },
+            text = { Text(stringResource(R.string.remove_provider_setting_description, key)) },
             confirmButton = {
-                TextButton(onClick = { deletingKey = null; onDelete(key) }) { Text("Remove") }
+                TextButton(onClick = { deletingKey = null; onDelete(key) }) { Text(stringResource(R.string.ui_remove_e96390)) }
             },
-            dismissButton = { TextButton(onClick = { deletingKey = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deletingKey = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     state.providerOAuthSession?.let { session ->
@@ -210,18 +210,18 @@ internal fun ProvidersScreen(
     disconnectingProvider?.let { provider ->
         AlertDialog(
             onDismissRequest = { disconnectingProvider = null },
-            title = { Text("Disconnect ${provider.name}?") },
-            text = { Text("Hermes will remove this provider account from ${state.activeProfile}.") },
+            title = { Text(stringResource(R.string.disconnect_provider_question, provider.name)) },
+            text = { Text(stringResource(R.string.remove_provider_account_description, state.activeProfile)) },
             confirmButton = {
                 TextButton(
-                    modifier = Modifier.semantics { contentDescription = "Confirm disconnect" },
+                    modifier = Modifier.localizedContentDescription(R.string.a11y_confirm_disconnect_794194),
                     onClick = {
                         disconnectingProvider = null
                         onDisconnectOAuth(provider.id)
                     },
-                ) { Text("Disconnect") }
+                ) { Text(stringResource(R.string.ui_disconnect_ed28e0)) }
             },
-            dismissButton = { TextButton(onClick = { disconnectingProvider = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { disconnectingProvider = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -251,14 +251,14 @@ private fun OAuthProviderCard(
                     )
                 }
                 if (provider.status.loggedIn) {
-                    Icon(Icons.Outlined.CheckCircle, "Connected", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Outlined.CheckCircle, stringResource(R.string.a11y_connected_c2f9b7), tint = MaterialTheme.colorScheme.primary)
                     if (provider.disconnectable) {
-                        OutlinedButton(onClick = onDisconnect, enabled = enabled) { Text("Disconnect") }
+                        OutlinedButton(onClick = onDisconnect, enabled = enabled) { Text(stringResource(R.string.ui_disconnect_ed28e0)) }
                     }
                 } else if (provider.flow !in setOf("pkce", "device_code", "external")) {
-                    Text("Unsupported", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.ui_unsupported_fb52c1), style = MaterialTheme.typography.labelMedium)
                 } else {
-                    OutlinedButton(onClick = onConnect, enabled = enabled) { Text("Connect") }
+                    OutlinedButton(onClick = onConnect, enabled = enabled) { Text(stringResource(R.string.ui_connect_b65463)) }
                 }
             }
             provider.status.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
@@ -290,7 +290,7 @@ private fun ProviderOAuthSessionDialog(
     }
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("CONNECT ${session.providerName.uppercase()}") },
+        title = { Text(stringResource(R.string.connect_named, session.providerName.uppercase())) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -314,23 +314,23 @@ private fun ProviderOAuthSessionDialog(
                     ) {
                         Text(code, Modifier.padding(14.dp), style = MaterialTheme.typography.titleMedium)
                     }
-                    OutlinedButton(onClick = { onCopy("Authorization code", code) }) { Text("Copy code") }
+                    OutlinedButton(onClick = { onCopy("Authorization code", code) }) { Text(stringResource(R.string.ui_copy_code_6c1069)) }
                 }
                 if (session.browserUrl.isNotBlank()) {
-                    OutlinedButton(onClick = { onOpenUrl(session.browserUrl) }) { Text("Open browser") }
+                    OutlinedButton(onClick = { onOpenUrl(session.browserUrl) }) { Text(stringResource(R.string.ui_open_browser_4f505a)) }
                 }
                 if (session.flow == "pkce") {
                     OutlinedTextField(
                         value = authorizationCode,
                         onValueChange = { authorizationCode = it.take(8192) },
-                        label = { Text("Authorization code") },
+                        label = { Text(stringResource(R.string.ui_authorization_code_90ed55)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
-                        Text("Waiting for Hermes", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.ui_waiting_for_hermes_26c6fc), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -340,10 +340,10 @@ private fun ProviderOAuthSessionDialog(
                 TextButton(
                     enabled = authorizationCode.isNotBlank() && !busy,
                     onClick = { onSubmit(authorizationCode.trim()) },
-                ) { Text("Complete sign-in") }
+                ) { Text(stringResource(R.string.ui_complete_sign_in_2907d7)) }
             }
         },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 
@@ -357,10 +357,10 @@ private fun ExternalProviderDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("CONNECT ${provider.name.uppercase()}") },
+        title = { Text(stringResource(R.string.connect_named, provider.name.uppercase())) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Run this command on the machine hosting Hermes, then recheck the account status here.")
+                Text(stringResource(R.string.ui_run_this_command_on_the_machine_hosting_hermes_then_rec_5942f6))
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(10.dp),
@@ -368,14 +368,14 @@ private fun ExternalProviderDialog(
                 ) {
                     Text(provider.cliCommand, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
                 }
-                OutlinedButton(onClick = { onCopy("Hermes login command", provider.cliCommand) }) { Text("Copy command") }
+                OutlinedButton(onClick = { onCopy("Hermes login command", provider.cliCommand) }) { Text(stringResource(R.string.ui_copy_command_a8e104)) }
                 if (provider.docsUrl.isNotBlank()) {
-                    OutlinedButton(onClick = { onOpenUrl(provider.docsUrl) }) { Text("Learn more") }
+                    OutlinedButton(onClick = { onOpenUrl(provider.docsUrl) }) { Text(stringResource(R.string.ui_learn_more_824d76)) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onRefresh) { Text("Recheck") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onRefresh) { Text(stringResource(R.string.ui_recheck_1fe7b6)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 
@@ -396,7 +396,7 @@ private fun ProviderCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (provider.authenticated) Icon(Icons.Outlined.CheckCircle, "Configured", tint = MaterialTheme.colorScheme.primary)
+                if (provider.authenticated) Icon(Icons.Outlined.CheckCircle, stringResource(R.string.a11y_configured_668c5f), tint = MaterialTheme.colorScheme.primary)
             }
             provider.warning?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             if (provider.models.isNotEmpty()) {
@@ -419,8 +419,8 @@ private fun ProviderCard(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    IconButton(onClick = { onEdit(key) }) { Icon(Icons.Outlined.Edit, "Edit $key") }
-                    if (info.isSet) IconButton(onClick = { onDelete(key) }) { Icon(Icons.Outlined.Delete, "Remove $key") }
+                    IconButton(onClick = { onEdit(key) }) { Icon(Icons.Outlined.Edit, stringResource(R.string.edit_named, key)) }
+                    if (info.isSet) IconButton(onClick = { onDelete(key) }) { Icon(Icons.Outlined.Delete, stringResource(R.string.remove_named, key)) }
                 }
             }
         }
@@ -439,7 +439,7 @@ private fun ProviderSettingDialog(
     var apiKey by remember(key) { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (info.isSet) "REPLACE PROVIDER SETTING" else "SET UP PROVIDER") },
+        title = { Text(stringResource(if (info.isSet) R.string.replace_provider_setting else R.string.setup_provider)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(info.description.ifBlank { key }, style = MaterialTheme.typography.bodySmall)
@@ -455,14 +455,13 @@ private fun ProviderSettingDialog(
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text("Endpoint API key (optional, validation only)") },
+                        label = { Text(stringResource(R.string.ui_endpoint_api_key_optional_validation_only_e0181e)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                Text(
-                    "The value is sent directly to Hermes for validation and server-side storage. Android never writes it to app state, logs or preferences.",
+                Text(stringResource(R.string.ui_the_value_is_sent_directly_to_hermes_for_validation_and_218369),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -478,8 +477,8 @@ private fun ProviderSettingDialog(
                     onSave(submittedValue, submittedKey)
                 },
                 enabled = value.isNotBlank(),
-            ) { Text("Validate and save") }
+            ) { Text(stringResource(R.string.ui_validate_and_save_424d36)) }
         },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }

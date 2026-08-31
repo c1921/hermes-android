@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.nousresearch.hermes.data.HermesState
+import com.nousresearch.hermes.R
 
 private enum class SessionDialog { RENAME, BRANCH, COMPRESS, RETRY, RESET, UNDO, CHECKPOINTS }
 
@@ -51,10 +53,10 @@ internal fun SessionActions(
     val running = state.runtimeInfo.running || state.sending
     val hasHistory = state.timeline.items.isNotEmpty()
 
-    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Outlined.MoreVert, "Session actions") }
+    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.a11y_session_actions_b086ca)) }
     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
         DropdownMenuItem(
-            text = { Text("Rename") },
+            text = { Text(stringResource(R.string.ui_rename_d3f4cb)) },
             leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) },
             onClick = {
                 input = state.activeStoredSession?.displayTitle ?: state.runtimeInfo.title
@@ -63,7 +65,7 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
-            text = { Text("Branch conversation") },
+            text = { Text(stringResource(R.string.ui_branch_conversation_681a60)) },
             leadingIcon = { Icon(Icons.AutoMirrored.Outlined.CallSplit, null) },
             enabled = hasHistory && !running,
             onClick = {
@@ -73,7 +75,7 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
-            text = { Text("Retry last message") },
+            text = { Text(stringResource(R.string.ui_retry_last_message_823a52)) },
             leadingIcon = { Icon(Icons.Outlined.Refresh, null) },
             enabled = hasHistory && !running,
             onClick = {
@@ -82,7 +84,7 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
-            text = { Text("Undo last turn") },
+            text = { Text(stringResource(R.string.ui_undo_last_turn_38a83f)) },
             leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Undo, null) },
             enabled = hasHistory && !running,
             onClick = {
@@ -91,7 +93,7 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
-            text = { Text("Compress context") },
+            text = { Text(stringResource(R.string.ui_compress_context_20c9e8)) },
             leadingIcon = { Icon(Icons.Outlined.Compress, null) },
             enabled = hasHistory && !running,
             onClick = {
@@ -101,7 +103,7 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
-            text = { Text("Checkpoints") },
+            text = { Text(stringResource(R.string.ui_checkpoints_a2b3a5)) },
             leadingIcon = { Icon(Icons.Outlined.History, null) },
             onClick = {
                 menuOpen = false
@@ -110,7 +112,7 @@ internal fun SessionActions(
             },
         )
         DropdownMenuItem(
-            text = { Text("Start fresh session") },
+            text = { Text(stringResource(R.string.ui_start_fresh_session_73b0b5)) },
             leadingIcon = { Icon(Icons.Outlined.RestartAlt, null) },
             enabled = !running,
             onClick = {
@@ -120,7 +122,7 @@ internal fun SessionActions(
         )
         if (!state.activeStoredSession?.durableId.isNullOrBlank()) {
             DropdownMenuItem(
-                text = { Text("Archive") },
+                text = { Text(stringResource(R.string.ui_archive_2621c6)) },
                 leadingIcon = { Icon(Icons.Outlined.Archive, null) },
                 onClick = {
                     menuOpen = false
@@ -172,45 +174,45 @@ internal fun SessionActions(
         )
         SessionDialog.UNDO -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("UNDO LAST TURN?") },
-            text = { Text("Hermes will remove the most recent user turn and its assistant/tool output from this live session.") },
+            title = { Text(stringResource(R.string.ui_undo_last_turn_7bf3d0)) },
+            text = { Text(stringResource(R.string.ui_hermes_will_remove_the_most_recent_user_turn_and_its_as_44dba9)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         dialog = null
                         onUndo()
                     },
-                ) { Text("Undo turn") }
+                ) { Text(stringResource(R.string.ui_undo_turn_29ab7c)) }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
         SessionDialog.RETRY -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("RETRY LAST MESSAGE?") },
-            text = { Text("Hermes will remove the latest completed exchange and submit the same user message again.") },
+            title = { Text(stringResource(R.string.ui_retry_last_message_246ae3)) },
+            text = { Text(stringResource(R.string.ui_hermes_will_remove_the_latest_completed_exchange_and_su_ed94c2)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         dialog = null
                         onRetry()
                     },
-                ) { Text("Retry message") }
+                ) { Text(stringResource(R.string.ui_retry_message_349059)) }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
         SessionDialog.RESET -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("START FRESH?") },
-            text = { Text("Hermes will end the current live conversation and open a clean session. Its stored transcript remains available in the session list.") },
+            title = { Text(stringResource(R.string.ui_start_fresh_449169)) },
+            text = { Text(stringResource(R.string.ui_hermes_will_end_the_current_live_conversation_and_open__176bb1)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         dialog = null
                         onReset()
                     },
-                ) { Text("Start new session") }
+                ) { Text(stringResource(R.string.ui_start_new_session_6cbc1c)) }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
         SessionDialog.CHECKPOINTS -> CheckpointDialog(
             state = state,
@@ -249,6 +251,6 @@ private fun TextInputDialog(
             }
         },
         confirmButton = { TextButton(onClick = onConfirm, enabled = confirmEnabled) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }

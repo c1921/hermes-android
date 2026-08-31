@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun BiometricLockScreen(
@@ -33,13 +35,11 @@ internal fun BiometricLockScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.primary)
-            Text(
-                "HERMES LOCKED",
+            Text(stringResource(R.string.ui_hermes_locked_3c096f),
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(top = 16.dp).semantics { heading() },
             )
-            Text(
-                "Authenticate with biometrics or your device credential to open Hermes.",
+            Text(stringResource(R.string.ui_authenticate_with_biometrics_or_your_device_credential__fdb9e0),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
@@ -54,10 +54,10 @@ internal fun BiometricLockScreen(
                 )
             }
             Button(onClick = onUnlock, modifier = Modifier.padding(top = 20.dp)) {
-                Text("UNLOCK")
+                Text(stringResource(R.string.ui_unlock_908843))
             }
             Button(onClick = onUseDeviceCredential, modifier = Modifier.padding(top = 8.dp)) {
-                Text("USE DEVICE CREDENTIAL")
+                Text(stringResource(R.string.ui_use_device_credential_37ae7d))
             }
         }
     }

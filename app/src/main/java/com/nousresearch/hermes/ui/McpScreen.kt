@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.McpCatalogEntry
 import com.nousresearch.hermes.protocol.McpServerSummary
+import com.nousresearch.hermes.R
 
 private enum class McpView { CONFIGURED, CATALOG }
 
@@ -81,17 +83,17 @@ internal fun McpScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             onBack?.let {
-                IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+                IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) }
             }
             Column(Modifier.weight(1f)) {
-                Text("MCP SERVERS", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                Text("Hermes runtime / ${state.activeProfile}", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_mcp_servers_a463ae), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                Text(stringResource(R.string.hermes_runtime, state.activeProfile), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = onRefresh, enabled = !state.mcpLoading) {
                 if (state.mcpLoading) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Outlined.Refresh, "Refresh MCP servers")
+                    Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_mcp_servers_82fdfc))
                 }
             }
         }
@@ -100,8 +102,7 @@ internal fun McpScreen(
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         ) {
-            Text(
-                "Configured servers and catalog metadata come from this Hermes profile. Connection tests run on Hermes; Android never executes MCP processes or receives their credentials.",
+            Text(stringResource(R.string.ui_configured_servers_and_catalog_metadata_come_from_this__94d3ed),
                 modifier = Modifier.padding(14.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -122,7 +123,7 @@ internal fun McpScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it.take(120) },
-            placeholder = { Text(if (view == McpView.CONFIGURED) "Search configured servers" else "Search catalog") },
+            placeholder = { Text(stringResource(if (view == McpView.CONFIGURED) R.string.search_configured_servers else R.string.search_catalog)) },
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
@@ -158,7 +159,7 @@ internal fun McpScreen(
         val reloadsNow = state.currentProfile == state.activeProfile || runtimeProfile == state.activeProfile
         AlertDialog(
             onDismissRequest = { pendingToggleName = null },
-            title = { Text("${if (pendingToggleEnabled) "ENABLE" else "DISABLE"} MCP SERVER?") },
+            title = { Text(stringResource(R.string.mcp_toggle_question, stringResource(if (pendingToggleEnabled) R.string.enable else R.string.disable).uppercase())) },
             text = {
                 Text(
                     if (reloadsNow) {
@@ -186,7 +187,7 @@ internal fun McpScreen(
                     )
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingToggleName = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingToggleName = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     pendingRemoveName?.let { name ->
@@ -195,7 +196,7 @@ internal fun McpScreen(
         val reloadsNow = state.currentProfile == state.activeProfile || runtimeProfile == state.activeProfile
         AlertDialog(
             onDismissRequest = { pendingRemoveName = null },
-            title = { Text("REMOVE MCP SERVER?") },
+            title = { Text(stringResource(R.string.ui_remove_mcp_server_0e798a)) },
             text = {
                 Text(
                     if (reloadsNow) {
@@ -213,7 +214,7 @@ internal fun McpScreen(
                     },
                 ) { Text(if (reloadsNow) "Remove and reload" else "Remove") }
             },
-            dismissButton = { TextButton(onClick = { pendingRemoveName = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingRemoveName = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     pendingInstall?.let { entry ->
@@ -223,13 +224,13 @@ internal fun McpScreen(
                 pendingInstall = null
                 installEnv = emptyMap()
             },
-            title = { Text("INSTALL ${entry.name.uppercase()}?") },
+            title = { Text(stringResource(R.string.install_named_question, entry.name.uppercase())) },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Source: ${entry.source.take(MAX_MCP_DISPLAY_CHARACTERS)}", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.source_named, entry.source.take(MAX_MCP_DISPLAY_CHARACTERS)), style = MaterialTheme.typography.bodySmall)
                     Text(entry.targetSummary(), style = MaterialTheme.typography.bodySmall)
                     if (entry.bootstrap.isNotEmpty()) {
                         Text(
@@ -268,7 +269,7 @@ internal fun McpScreen(
                         onInstall(entry.name, values)
                     },
                     enabled = requiredComplete && !state.mcpLoading,
-                ) { Text("Install and enable") }
+                ) { Text(stringResource(R.string.ui_install_and_enable_a1c74f)) }
             },
             dismissButton = {
                 TextButton(
@@ -276,7 +277,7 @@ internal fun McpScreen(
                         pendingInstall = null
                         installEnv = emptyMap()
                     },
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.ui_cancel_77dfd2)) }
             },
         )
     }
@@ -322,7 +323,7 @@ private fun ConfiguredMcpList(
                             checked = server.enabled,
                             onCheckedChange = { onSetEnabled(server.name, it) },
                             enabled = !state.mcpLoading,
-                            modifier = Modifier.semantics { contentDescription = "Enable ${server.name}" },
+                            modifier = Modifier.localizedContentDescription(R.string.enable_named, server.name),
                         )
                     }
                     probe?.let {
@@ -345,7 +346,7 @@ private fun ConfiguredMcpList(
                         onClick = { onTest(server.name) },
                         enabled = server.enabled && !state.mcpLoading,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Test on Hermes") }
+                    ) { Text(stringResource(R.string.ui_test_on_hermes_57bd42)) }
                     TextButton(
                         onClick = { onRemove(server.name) },
                         enabled = !state.mcpLoading,
@@ -353,7 +354,7 @@ private fun ConfiguredMcpList(
                     ) {
                         Icon(Icons.Outlined.Delete, null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Remove from Hermes")
+                        Text(stringResource(R.string.ui_remove_from_hermes_3193a3))
                     }
                 }
             }
@@ -430,7 +431,7 @@ private fun McpCatalogCard(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            Text("${entry.transport} / auth: ${entry.authType}", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.transport_auth, entry.transport, entry.authType), style = MaterialTheme.typography.labelMedium)
             Text(entry.targetSummary(), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             if (entry.requiredEnv.isNotEmpty()) {
                 Text(
@@ -439,7 +440,7 @@ private fun McpCatalogCard(
                 )
             }
             if (entry.needsInstall) {
-                Text("Requires a server-side clone/bootstrap step. Android waits for Hermes to finish before reloading MCP.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_requires_a_server_side_clone_bootstrap_step_android_wai_a9882f), style = MaterialTheme.typography.bodySmall)
             }
             if (entry.postInstall.isNotBlank()) {
                 Text(entry.postInstall.take(MAX_MCP_DISPLAY_CHARACTERS), style = MaterialTheme.typography.bodySmall)
@@ -451,8 +452,7 @@ private fun McpCatalogCard(
             )
             when {
                 entry.installed -> Unit
-                entry.authType == "oauth" -> Text(
-                    "Install and authentication require Hermes Desktop or CLI because the current flow opens a browser on the server host.",
+                entry.authType == "oauth" -> Text(stringResource(R.string.ui_install_and_authentication_require_hermes_desktop_or_cl_7e9a21),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -460,7 +460,7 @@ private fun McpCatalogCard(
                     onClick = { onInstall(entry) },
                     enabled = !loading,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Review and install") }
+                ) { Text(stringResource(R.string.ui_review_and_install_c9fdd1)) }
             }
         }
     }

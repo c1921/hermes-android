@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonPrimitive
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun ServerConfigScreen(
@@ -84,15 +86,14 @@ internal fun ServerConfigScreen(
             onRefresh = onRefresh,
             onBack = onBack,
         )
-        Text(
-            "Schema-driven Hermes configuration. Android sends one advertised field at a time; running sessions may retain their current values.",
+        Text(stringResource(R.string.ui_schema_driven_hermes_configuration_android_sends_one_ad_9b3315),
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
         OutlinedTextField(
             value = query,
             onValueChange = { query = it.take(120) },
-            label = { Text("Search settings") },
+            label = { Text(stringResource(R.string.ui_search_settings_9a6f37)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         )
@@ -105,7 +106,7 @@ internal fun ServerConfigScreen(
                     FilterChip(
                         selected = activeCategory == null,
                         onClick = { selectedCategory = null },
-                        label = { Text("All") },
+                        label = { Text(stringResource(R.string.ui_all_6a7208)) },
                     )
                 }
                 items(categories, key = { it }) { category ->
@@ -146,8 +147,7 @@ internal fun ServerConfigScreen(
                 )
             }
             item {
-                Text(
-                    "Provider secrets, global approval bypass, private-network relaxations, model selection and toolsets stay in their dedicated guarded surfaces.",
+                Text(stringResource(R.string.ui_provider_secrets_global_approval_bypass_private_network_200f22),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(4.dp, 12.dp, 4.dp, 24.dp),
                 )
@@ -202,10 +202,10 @@ private fun ServerConfigRow(
                     checked = field.value.jsonPrimitive.boolean,
                     onCheckedChange = onBoolean,
                     enabled = enabled,
-                    modifier = Modifier.semantics { contentDescription = "Toggle ${field.key}" },
+                    modifier = Modifier.localizedContentDescription(R.string.toggle_named, field.key),
                 )
             } else {
-                Icon(Icons.Outlined.Edit, contentDescription = "Edit ${field.key}")
+                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.edit_named, field.key))
             }
         }
     }
@@ -242,7 +242,7 @@ private fun ServerConfigEditDialog(
                     OutlinedTextField(
                         value = draft,
                         onValueChange = { draft = it.take(4_096); validationError = null },
-                        label = { Text("Value") },
+                        label = { Text(stringResource(R.string.ui_value_8dce17)) },
                         minLines = if (field.type == ServerConfigType.TEXT) 3 else 1,
                         maxLines = 8,
                         modifier = Modifier.fillMaxWidth(),
@@ -256,9 +256,9 @@ private fun ServerConfigEditDialog(
                 runCatching { field.parseDraft(draft) }
                     .onSuccess(onSave)
                     .onFailure { validationError = it.message ?: "Invalid value" }
-            }) { Text("Save") }
+            }) { Text(stringResource(R.string.ui_save_efc007)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 

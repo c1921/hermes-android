@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
@@ -367,7 +368,7 @@ private data class ManagementActions(
 )
 
 @Composable
-fun HermesApp(
+internal fun HermesApp(
     secureScreen: Boolean = false,
     onSecureScreenChange: (Boolean) -> Unit = {},
     biometricReentry: Boolean = false,
@@ -375,6 +376,8 @@ fun HermesApp(
     onBiometricReentryChange: (Boolean) -> Unit = {},
     skin: HermesSkin = HermesSkin.NOUS,
     onSkinChange: (HermesSkin) -> Unit = {},
+    appLanguage: AppLanguage = AppLanguage.SYSTEM,
+    onAppLanguageChange: (AppLanguage) -> Unit = {},
     onWorkspaceReady: () -> Unit = {},
     entryDelivery: HermesEntryDelivery? = null,
     onEntryConsumed: (String) -> Unit = {},
@@ -731,6 +734,8 @@ fun HermesApp(
             onBiometricReentryChange = onBiometricReentryChange,
             skin = skin,
             onSkinChange = onSkinChange,
+            appLanguage = appLanguage,
+            onAppLanguageChange = onAppLanguageChange,
         )
     }
     HermesTheme(skin) {
@@ -788,6 +793,8 @@ fun HermesApp(
                             onBiometricReentryChange = onBiometricReentryChange,
                             skin = skin,
                             onSkinChange = onSkinChange,
+                            appLanguage = appLanguage,
+                            onAppLanguageChange = onAppLanguageChange,
                             onBack = { appNavController.popBackStack() },
                             modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
                         )
@@ -807,10 +814,10 @@ fun HermesApp(
         entryDelivery?.failureMessage?.let { failure ->
             AlertDialog(
                 onDismissRequest = {},
-                title = { Text("Hermes could not finish this request") },
+                title = { Text(stringResource(R.string.ui_hermes_could_not_finish_this_request_caf6ea)) },
                 text = { Text(failure) },
                 confirmButton = {
-                    TextButton(onClick = { onEntryRetry(entryDelivery.request.id) }) { Text("Retry") }
+                    TextButton(onClick = { onEntryRetry(entryDelivery.request.id) }) { Text(stringResource(R.string.ui_retry_9f5cd8)) }
                 },
                 dismissButton = {
                     TextButton(
@@ -822,7 +829,7 @@ fun HermesApp(
                                 onEntryDiscard(entryDelivery.request.id)
                             }
                         },
-                    ) { Text("Discard") }
+                    ) { Text(stringResource(R.string.ui_discard_36fff6)) }
                 },
             )
         }
@@ -883,21 +890,19 @@ internal fun OnboardingScreen(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         BrandGlyphSmall()
                         Column {
-                            Text("HERMES", style = MaterialTheme.typography.titleLarge)
-                            Text("AGENT / ANDROID", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.ui_hermes_18707d), style = MaterialTheme.typography.titleLarge)
+                            Text(stringResource(R.string.ui_agent_android_b4b6b6), style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    Text("OPEN SOURCE  ·  NATIVE ANDROID", style = MaterialTheme.typography.labelMedium)
-                    Text(
-                        "THE AGENT\nTHAT GROWS\nWITH YOU",
+                    Text(stringResource(R.string.ui_open_source_native_android_11ede3), style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.ui_the_agent_that_grows_with_you_1a12d4),
                         style = MaterialTheme.typography.headlineLarge,
                         modifier = Modifier.semantics { heading() },
                     )
-                    Text(
-                        "Your Hermes sessions, tools, skills, memory and approvals. Native on Android; agent state stays on the backend you control.",
+                    Text(stringResource(R.string.ui_your_hermes_sessions_tools_skills_memory_and_approvals__a2ae3b),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Button(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth()) { Text("CONNECT TO HERMES") }
+                    Button(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ui_connect_to_hermes_a29692)) }
                     Image(
                         painter = painterResource(R.drawable.hermes_hero_art),
                         contentDescription = null,
@@ -918,8 +923,8 @@ internal fun OnboardingScreen(
                                 clearProviderSelection()
                                 step = 0
                             },
-                        ) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
-                        Text("BACKEND LINK", style = MaterialTheme.typography.headlineMedium)
+                        ) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) }
+                        Text(stringResource(R.string.ui_backend_link_67c4b1), style = MaterialTheme.typography.headlineMedium)
                     }
                     HermesField(label, { label = it }, "Connection name")
                     HermesField(url, { value -> url = value; clearProviderSelection() }, "Hermes backend URL", KeyboardType.Uri)
@@ -940,8 +945,8 @@ internal fun OnboardingScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Allow private-network HTTP", style = MaterialTheme.typography.titleMedium)
-                            Text("Only literal LAN, loopback or Tailscale IPs. HTTPS is required otherwise.", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.ui_allow_private_network_http_2be5ea), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.ui_only_literal_lan_loopback_or_tailscale_ips_https_is_req_943f31), style = MaterialTheme.typography.bodySmall)
                         }
                         Switch(checked = privateHttp, onCheckedChange = null)
                     }
@@ -1003,11 +1008,10 @@ internal fun OnboardingScreen(
                         if (busy || discoveringProviders) {
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
-                            Text(if (providerSource == providerKey) "Test HTTP + WebSocket and save" else "Check sign-in options and save")
+                            Text(stringResource(if (providerSource == providerKey) R.string.test_http_websocket_save else R.string.check_signin_save))
                         }
                     }
-                    Text(
-                        "Only the returned Dashboard session cookies are encrypted with Android Keystore. Your password is never saved or restored as UI state.",
+                    Text(stringResource(R.string.ui_only_the_returned_dashboard_session_cookies_are_encrypt_198460),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1044,7 +1048,7 @@ private fun HermesField(
 private fun BrandGlyph() {
     Image(
         painter = painterResource(R.drawable.hermes_badge),
-        contentDescription = "Hermes Agent",
+        contentDescription = stringResource(R.string.a11y_hermes_agent_563803),
         modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)),
         contentScale = ContentScale.Crop,
     )
@@ -1063,12 +1067,12 @@ private fun ArchitectureStrip() {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("ANDROID", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.ui_android_81297a), style = MaterialTheme.typography.labelMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Icon(Icons.Outlined.SwapHoriz, null, modifier = Modifier.size(16.dp))
-                Text("HTTPS / WSS", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.ui_https_wss_cf7920), style = MaterialTheme.typography.labelMedium)
             }
-            Text("HERMES SERVE", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.ui_hermes_serve_23a5b5), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -1118,6 +1122,8 @@ private fun HermesWorkspace(
     onBiometricReentryChange: (Boolean) -> Unit,
     skin: HermesSkin,
     onSkinChange: (HermesSkin) -> Unit,
+    appLanguage: AppLanguage,
+    onAppLanguageChange: (AppLanguage) -> Unit,
 ) {
     val context = LocalContext.current
     val openExternalUrl: (String) -> Unit = remember(context) {
@@ -1370,6 +1376,8 @@ private fun HermesWorkspace(
                         onBiometricReentryChange = onBiometricReentryChange,
                         skin = skin,
                         onSkinChange = onSkinChange,
+                        appLanguage = appLanguage,
+                        onAppLanguageChange = onAppLanguageChange,
                         onBack = { navigator.back(backendId, profileId) },
                         modifier = Modifier.weight(1f),
                     )
@@ -1890,21 +1898,21 @@ private fun SessionRail(
         ) {
             if (compact) {
                 IconButton(onClick = { drawerScope.launch { drawerState.open() } }) {
-                    Icon(Icons.Outlined.Menu, "Open navigation")
+                    Icon(Icons.Outlined.Menu, stringResource(R.string.a11y_open_navigation_0f53b3))
                 }
             }
             BrandGlyphSmall()
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f).clickable(onClick = onBackends)) {
-                Text("HERMES", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.ui_hermes_18707d), style = MaterialTheme.typography.titleLarge)
                 Text(state.backend?.label.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
-            IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh sessions") }
+            IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_sessions_fd90ad)) }
             IconButton(
                 onClick = {
                     if (state.runtimeSessionId == null) onNewSession() else confirmNewSession = true
                 },
-            ) { Icon(Icons.Outlined.Add, "New session") }
+            ) { Icon(Icons.Outlined.Add, stringResource(R.string.a11y_new_session_5c881d)) }
         }
         ConnectionLine(connection)
         if (!compact) {
@@ -1919,7 +1927,7 @@ private fun SessionRail(
             ) {
                 Icon(Icons.Outlined.Folder, null)
                 Spacer(Modifier.width(6.dp))
-                Text("Artifacts")
+                Text(stringResource(R.string.ui_artifacts_a5b79f))
             }
             OutlinedButton(
                 onClick = onAutomations,
@@ -1928,7 +1936,7 @@ private fun SessionRail(
             ) {
                 Icon(Icons.Outlined.Schedule, null)
                 Spacer(Modifier.width(6.dp))
-                Text("Automations")
+                Text(stringResource(R.string.ui_automations_82542d))
             }
         }
         Row(
@@ -1942,7 +1950,7 @@ private fun SessionRail(
             ) {
                 Icon(Icons.Outlined.Tune, null)
                 Spacer(Modifier.width(6.dp))
-                Text("Manage")
+                Text(stringResource(R.string.ui_manage_bf58d1))
             }
             OutlinedButton(
                 onClick = onAppSettings,
@@ -1951,14 +1959,14 @@ private fun SessionRail(
             ) {
                 Icon(Icons.Outlined.Info, null)
                 Spacer(Modifier.width(6.dp))
-                Text("App settings")
+                Text(stringResource(R.string.ui_app_settings_d69225))
             }
         }
         }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it.take(200) },
-            placeholder = { Text("Search sessions") },
+            placeholder = { Text(stringResource(R.string.ui_search_sessions_646db9)) },
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
             trailingIcon = {
                 if (state.sessionSearchLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -1996,7 +2004,7 @@ private fun SessionRail(
             if (visibleSessions.isEmpty() && remoteResults.isEmpty() && !state.loading && !state.sessionSearchLoading) {
                 item {
                     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (state.sessions.isEmpty()) "NO SESSIONS" else "NO MATCHES", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(if (state.sessions.isEmpty()) R.string.no_sessions else R.string.no_matches), style = MaterialTheme.typography.titleMedium)
                         Text(
                             if (state.sessions.isEmpty()) "Start a conversation or connect another Hermes surface."
                             else "Try a title, profile, model, provider or source.",
@@ -2014,33 +2022,33 @@ private fun SessionRail(
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet {
-                    Text("HERMES", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(20.dp))
+                    Text(stringResource(R.string.ui_hermes_18707d), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(20.dp))
                     NavigationDrawerItem(
-                        label = { Text("Chats") },
+                        label = { Text(stringResource(R.string.ui_chats_6c9e84)) },
                         selected = true,
                         onClick = { drawerScope.launch { drawerState.close() } },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     NavigationDrawerItem(
-                        label = { Text("Artifacts") },
+                        label = { Text(stringResource(R.string.ui_artifacts_a5b79f)) },
                         selected = false,
                         onClick = onArtifacts,
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     NavigationDrawerItem(
-                        label = { Text("Automations") },
+                        label = { Text(stringResource(R.string.ui_automations_82542d)) },
                         selected = false,
                         onClick = onAutomations,
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     NavigationDrawerItem(
-                        label = { Text("Manage") },
+                        label = { Text(stringResource(R.string.ui_manage_bf58d1)) },
                         selected = false,
                         onClick = onManage,
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                     NavigationDrawerItem(
-                        label = { Text("App settings") },
+                        label = { Text(stringResource(R.string.ui_app_settings_d69225)) },
                         selected = false,
                         onClick = onAppSettings,
                         modifier = Modifier.padding(horizontal = 12.dp),
@@ -2057,33 +2065,33 @@ private fun SessionRail(
     pendingDelete?.let { session ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("DELETE SESSION?") },
-            text = { Text("${session.displayTitle} and its stored transcript will be permanently removed from Hermes. This cannot be undone.") },
+            title = { Text(stringResource(R.string.ui_delete_session_fd5765)) },
+            text = { Text(stringResource(R.string.delete_session_description, session.displayTitle)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         pendingDelete = null
                         onDeleteSession(session)
                     },
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.ui_delete_f6fdbe)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     if (confirmNewSession) {
         AlertDialog(
             onDismissRequest = { confirmNewSession = false },
-            title = { Text("START FRESH?") },
-            text = { Text("Hermes will end the current live conversation and open a clean session. Its stored transcript remains available in the session list.") },
+            title = { Text(stringResource(R.string.ui_start_fresh_449169)) },
+            text = { Text(stringResource(R.string.ui_hermes_will_end_the_current_live_conversation_and_open__176bb1)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         confirmNewSession = false
                         onNewSession()
                     },
-                ) { Text("Start new session") }
+                ) { Text(stringResource(R.string.ui_start_new_session_6cbc1c)) }
             },
-            dismissButton = { TextButton(onClick = { confirmNewSession = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmNewSession = false }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -2143,7 +2151,7 @@ private fun highlightedSearchSnippet(raw: String, highlight: Color): AnnotatedSt
 private fun BrandGlyphSmall() {
     Image(
         painter = painterResource(R.drawable.hermes_badge),
-        contentDescription = "Hermes Agent",
+        contentDescription = stringResource(R.string.a11y_hermes_agent_563803),
         modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
         contentScale = ContentScale.Crop,
     )
@@ -2217,7 +2225,7 @@ private fun SessionRow(
             }
             SessionSwipeAction(
                 icon = Icons.Outlined.Archive,
-                contentDescription = "Archive ${session.displayTitle}",
+                contentDescription = stringResource(R.string.archive_named, session.displayTitle),
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                 visible = swipeState.currentValue,
@@ -2229,7 +2237,7 @@ private fun SessionRow(
             onDelete?.let { delete ->
                 SessionSwipeAction(
                     icon = Icons.Outlined.Delete,
-                    contentDescription = "Delete ${session.displayTitle}",
+                    contentDescription = stringResource(R.string.delete_named, session.displayTitle),
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     visible = swipeState.currentValue,
@@ -2301,7 +2309,7 @@ private fun SessionRow(
                 }
             }
             if (session.pinned == true) {
-                Icon(Icons.Outlined.PushPin, "Pinned ${session.displayTitle}", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.PushPin, stringResource(R.string.pinned_named, session.displayTitle), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
             if (session.isActive) Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.tertiary))
         }
@@ -2380,8 +2388,8 @@ private fun ChatSurface(
                 Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     BrandGlyph()
                     Spacer(Modifier.height(18.dp))
-                    Text("OPEN A SESSION", style = MaterialTheme.typography.headlineMedium)
-                    Text("Select an existing conversation or create a new one.", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.ui_open_a_session_5e62c9), style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(R.string.ui_select_an_existing_conversation_or_create_a_new_one_8ad07a), style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 key(state.activeStoredSession?.id ?: state.runtimeSessionId) {
@@ -2475,7 +2483,7 @@ private fun ChatHeader(
     sessionActions: SessionActionCallbacks,
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sessions") } }
+        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_to_sessions_e7bfae)) } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(
                 state.activeStoredSession?.displayTitle ?: state.runtimeInfo.title.ifBlank { "New session" },
@@ -2488,7 +2496,7 @@ private fun ChatHeader(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        onFiles?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Folder, "Open session files") } }
+        onFiles?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Folder, stringResource(R.string.a11y_open_session_files_b7889a)) } }
         SessionActions(
             state = state,
             onRename = sessionActions.rename,
@@ -2580,7 +2588,7 @@ internal fun Timeline(
                     followLatest = true
                 },
             ) {
-                Icon(Icons.Outlined.KeyboardArrowDown, "Jump to latest message")
+                Icon(Icons.Outlined.KeyboardArrowDown, stringResource(R.string.a11y_jump_to_latest_message_2de795))
             }
         }
     }
@@ -2628,7 +2636,7 @@ internal fun MessageBlock(
                                 actionError = null
                                 runCatching {
                                     context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
-                                        ClipData.newPlainText("Hermes message", message.text),
+                                        ClipData.newPlainText(context.getString(R.string.ui_hermes_message_566946), message.text),
                                     )
                                 }.onSuccess {
                                     copied = true
@@ -2653,7 +2661,7 @@ internal fun MessageBlock(
                                 }
                             },
                         ) {
-                            Icon(Icons.Outlined.Share, "Share message", modifier = Modifier.size(19.dp))
+                            Icon(Icons.Outlined.Share, stringResource(R.string.a11y_share_message_c1c0e6), modifier = Modifier.size(19.dp))
                         }
                     }
                     if (!user && message.role == MessageRole.ASSISTANT && !message.streaming && message.text.isNotBlank()) {
@@ -2773,14 +2781,22 @@ internal fun ToolBlock(
     var localExpanded by rememberSaveable(disclosureKey) { mutableStateOf(false) }
     val isExpanded = expanded ?: localExpanded
     val presentation = remember(tool.name, tool.summary, tool.state) { tool.presentation(includeTranscript = false) }
-    val accessibilityDescription = remember(presentation) {
-        listOfNotNull(
-            "Tool usage",
+    val toolStateDescription = stringResource(
+        when (presentation.state) {
+            ToolState.RUNNING -> R.string.tool_running
+            ToolState.COMPLETE -> R.string.tool_completed
+            ToolState.FAILED -> R.string.tool_failed
+        },
+        presentation.title,
+    )
+    val presentationDescription = presentation.summary ?: toolStateDescription
+    val disclosureStateDescription = stringResource(if (isExpanded) R.string.expanded else R.string.collapsed)
+    val accessibilityDescription = listOfNotNull(
+            stringResource(R.string.tool_usage_accessibility),
             presentation.title,
-            presentation.stateDescription,
-            presentation.description.takeUnless { it == presentation.stateDescription },
+            toolStateDescription,
+            presentation.summary,
         ).joinToString(", ")
-    }
     val colour = when (tool.state) {
         ToolState.RUNNING -> WarningColor
         ToolState.COMPLETE -> MaterialTheme.colorScheme.tertiary
@@ -2798,7 +2814,7 @@ internal fun ToolBlock(
                     .fillMaxWidth()
                     .clickable(
                         role = Role.Button,
-                        onClickLabel = if (isExpanded) "Hide tool transcript" else "Show tool transcript",
+                        onClickLabel = stringResource(if (isExpanded) R.string.hide_tool_transcript else R.string.show_tool_transcript),
                     ) {
                         val nextExpanded = !isExpanded
                         if (expanded == null) localExpanded = nextExpanded
@@ -2806,7 +2822,7 @@ internal fun ToolBlock(
                     }
                     .semantics {
                         contentDescription = accessibilityDescription
-                        stateDescription = if (isExpanded) "Expanded" else "Collapsed"
+                        stateDescription = disclosureStateDescription
                     }
                     .padding(horizontal = 12.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2814,9 +2830,9 @@ internal fun ToolBlock(
                 Icon(Icons.Outlined.Terminal, null, tint = colour, modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("TOOL USAGE · ${presentation.title}", style = MaterialTheme.typography.labelMedium, color = colour)
+                    Text(stringResource(R.string.tool_usage, presentation.title), style = MaterialTheme.typography.labelMedium, color = colour)
                     Text(
-                        presentation.description,
+                        presentationDescription,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -2844,6 +2860,14 @@ internal fun ToolSupportingPane(
     onClose: () -> Unit,
 ) {
     val presentation = remember(tool.name, tool.summary, tool.state) { tool.presentation(includeTranscript = false) }
+    val presentationDescription = presentation.summary ?: stringResource(
+        when (presentation.state) {
+            ToolState.RUNNING -> R.string.tool_running
+            ToolState.COMPLETE -> R.string.tool_completed
+            ToolState.FAILED -> R.string.tool_failed
+        },
+        presentation.title,
+    )
     Column(
         Modifier
             .width(340.dp)
@@ -2853,10 +2877,10 @@ internal fun ToolSupportingPane(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("TOOL USAGE · ${presentation.title}", style = MaterialTheme.typography.labelMedium)
-                Text(presentation.description, style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.tool_usage, presentation.title), style = MaterialTheme.typography.labelMedium)
+                Text(presentationDescription, style = MaterialTheme.typography.bodyMedium)
             }
-            IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "Close tool transcript") }
+            IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, stringResource(R.string.a11y_close_tool_transcript_78710b)) }
         }
         ToolTranscriptContent(tool = tool, modifier = Modifier.fillMaxSize())
     }
@@ -2880,8 +2904,7 @@ private fun ToolTranscriptContent(
         }
         val transcript = remember(tool.detail) { tool.presentation().transcript }
         if (transcript.isNotBlank()) {
-            Text(
-                "TRANSCRIPT",
+            Text(stringResource(R.string.ui_transcript_a54856),
                 Modifier.padding(top = 10.dp, bottom = 6.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2910,7 +2933,7 @@ private fun ToolTranscriptContent(
 internal fun ReasoningBlock(reasoning: TimelineItem.Reasoning) {
     var expanded by rememberSaveable(reasoning.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 4.dp)) {
-        Text("REASONING ${if (expanded) "−" else "+"}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(if (expanded) R.string.reasoning_expanded else R.string.reasoning_collapsed), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (expanded) Text(reasoning.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -3164,11 +3187,11 @@ private fun Composer(
                             Row {
                                 when {
                                     attachment.phase == AttachmentPhase.ERROR -> {
-                                        TextButton(onClick = { onRetryAttachment(attachment.id) }) { Text("Retry") }
-                                        TextButton(onClick = { onRemoveAttachment(attachment.id) }) { Text("Remove") }
+                                        TextButton(onClick = { onRetryAttachment(attachment.id) }) { Text(stringResource(R.string.ui_retry_9f5cd8)) }
+                                        TextButton(onClick = { onRemoveAttachment(attachment.id) }) { Text(stringResource(R.string.ui_remove_e96390)) }
                                     }
-                                    attachment.active -> TextButton(onClick = { onCancelAttachment(attachment.id) }) { Text("Cancel") }
-                                    else -> TextButton(onClick = { onRemoveAttachment(attachment.id) }) { Text("Remove") }
+                                    attachment.active -> TextButton(onClick = { onCancelAttachment(attachment.id) }) { Text(stringResource(R.string.ui_cancel_77dfd2)) }
+                                    else -> TextButton(onClick = { onRemoveAttachment(attachment.id) }) { Text(stringResource(R.string.ui_remove_e96390)) }
                                 }
                             }
                         }
@@ -3208,7 +3231,7 @@ private fun Composer(
                         onClick = { documentPicker.launch(arrayOf("*/*")) },
                         enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
                     ) {
-                        Icon(Icons.Outlined.AttachFile, "Attach files")
+                        Icon(Icons.Outlined.AttachFile, stringResource(R.string.a11y_attach_files_137135))
                     }
                     IconButton(
                         onClick = {
@@ -3226,14 +3249,14 @@ private fun Composer(
                         },
                         enabled = connected && attachments.size < MAX_PENDING_ATTACHMENTS,
                     ) {
-                        Icon(Icons.Outlined.PhotoCamera, "Take a photo")
+                        Icon(Icons.Outlined.PhotoCamera, stringResource(R.string.a11y_take_a_photo_229847))
                     }
                 }
                 Box {
                     IconButton(
                         onClick = { historyMenuOpen = true },
                         enabled = connected && userHistory.isNotEmpty(),
-                        modifier = Modifier.semantics { contentDescription = "Open message history" },
+                        modifier = Modifier.localizedContentDescription(R.string.a11y_open_message_history_05b65a),
                     ) { Icon(Icons.Outlined.History, null) }
                     DropdownMenu(
                         expanded = historyMenuOpen,
@@ -3312,7 +3335,7 @@ private fun Composer(
                 if (sending) {
                     IconButton(
                         onClick = onInterrupt,
-                        modifier = Modifier.semantics { contentDescription = "Stop the current Hermes run" },
+                        modifier = Modifier.localizedContentDescription(R.string.a11y_stop_the_current_hermes_run_edca16),
                     ) {
                         Icon(Icons.Outlined.StopCircle, null, tint = MaterialTheme.colorScheme.error)
                     }
@@ -3325,27 +3348,26 @@ private fun Composer(
                         enabled = connected && draft.isNotBlank() && attachments.isEmpty() &&
                             queuedPrompts.size < ComposerQueue.MAX_ENTRIES && !queueDraining,
                     ) {
-                        Icon(Icons.Outlined.Schedule, "Queue for the next turn")
+                        Icon(Icons.Outlined.Schedule, stringResource(R.string.a11y_queue_for_the_next_turn_1cec5f))
                     }
                     IconButton(
                         onClick = ::submit,
                         enabled = connected && draft.isNotBlank() && attachments.all { it.ready },
                     ) {
-                        Icon(Icons.AutoMirrored.Outlined.Send, "Steer the current run")
+                        Icon(Icons.AutoMirrored.Outlined.Send, stringResource(R.string.a11y_steer_the_current_run_80b792))
                     }
                 } else {
                     IconButton(
                         onClick = ::submit,
                         enabled = connected && draft.isNotBlank() && attachments.all { it.ready },
                     ) {
-                        Icon(Icons.AutoMirrored.Outlined.Send, "Send message")
+                        Icon(Icons.AutoMirrored.Outlined.Send, stringResource(R.string.a11y_send_message_c70a89))
                     }
                 }
             },
         )
         if (sending && attachments.isNotEmpty()) {
-            Text(
-                "Pending-message queue is text-only; send or remove attachments first.",
+            Text(stringResource(R.string.ui_pending_message_queue_is_text_only_send_or_remove_attac_70f037),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -3363,12 +3385,12 @@ private fun Composer(
     queuedEditId?.let { entryId ->
         AlertDialog(
             onDismissRequest = { queuedEditId = null },
-            title = { Text("EDIT PENDING MESSAGE") },
+            title = { Text(stringResource(R.string.ui_edit_pending_message_a107fa)) },
             text = {
                 OutlinedTextField(
                     value = queuedEditText,
                     onValueChange = { queuedEditText = it.take(ComposerQueue.MAX_TEXT_CHARACTERS) },
-                    label = { Text("Message") },
+                    label = { Text(stringResource(R.string.ui_message_68f414)) },
                     minLines = 3,
                     maxLines = 8,
                 )
@@ -3380,16 +3402,16 @@ private fun Composer(
                         queuedEditId = null
                     },
                     enabled = queuedEditText.isNotBlank() && !queueDraining,
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.ui_save_efc007)) }
             },
-            dismissButton = { TextButton(onClick = { queuedEditId = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { queuedEditId = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     pendingDestructiveSlash?.let { command ->
         val restoresSnapshot = command.lowercase().startsWith("/rollback restore")
         AlertDialog(
             onDismissRequest = { pendingDestructiveSlash = null },
-            title = { Text(if (restoresSnapshot) "RESTORE SNAPSHOT?" else "START FRESH?") },
+            title = { Text(stringResource(if (restoresSnapshot) R.string.restore_snapshot_question else R.string.ui_start_fresh_449169)) },
             text = {
                 Text(
                     if (restoresSnapshot) {
@@ -3405,9 +3427,9 @@ private fun Composer(
                         pendingDestructiveSlash = null
                         onExecuteSlash(command)
                     },
-                ) { Text(if (restoresSnapshot) "Restore snapshot" else "Start new session") }
+                ) { Text(stringResource(if (restoresSnapshot) R.string.restore_snapshot else R.string.ui_start_new_session_6cbc1c)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDestructiveSlash = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingDestructiveSlash = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -3440,7 +3462,7 @@ private fun PendingMessageQueue(
     ) {
         Column(Modifier.fillMaxWidth().padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("PENDING MESSAGES", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.ui_pending_messages_75b592), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                 if (draining) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(6.dp))
@@ -3474,18 +3496,18 @@ private fun PendingMessageQueue(
                                     onClick = { onSendNow(entry.id) },
                                     enabled = !draining,
                                     modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                                ) { Icon(Icons.Outlined.Refresh, "Retry pending message", modifier = Modifier.size(17.dp)) }
+                                ) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_retry_pending_message_64845b), modifier = Modifier.size(17.dp)) }
                             }
                             IconButton(
                                 onClick = { onEdit(entry) },
                                 enabled = !draining,
                                 modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                            ) { Icon(Icons.Outlined.Edit, "Edit pending message", modifier = Modifier.size(17.dp)) }
+                            ) { Icon(Icons.Outlined.Edit, stringResource(R.string.a11y_edit_pending_message_9cca47), modifier = Modifier.size(17.dp)) }
                             IconButton(
                                 onClick = { onRemove(entry.id) },
                                 enabled = !draining,
                                 modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-                            ) { Icon(Icons.Outlined.Delete, "Remove pending message", modifier = Modifier.size(17.dp)) }
+                            ) { Icon(Icons.Outlined.Delete, stringResource(R.string.a11y_remove_pending_message_422a73), modifier = Modifier.size(17.dp)) }
                         }
                     }
                 }
@@ -3622,8 +3644,8 @@ private fun VoiceStatus(
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                    Button(onClick = onStop) { Text("Transcribe") }
+                    TextButton(onClick = onCancel) { Text(stringResource(R.string.ui_cancel_77dfd2)) }
+                    Button(onClick = onStop) { Text(stringResource(R.string.ui_transcribe_5a6353)) }
                 }
                 LinearProgressIndicator(progress = { state.level }, modifier = Modifier.fillMaxWidth())
                 Text(
@@ -3643,8 +3665,8 @@ private fun VoiceStatus(
         ) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                Text("HERMES IS TRANSCRIBING", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                TextButton(onClick = onCancel) { Text("Cancel") }
+                Text(stringResource(R.string.ui_hermes_is_transcribing_842be3), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.ui_cancel_77dfd2)) }
             }
         }
         VoicePhase.IDLE -> state.error?.let { message ->
@@ -3655,8 +3677,8 @@ private fun VoiceStatus(
             ) {
                 Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    if (showPermissionSettings) TextButton(onClick = onOpenPermissionSettings) { Text("Settings") }
-                    IconButton(onClick = onDismissError) { Icon(Icons.Outlined.Close, "Dismiss voice error") }
+                    if (showPermissionSettings) TextButton(onClick = onOpenPermissionSettings) { Text(stringResource(R.string.ui_settings_c7f73b)) }
+                    IconButton(onClick = onDismissError) { Icon(Icons.Outlined.Close, stringResource(R.string.a11y_dismiss_voice_error_1c0fe3)) }
                 }
             }
         }
@@ -3694,14 +3716,14 @@ private fun SpeechStatus(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (state.phase == SpeechPhase.PLAYING) {
-                    IconButton(onClick = onPause) { Icon(Icons.Outlined.Pause, "Pause spoken reply") }
+                    IconButton(onClick = onPause) { Icon(Icons.Outlined.Pause, stringResource(R.string.a11y_pause_spoken_reply_335ed5)) }
                 } else if (state.phase == SpeechPhase.PAUSED) {
-                    IconButton(onClick = onResume) { Icon(Icons.Outlined.PlayArrow, "Resume spoken reply") }
+                    IconButton(onClick = onResume) { Icon(Icons.Outlined.PlayArrow, stringResource(R.string.a11y_resume_spoken_reply_a61a49)) }
                 }
                 if (state.phase != SpeechPhase.LOADING) {
-                    TextButton(onClick = onOutput) { Text("Output") }
+                    TextButton(onClick = onOutput) { Text(stringResource(R.string.ui_output_4bed33)) }
                 }
-                IconButton(onClick = onStop) { Icon(Icons.Outlined.StopCircle, "Stop spoken reply") }
+                IconButton(onClick = onStop) { Icon(Icons.Outlined.StopCircle, stringResource(R.string.a11y_stop_spoken_reply_55de1b)) }
             }
         }
     } else if (state.error != null) {
@@ -3712,7 +3734,7 @@ private fun SpeechStatus(
         ) {
             Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(state.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismissError) { Icon(Icons.Outlined.Close, "Dismiss spoken reply error") }
+                IconButton(onClick = onDismissError) { Icon(Icons.Outlined.Close, stringResource(R.string.a11y_dismiss_spoken_reply_error_525f7d)) }
             }
         }
     }
@@ -3747,7 +3769,7 @@ private fun SlashSuggestions(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text("Loading Hermes commands", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.ui_loading_hermes_commands_fa75d1), style = MaterialTheme.typography.bodySmall)
                 }
             }
             suggestions.forEachIndexed { index, suggestion ->
@@ -3789,7 +3811,7 @@ private fun ApprovalDialog(command: String, description: String?, choices: List<
     AlertDialog(
         onDismissRequest = { },
         icon = { Icon(Icons.Outlined.Terminal, null, tint = MaterialTheme.colorScheme.error) },
-        title = { Text("COMMAND APPROVAL") },
+        title = { Text(stringResource(R.string.ui_command_approval_93b2f6)) },
         text = {
             Column(
                 Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
@@ -3808,7 +3830,7 @@ private fun ApprovalDialog(command: String, description: String?, choices: List<
                 }
             }
         },
-        dismissButton = { OutlinedButton(onClick = { onChoice("deny") }) { Text("DENY") } },
+        dismissButton = { OutlinedButton(onClick = { onChoice("deny") }) { Text(stringResource(R.string.ui_deny_b87191)) } },
     )
 }
 
@@ -3818,7 +3840,7 @@ private fun ClarificationDialog(question: String, choices: List<String>, onAnswe
     var answer by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = { },
-        title = { Text("HERMES NEEDS INPUT") },
+        title = { Text(stringResource(R.string.ui_hermes_needs_input_9dba98)) },
         text = {
             Column(
                 Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
@@ -3830,10 +3852,10 @@ private fun ClarificationDialog(question: String, choices: List<String>, onAnswe
                         choices.forEach { choice -> OutlinedButton(onClick = { answer = choice }) { Text(choice) } }
                     }
                 }
-                OutlinedTextField(answer, { answer = it }, Modifier.fillMaxWidth(), label = { Text("Answer") })
+                OutlinedTextField(answer, { answer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.ui_answer_a16a4e)) })
             }
         },
-        confirmButton = { Button(enabled = answer.isNotBlank(), onClick = { onAnswer(answer.trim()) }) { Text("CONTINUE") } },
+        confirmButton = { Button(enabled = answer.isNotBlank(), onClick = { onAnswer(answer.trim()) }) { Text(stringResource(R.string.ui_continue_ff3dbb)) } },
     )
 }
 
@@ -3854,7 +3876,7 @@ internal fun SensitiveInputDialog(
     AlertDialog(
         onDismissRequest = { },
         icon = { Icon(Icons.Outlined.Key, null, tint = WarningColor) },
-        title = { Text(if (sudo) "SUDO PASSWORD REQUIRED" else "SECRET REQUIRED") },
+        title = { Text(stringResource(if (sudo) R.string.sudo_password_required else R.string.secret_required)) },
         text = {
             Column(
                 Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
@@ -3862,13 +3884,13 @@ internal fun SensitiveInputDialog(
             ) {
                 Text(prompt)
                 environmentVariable?.let {
-                    Text("ENVIRONMENT VARIABLE / $it", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.environment_variable, it), style = MaterialTheme.typography.labelMedium)
                 }
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it.take(8_192) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if (sudo) "Password" else "Secret value") },
+                    label = { Text(stringResource(if (sudo) R.string.password else R.string.secret_value)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
@@ -3877,18 +3899,17 @@ internal fun SensitiveInputDialog(
                     ),
                     keyboardActions = KeyboardActions(onDone = { if (value.isNotEmpty()) submit(value) }),
                 )
-                Text(
-                    "This value is sent once to the active Hermes request. Android does not save it to drafts, restored state, logs, or local preferences.",
+                Text(stringResource(R.string.ui_this_value_is_sent_once_to_the_active_hermes_request_an_14cd8b),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            Button(enabled = value.isNotEmpty(), onClick = { submit(value) }) { Text("CONTINUE") }
+            Button(enabled = value.isNotEmpty(), onClick = { submit(value) }) { Text(stringResource(R.string.ui_continue_ff3dbb)) }
         },
         dismissButton = {
-            OutlinedButton(onClick = { submit("") }) { Text("CANCEL REQUEST") }
+            OutlinedButton(onClick = { submit("") }) { Text(stringResource(R.string.ui_cancel_request_499d4e)) }
         },
     )
 }

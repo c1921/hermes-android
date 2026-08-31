@@ -1,5 +1,7 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -41,6 +43,7 @@ import com.nousresearch.hermes.protocol.AnalyticsSkillEntry
 import com.nousresearch.hermes.protocol.AnalyticsToolEntry
 import com.nousresearch.hermes.protocol.ContextUsageCategory
 import java.util.Locale
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun UsageScreen(
@@ -56,17 +59,17 @@ internal fun UsageScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             onBack?.let {
-                IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+                IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) }
             }
             Column(Modifier.weight(1f)) {
-                Text("USAGE", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                Text("Hermes profile / ${state.activeProfile}", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_usage_cf3bfa), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                Text(stringResource(R.string.hermes_profile, state.activeProfile), style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = { onRefresh(state.usageDays) }, enabled = !state.usageLoading) {
                 if (state.usageLoading) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Outlined.Refresh, "Refresh usage")
+                    Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_usage_a4a94d))
                 }
             }
         }
@@ -77,14 +80,14 @@ internal fun UsageScreen(
             listOf(7, 30, 90).forEach { days ->
                 if (state.usageDays == days) {
                     Button(onClick = { onRefresh(days) }, modifier = Modifier.weight(1f), enabled = !state.usageLoading) {
-                        Text("$days days")
+                        Text(pluralStringResource(R.plurals.days, days, days))
                     }
                 } else {
                     OutlinedButton(
                         onClick = { onRefresh(days) },
                         modifier = Modifier.weight(1f),
                         enabled = !state.usageLoading,
-                    ) { Text("$days days") }
+                    ) { Text(pluralStringResource(R.plurals.days, days, days)) }
                 }
             }
         }
@@ -97,8 +100,7 @@ internal fun UsageScreen(
             return@Column
         }
         if (analytics == null) {
-            Text(
-                "Hermes usage data is unavailable for this profile.",
+            Text(stringResource(R.string.ui_hermes_usage_data_is_unavailable_for_this_profile_ddbf4c),
                 modifier = Modifier.padding(24.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -126,7 +128,7 @@ internal fun UsageScreen(
                             },
                         )
                         if (breakdown.categories.isEmpty()) {
-                            Text("Hermes did not report a category breakdown for this session.", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.ui_hermes_did_not_report_a_category_breakdown_for_this_ses_e788ed), style = MaterialTheme.typography.bodySmall)
                         } else {
                             breakdown.categories.forEach { ContextCategoryRow(it, breakdown.contextUsed) }
                         }
@@ -184,7 +186,7 @@ private fun UsageModelRow(model: AnalyticsModelEntry) {
                 "${model.inputTokens.compact()} input / ${model.outputTokens.compact()} output / ${model.apiCalls.compact()} calls",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text("Estimated ${model.estimatedCost.usd()} / ${model.sessions.compact()} sessions", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.estimated_usage, model.estimatedCost.usd(), model.sessions.compact()), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -250,15 +252,15 @@ private fun UsageError(message: String) {
 private fun Long?.compact(): String {
     val value = this?.coerceAtLeast(0) ?: return "—"
     return when {
-        value >= 1_000_000_000 -> String.format(Locale.US, "%.1fB", value / 1_000_000_000.0)
-        value >= 1_000_000 -> String.format(Locale.US, "%.1fM", value / 1_000_000.0)
-        value >= 1_000 -> String.format(Locale.US, "%.1fK", value / 1_000.0)
+        value >= 1_000_000_000 -> String.format(Locale.getDefault(), "%.1fB", value / 1_000_000_000.0)
+        value >= 1_000_000 -> String.format(Locale.getDefault(), "%.1fM", value / 1_000_000.0)
+        value >= 1_000 -> String.format(Locale.getDefault(), "%.1fK", value / 1_000.0)
         else -> value.toString()
     }
 }
 
-private fun Double.usd(): String = if (isFinite() && this >= 0) String.format(Locale.US, "$%.4f", this) else "—"
-private fun Double.safePercent(): String = if (isFinite()) String.format(Locale.US, "%.1f", coerceIn(0.0, 100.0)) else "0.0"
+private fun Double.usd(): String = if (isFinite() && this >= 0) String.format(Locale.getDefault(), "$%.4f", this) else "—"
+private fun Double.safePercent(): String = if (isFinite()) String.format(Locale.getDefault(), "%.1f", coerceIn(0.0, 100.0)) else "0.0"
 
 private const val MAX_USAGE_ROWS = 20
 private const val MAX_USAGE_LABEL_CHARACTERS = 200

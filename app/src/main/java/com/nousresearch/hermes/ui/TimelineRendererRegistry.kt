@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.domain.TimelineItem
+import com.nousresearch.hermes.R
 
 internal enum class TimelineRendererKind {
     MESSAGE,
@@ -84,31 +86,32 @@ internal object TimelineRendererRegistry {
 private fun ReferenceBlock(reference: TimelineItem.Reference) {
     TimelineCard(
         label = listOfNotNull(
-            "REFERENCE",
+            stringResource(R.string.timeline_reference),
             reference.index?.let { index -> reference.count?.let { "$index/$it" } ?: index.toString() },
             reference.label,
         ).joinToString(" · "),
         text = reference.text,
-        contentDescription = "Reference, ${reference.label}",
+        contentDescription = stringResource(R.string.reference_description, reference.label),
     )
 }
 
 @Composable
 private fun ArtifactTimelineBlock(artifact: TimelineItem.Artifact) {
+    val availableFromHermes = stringResource(R.string.available_from_hermes)
     TimelineCard(
-        label = "ARTIFACT · ${artifact.label}",
+        label = stringResource(R.string.timeline_artifact, artifact.label),
         text = listOfNotNull(artifact.description, artifact.mimeType, artifact.reference).joinToString(" · ")
-            .ifBlank { "Available from Hermes" },
-        contentDescription = "Artifact, ${artifact.label}",
+            .ifBlank { availableFromHermes },
+        contentDescription = stringResource(R.string.artifact_description, artifact.label),
     )
 }
 
 @Composable
 private fun ErrorTimelineBlock(error: TimelineItem.Error) {
     TimelineCard(
-        label = if (error.recoverable) "ERROR · RECOVERABLE" else "ERROR",
+        label = stringResource(if (error.recoverable) R.string.timeline_error_recoverable else R.string.timeline_error),
         text = error.message,
-        contentDescription = "Hermes error",
+        contentDescription = stringResource(R.string.a11y_hermes_error_7454cc),
         error = true,
     )
 }
@@ -116,9 +119,9 @@ private fun ErrorTimelineBlock(error: TimelineItem.Error) {
 @Composable
 private fun BlockingRequestBlock(request: TimelineItem.BlockingRequest) {
     TimelineCard(
-        label = "ACTION REQUIRED · ${request.kind.name.replace('_', ' ')}",
+        label = stringResource(R.string.timeline_action_required, request.kind.name.replace('_', ' ')),
         text = request.prompt,
-        contentDescription = "Action required, ${request.kind.name.replace('_', ' ').lowercase()}",
+        contentDescription = stringResource(R.string.action_required_description, request.kind.name.replace('_', ' ').lowercase()),
     )
 }
 
@@ -126,9 +129,9 @@ private fun BlockingRequestBlock(request: TimelineItem.BlockingRequest) {
 private fun GenericTimelineBlock(item: TimelineItem) {
     val unknown = item as? TimelineItem.Unknown
     TimelineCard(
-        label = "HERMES EVENT",
-        text = unknown?.summary?.take(512) ?: "This Hermes version returned an unsupported conversation part.",
-        contentDescription = "Unsupported Hermes conversation part",
+        label = stringResource(R.string.timeline_event),
+        text = unknown?.summary?.take(512) ?: stringResource(R.string.unsupported_conversation_part),
+        contentDescription = stringResource(R.string.a11y_unsupported_hermes_conversation_part_71384d),
     )
 }
 

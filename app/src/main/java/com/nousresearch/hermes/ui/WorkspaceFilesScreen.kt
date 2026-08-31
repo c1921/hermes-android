@@ -12,6 +12,7 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,6 +85,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun WorkspaceFilesScreen(
@@ -164,8 +166,8 @@ internal fun WorkspaceFilesScreen(
             ) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("SAVING ${entry.name}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                        IconButton(onClick = viewModel::cancelDownload) { Icon(Icons.Outlined.Cancel, "Cancel download") }
+                        Text(stringResource(R.string.saving_file, entry.name), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                        IconButton(onClick = viewModel::cancelDownload) { Icon(Icons.Outlined.Cancel, stringResource(R.string.a11y_cancel_download_67bb11)) }
                     }
                     state.downloadProgress?.let { LinearProgressIndicator(progress = { it }, Modifier.fillMaxWidth()) }
                         ?: LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -197,10 +199,10 @@ internal fun WorkspaceFilesScreen(
                         value = pathInput,
                         onValueChange = { pathInput = it.take(4_096) },
                         singleLine = true,
-                        label = { Text("Server path") },
+                        label = { Text(stringResource(R.string.ui_server_path_27f2f0)) },
                         modifier = Modifier.weight(1f),
                     )
-                    Button(onClick = { viewModel.open(pathInput) }, enabled = pathInput.isNotBlank() && !state.loading) { Text("GO") }
+                    Button(onClick = { viewModel.open(pathInput) }, enabled = pathInput.isNotBlank() && !state.loading) { Text(stringResource(R.string.ui_go_f63f96)) }
                 }
             }
             if (state.loading && listing == null) {
@@ -235,8 +237,8 @@ internal fun WorkspaceFilesScreen(
                                 Modifier.fillMaxWidth().padding(36.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Text("EMPTY WORKSPACE", style = MaterialTheme.typography.titleMedium)
-                                Text("Hermes reported no files in this directory.", style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.ui_empty_workspace_573ec1), style = MaterialTheme.typography.titleMedium)
+                                Text(stringResource(R.string.ui_hermes_reported_no_files_in_this_directory_3355c4), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -269,13 +271,13 @@ private fun FilesHeader(path: String, loading: Boolean, onRefresh: (() -> Unit)?
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } }
+        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            Text("FILES", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.ui_files_9fb4f1), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Text(path.ifBlank { "Hermes workspace" }, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (loading) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-        else onRefresh?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Refresh, "Refresh files") } }
+        else onRefresh?.let { IconButton(onClick = it) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_files_75bfab)) } }
     }
 }
 
@@ -312,7 +314,7 @@ private fun FileRow(
                 Text(detail, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (name == "..") Icon(Icons.Outlined.KeyboardArrowUp, null)
-            onSave?.let { save -> IconButton(onClick = save) { Icon(Icons.Outlined.Download, "Save $name") } }
+            onSave?.let { save -> IconButton(onClick = save) { Icon(Icons.Outlined.Download, stringResource(R.string.save_named, name)) } }
         }
     }
 }
@@ -338,15 +340,15 @@ private fun FilePreviewPane(
                     Text("${preview.mimeType} / ${preview.entry.size?.formatBytes().orEmpty()}", style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = onShare, enabled = !busy) {
-                    Icon(Icons.Outlined.Share, "Share ${preview.entry.name}")
+                    Icon(Icons.Outlined.Share, stringResource(R.string.share_named, preview.entry.name))
                 }
                 IconButton(onClick = onOpenWith, enabled = !busy) {
-                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, "Open ${preview.entry.name} with another app")
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, stringResource(R.string.open_with_another_app, preview.entry.name))
                 }
                 OutlinedButton(onClick = onSave, enabled = !busy) {
                     Icon(Icons.Outlined.Download, null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Save")
+                    Text(stringResource(R.string.ui_save_efc007))
                 }
             }
         }
@@ -419,9 +421,9 @@ internal fun PdfPreview(bytes: ByteArray) {
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedButton(onClick = { page-- }, enabled = page > 0) { Text("Previous") }
+                    OutlinedButton(onClick = { page-- }, enabled = page > 0) { Text(stringResource(R.string.ui_previous_50f942)) }
                     Text("${page + 1} / ${result.pageCount}", Modifier.padding(horizontal = 14.dp))
-                    OutlinedButton(onClick = { page++ }, enabled = page + 1 < result.pageCount) { Text("Next") }
+                    OutlinedButton(onClick = { page++ }, enabled = page + 1 < result.pageCount) { Text(stringResource(R.string.ui_next_bc9819)) }
                 }
                 Image(
                     result.bitmap.asImageBitmap(),
@@ -441,7 +443,7 @@ internal fun PreviewFailure(message: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("PREVIEW UNAVAILABLE", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.ui_preview_unavailable_d197c9), style = MaterialTheme.typography.titleMedium)
         Text(message, style = MaterialTheme.typography.bodySmall)
     }
 }

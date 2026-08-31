@@ -10,6 +10,7 @@ import com.nousresearch.hermes.protocol.GatewayConnectionState
 import com.nousresearch.hermes.ui.theme.HermesSkin
 import com.nousresearch.hermes.ui.theme.HermesTheme
 import org.junit.Rule
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,13 +37,40 @@ class SettingsSeparationTest {
 
         compose.onNodeWithText("APP SETTINGS").assertExists()
         compose.onNodeWithText("APPEARANCE").assertExists()
-        compose.onNode(hasScrollAction()).performScrollToIndex(1)
-        compose.onNodeWithText("SECURE SCREEN").assertExists()
         compose.onNode(hasScrollAction()).performScrollToIndex(2)
-        compose.onNodeWithText("BIOMETRIC RE-ENTRY").assertExists()
+        compose.onNodeWithText("SECURE SCREEN").assertExists()
         compose.onNode(hasScrollAction()).performScrollToIndex(3)
+        compose.onNodeWithText("BIOMETRIC RE-ENTRY").assertExists()
+        compose.onNode(hasScrollAction()).performScrollToIndex(4)
         compose.onNodeWithText("NOTIFICATIONS").assertExists()
         compose.onNodeWithText("Message content stays private.", substring = true).assertExists()
+    }
+
+    @Test
+    fun appLanguagePickerExposesAllChoices() {
+        var selected: AppLanguage? = null
+        compose.setContent {
+            HermesTheme {
+                AppSettingsScreen(
+                    secureScreen = false,
+                    onSecureScreenChange = {},
+                    biometricReentry = false,
+                    biometricAvailable = true,
+                    onBiometricReentryChange = {},
+                    skin = HermesSkin.NOUS,
+                    onSkinChange = {},
+                    appLanguage = AppLanguage.SYSTEM,
+                    onAppLanguageChange = { selected = it },
+                    onBack = null,
+                )
+            }
+        }
+
+        compose.onNode(hasScrollAction()).performScrollToIndex(1)
+        compose.onNodeWithText("Follow system").assertExists()
+        compose.onNodeWithText("English").assertExists()
+        compose.onNodeWithText("简体中文").performClick()
+        assertEquals(AppLanguage.SIMPLIFIED_CHINESE, selected)
     }
 
     @Test

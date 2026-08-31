@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.data.VALID_REASONING_EFFORTS
 import com.nousresearch.hermes.protocol.ModelProvider
+import com.nousresearch.hermes.R
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -97,7 +99,7 @@ internal fun ModelControls(
             FilterChip(
                 selected = runtime.fast,
                 onClick = { onFast(!runtime.fast) },
-                label = { Text("Fast") },
+                label = { Text(stringResource(R.string.ui_fast_8db6a2)) },
                 leadingIcon = { Icon(Icons.Outlined.Bolt, null) },
             )
         }
@@ -107,7 +109,7 @@ internal fun ModelControls(
                 onClick = {
                     if (runtime.yolo) onYolo(false) else yoloConfirmation = true
                 },
-                label = { Text("YOLO") },
+                label = { Text(stringResource(R.string.ui_yolo_26a5eb)) },
                 leadingIcon = { Icon(Icons.Outlined.Warning, null) },
                 modifier = Modifier.semantics {
                     stateDescription = if (runtime.yolo) "Approval bypass enabled for this session" else "Approval bypass disabled"
@@ -134,7 +136,7 @@ internal fun ModelControls(
     if (effortOpen) {
         AlertDialog(
             onDismissRequest = { effortOpen = false },
-            title = { Text("REASONING EFFORT") },
+            title = { Text(stringResource(R.string.ui_reasoning_effort_3c4fd7)) },
             text = {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     VALID_REASONING_EFFORTS.forEach { effort ->
@@ -149,7 +151,7 @@ internal fun ModelControls(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { effortOpen = false }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { effortOpen = false }) { Text(stringResource(R.string.ui_close_bbfa77)) } },
         )
     }
 
@@ -157,9 +159,9 @@ internal fun ModelControls(
         AlertDialog(
             onDismissRequest = { yoloConfirmation = false },
             icon = { Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("BYPASS APPROVALS?") },
+            title = { Text(stringResource(R.string.ui_bypass_approvals_7771b5)) },
             text = {
-                Text("Hermes will run dangerous commands in this session without asking. This does not change other sessions or the server-wide policy.")
+                Text(stringResource(R.string.ui_hermes_will_run_dangerous_commands_in_this_session_with_9dc3ec))
             },
             confirmButton = {
                 TextButton(
@@ -167,9 +169,9 @@ internal fun ModelControls(
                         yoloConfirmation = false
                         onYolo(true)
                     },
-                ) { Text("Enable for session", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.ui_enable_for_session_fe29f1), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { yoloConfirmation = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { yoloConfirmation = false }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 
@@ -177,10 +179,10 @@ internal fun ModelControls(
         AlertDialog(
             onDismissRequest = onCancelModel,
             icon = { Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("CONFIRM MODEL COST") },
+            title = { Text(stringResource(R.string.ui_confirm_model_cost_6769e6)) },
             text = { Text(pending.message) },
-            confirmButton = { TextButton(onClick = onConfirmModel) { Text("Use model") } },
-            dismissButton = { TextButton(onClick = onCancelModel) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = onConfirmModel) { Text(stringResource(R.string.ui_use_model_8d558c)) } },
+            dismissButton = { TextButton(onClick = onCancelModel) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -208,8 +210,8 @@ private fun ModelPickerDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("MODEL CATALOGUE", modifier = Modifier.weight(1f))
-                IconButton(onClick = onRefresh, enabled = !loading) { Icon(Icons.Outlined.Refresh, "Refresh model catalogue") }
+                Text(stringResource(R.string.ui_model_catalogue_8ce186), modifier = Modifier.weight(1f))
+                IconButton(onClick = onRefresh, enabled = !loading) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_model_catalogue_a9e2d5)) }
             }
         },
         text = {
@@ -217,7 +219,7 @@ private fun ModelPickerDialog(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Search provider or model") },
+                    placeholder = { Text(stringResource(R.string.ui_search_provider_or_model_2d2496)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -242,7 +244,7 @@ private fun ModelPickerDialog(
                             ) {
                                 Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                     Text(model, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    if (selected) Text("Active", style = MaterialTheme.typography.labelSmall)
+                                    if (selected) Text(stringResource(R.string.ui_active_a733b8), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                             HorizontalDivider()
@@ -257,6 +259,6 @@ private fun ModelPickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_close_bbfa77)) } },
     )
 }

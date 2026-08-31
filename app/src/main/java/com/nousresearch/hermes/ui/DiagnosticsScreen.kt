@@ -47,12 +47,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.DiagnosticAction
+import com.nousresearch.hermes.R
 import com.nousresearch.hermes.data.DiagnosticRunState
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.GatewayConnectionState
@@ -118,10 +120,10 @@ internal fun DiagnosticsScreen(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to sessions") } }
+            onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_to_sessions_e7bfae)) } }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text("DIAGNOSTICS", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                Text("Compatibility, doctor and security audit", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.ui_diagnostics_7563ce), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                Text(stringResource(R.string.ui_compatibility_doctor_and_security_audit_26bfa1), style = MaterialTheme.typography.bodySmall)
             }
         }
         HorizontalDivider()
@@ -134,8 +136,7 @@ internal fun DiagnosticsScreen(
                 DiagnosticInfoCard(state, connection, BuildProvenanceSource.current)
             }
             item {
-                Text(
-                    "These commands run on the selected Hermes server. Host logs and update state describe the whole authenticated Hermes installation, not only the selected profile. Output is bounded and redacted again on Android before display; it is not uploaded by the app.",
+                Text(stringResource(R.string.ui_these_commands_run_on_the_selected_hermes_server_host_l_f51794),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -153,9 +154,8 @@ internal fun DiagnosticsScreen(
             item {
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("REDACTED SUPPORT REPORT", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Save an allowlisted text report through Android's document picker. It excludes credentials, conversations, provider settings and raw configuration.",
+                        Text(stringResource(R.string.ui_redacted_support_report_02e644), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.ui_save_an_allowlisted_text_report_through_android_s_docum_8cc5df),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Button(
@@ -166,7 +166,7 @@ internal fun DiagnosticsScreen(
                             },
                             enabled = !exportInProgress,
                         ) {
-                            Text(if (exportInProgress) "Exporting…" else "Save report")
+                            Text(stringResource(if (exportInProgress) R.string.exporting else R.string.save_report))
                         }
                         exportNotice?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -197,7 +197,7 @@ internal fun DiagnosticsScreen(
     if (confirmBackup) {
         AlertDialog(
             onDismissRequest = { confirmBackup = false },
-            title = { Text("CREATE HERMES HOST BACKUP?") },
+            title = { Text(stringResource(R.string.ui_create_hermes_host_backup_0a4e1f)) },
             text = {
                 Text(
                     "This runs backup on the whole authenticated Hermes installation, not only profile ${state.activeProfile}. " +
@@ -206,9 +206,9 @@ internal fun DiagnosticsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { confirmBackup = false; onPrepareBackup() }) { Text("Create backup") }
+                TextButton(onClick = { confirmBackup = false; onPrepareBackup() }) { Text(stringResource(R.string.ui_create_backup_60e77f)) }
             },
-            dismissButton = { TextButton(onClick = { confirmBackup = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmBackup = false }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -226,11 +226,10 @@ private fun HostMaintenanceCard(
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("HERMES HOST", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.ui_hermes_host_f9ccdc), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (state.hostMaintenanceLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
-            Text(
-                "Read-only status for the authenticated Hermes host. Android does not apply updates or infer a profile from this host-wide endpoint.",
+            Text(stringResource(R.string.ui_read_only_status_for_the_authenticated_hermes_host_andr_4c1903),
                 style = MaterialTheme.typography.bodySmall,
             )
             if (update != null) {
@@ -260,7 +259,7 @@ private fun HostMaintenanceCard(
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             if (state.hostLogs.isNotEmpty()) {
-                Text("RECENT REDACTED AGENT LOG", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.ui_recent_redacted_agent_log_4305fe), style = MaterialTheme.typography.labelMedium)
                 SelectionContainer {
                     Text(
                         state.hostLogs.joinToString("\n"),
@@ -269,11 +268,10 @@ private fun HostMaintenanceCard(
                     )
                 }
             }
-            Button(onClick = { onRefresh(true) }, enabled = !state.hostMaintenanceLoading) { Text("Check now") }
+            Button(onClick = { onRefresh(true) }, enabled = !state.hostMaintenanceLoading) { Text(stringResource(R.string.ui_check_now_2ce5dd)) }
             HorizontalDivider()
-            Text("HOST BACKUP", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "Hermes creates the archive on its host. Android downloads it only after the same process ID reports exit 0, directly into the document destination you choose.",
+            Text(stringResource(R.string.ui_host_backup_a4daac), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.ui_hermes_creates_the_archive_on_its_host_android_download_fbc70d),
                 style = MaterialTheme.typography.bodySmall,
             )
             backup.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
@@ -281,11 +279,11 @@ private fun HostMaintenanceCard(
             if (backup.preparing || backup.saving) {
                 backup.progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }
                     ?: LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                TextButton(onClick = onCancelBackup) { Text(if (backup.preparing) "Stop waiting" else "Cancel export") }
+                TextButton(onClick = onCancelBackup) { Text(stringResource(if (backup.preparing) R.string.stop_waiting else R.string.cancel_export)) }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onPrepareBackup) { Text(if (backup.archive == null) "Create backup" else "Create another") }
-                    if (backup.archive != null) Button(onClick = onSaveBackup) { Text("Save ZIP…") }
+                    Button(onClick = onPrepareBackup) { Text(stringResource(if (backup.archive == null) R.string.ui_create_backup_60e77f else R.string.create_another)) }
+                    if (backup.archive != null) Button(onClick = onSaveBackup) { Text(stringResource(R.string.ui_save_zip_f9a419)) }
                 }
             }
         }
@@ -300,9 +298,9 @@ internal fun AppearancePicker(
     val dark = isSystemInDarkTheme()
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("APPEARANCE", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.appearance), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
             Text(
-                "Official Hermes Desktop presets. Android follows the system light or dark setting.",
+                stringResource(R.string.appearance_description),
                 style = MaterialTheme.typography.bodySmall,
             )
             HermesSkin.entries.chunked(2).forEach { rowSkins ->
@@ -348,11 +346,11 @@ internal fun AppearancePicker(
                                     }
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(skin.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                                    if (active) Icon(Icons.Outlined.Check, "Selected", modifier = Modifier.size(18.dp))
+                                    Text(stringResource(skin.labelResource), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                                    if (active) Icon(Icons.Outlined.Check, stringResource(R.string.selected), modifier = Modifier.size(18.dp))
                                 }
                                 Text(
-                                    skin.description,
+                                    stringResource(skin.descriptionResource),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = preview.onSurfaceVariant,
                                 )
@@ -365,6 +363,26 @@ internal fun AppearancePicker(
         }
     }
 }
+
+private val HermesSkin.labelResource: Int
+    get() = when (this) {
+        HermesSkin.NOUS -> R.string.skin_nous
+        HermesSkin.MIDNIGHT -> R.string.skin_midnight
+        HermesSkin.EMBER -> R.string.skin_ember
+        HermesSkin.MONO -> R.string.skin_mono
+        HermesSkin.CYBERPUNK -> R.string.skin_cyberpunk
+        HermesSkin.SLATE -> R.string.skin_slate
+    }
+
+private val HermesSkin.descriptionResource: Int
+    get() = when (this) {
+        HermesSkin.NOUS -> R.string.skin_nous_description
+        HermesSkin.MIDNIGHT -> R.string.skin_midnight_description
+        HermesSkin.EMBER -> R.string.skin_ember_description
+        HermesSkin.MONO -> R.string.skin_mono_description
+        HermesSkin.CYBERPUNK -> R.string.skin_cyberpunk_description
+        HermesSkin.SLATE -> R.string.skin_slate_description
+    }
 
 @Composable
 private fun DiagnosticInfoCard(
@@ -444,7 +462,7 @@ private fun DiagnosticActionCard(
                 }
             }
             Button(onClick = onRun, enabled = run?.running != true) {
-                Text(if (run == null) "Run" else "Run again")
+                Text(stringResource(if (run == null) R.string.run else R.string.run_again))
             }
         }
     }

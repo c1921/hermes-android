@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.nousresearch.hermes.R
 import com.nousresearch.hermes.platform.HermesNotificationPermission
 import com.nousresearch.hermes.platform.hermesNotificationPermission
 import com.nousresearch.hermes.platform.markHermesNotificationPermissionRequested
@@ -54,6 +57,8 @@ internal fun AppSettingsScreen(
     onBiometricReentryChange: (Boolean) -> Unit,
     skin: HermesSkin,
     onSkinChange: (HermesSkin) -> Unit,
+    appLanguage: AppLanguage = AppLanguage.SYSTEM,
+    onAppLanguageChange: (AppLanguage) -> Unit = {},
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -79,16 +84,16 @@ internal fun AppSettingsScreen(
         ) {
             onBack?.let {
                 IconButton(onClick = it) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back))
                 }
             }
             Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 Text(
-                    "APP SETTINGS",
+                    stringResource(R.string.app_settings),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.semantics { heading() },
                 )
-                Text("Appearance and privacy on this device", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.app_settings_description), style = MaterialTheme.typography.bodySmall)
             }
         }
         HorizontalDivider()
@@ -98,6 +103,7 @@ internal fun AppSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { AppearancePicker(skin, onSkinChange) }
+            item { LanguagePicker(appLanguage, onAppLanguageChange) }
             item {
                 Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
                     Row(
@@ -105,16 +111,16 @@ internal fun AppSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("SECURE SCREEN", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.secure_screen), style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Block screenshots, screen recording and the recent-app thumbnail for Hermes content on this device.",
+                                stringResource(R.string.secure_screen_description),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
                         Switch(
                             checked = secureScreen,
                             onCheckedChange = onSecureScreenChange,
-                            modifier = Modifier.semantics { contentDescription = "Secure screen" },
+                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.secure_screen) },
                         )
                     }
                 }
@@ -126,12 +132,12 @@ internal fun AppSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("BIOMETRIC RE-ENTRY", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.biometric_reentry), style = MaterialTheme.typography.titleMedium)
                             Text(
                                 if (biometricAvailable) {
-                                    "Require biometrics or the device credential after Hermes stays in the background for five minutes."
+                                    stringResource(R.string.biometric_reentry_available)
                                 } else {
-                                    "Set a device screen lock before enabling biometric re-entry."
+                                    stringResource(R.string.biometric_reentry_unavailable)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -140,7 +146,7 @@ internal fun AppSettingsScreen(
                             checked = biometricReentry,
                             onCheckedChange = onBiometricReentryChange,
                             enabled = biometricAvailable,
-                            modifier = Modifier.semantics { contentDescription = "Biometric re-entry" },
+                            modifier = Modifier.semantics { contentDescription = context.getString(R.string.biometric_reentry) },
                         )
                     }
                 }
@@ -152,16 +158,18 @@ internal fun AppSettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            "NOTIFICATIONS",
+                            stringResource(R.string.notifications),
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.semantics { heading() },
                         )
                         Text(
-                            if (notificationPermission == HermesNotificationPermission.GRANTED) "Allowed" else "Not allowed",
+                            stringResource(
+                                if (notificationPermission == HermesNotificationPermission.GRANTED) R.string.allowed else R.string.not_allowed,
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Text(
-                            "Allow completion, action-required, automation failure and cron result alerts. Message content stays private.",
+                            stringResource(R.string.notifications_description),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         if (notificationPermission != HermesNotificationPermission.GRANTED) {
@@ -181,9 +189,9 @@ internal fun AppSettingsScreen(
                             ) {
                                 Text(
                                     if (notificationPermission == HermesNotificationPermission.REQUEST) {
-                                        "ALLOW NOTIFICATIONS"
+                                        stringResource(R.string.allow_notifications)
                                     } else {
-                                        "OPEN NOTIFICATION SETTINGS"
+                                        stringResource(R.string.open_notification_settings)
                                     },
                                 )
                             }
@@ -193,10 +201,47 @@ internal fun AppSettingsScreen(
             }
             item {
                 Text(
-                    "These preferences affect only this Android device. Hermes server configuration lives under Manage.",
+                    stringResource(R.string.device_preferences_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguagePicker(
+    selected: AppLanguage,
+    onSelected: (AppLanguage) -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+        Column(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.language),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(stringResource(R.string.language_description), style = MaterialTheme.typography.bodySmall)
+            AppLanguage.entries.forEach { language ->
+                val label = when (language) {
+                    AppLanguage.SYSTEM -> stringResource(R.string.language_system)
+                    AppLanguage.ENGLISH -> stringResource(R.string.language_english)
+                    AppLanguage.SIMPLIFIED_CHINESE -> stringResource(R.string.language_simplified_chinese)
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = language == selected,
+                        onClick = { if (language != selected) onSelected(language) },
+                    )
+                    Text(label)
+                }
             }
         }
     }

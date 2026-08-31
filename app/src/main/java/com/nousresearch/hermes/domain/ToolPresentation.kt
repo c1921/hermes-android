@@ -11,8 +11,8 @@ import kotlinx.serialization.json.contentOrNull
 
 data class ToolPresentation(
     val title: String,
-    val description: String,
-    val stateDescription: String,
+    val summary: String?,
+    val state: ToolState,
     val transcript: String,
 )
 
@@ -24,11 +24,6 @@ private val toolTranscriptJson = Json {
 
 fun TimelineItem.Tool.presentation(includeTranscript: Boolean = true): ToolPresentation {
     val title = name.humanToolName()
-    val stateDescription = when (state) {
-        ToolState.RUNNING -> "$title is running"
-        ToolState.COMPLETE -> "$title completed"
-        ToolState.FAILED -> "$title failed"
-    }
     val shortSummary = summary
         ?.replace(Regex("\\s+"), " ")
         ?.trim()
@@ -37,8 +32,8 @@ fun TimelineItem.Tool.presentation(includeTranscript: Boolean = true): ToolPrese
 
     return ToolPresentation(
         title = title,
-        description = shortSummary ?: stateDescription,
-        stateDescription = stateDescription,
+        summary = shortSummary,
+        state = state,
         transcript = if (includeTranscript) beautifyToolTranscript(detail.orEmpty()) else "",
     )
 }

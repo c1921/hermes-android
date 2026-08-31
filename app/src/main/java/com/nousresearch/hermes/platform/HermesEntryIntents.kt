@@ -8,6 +8,7 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import com.nousresearch.hermes.MainActivity
 import com.nousresearch.hermes.R
 import com.nousresearch.hermes.ui.navigation.HermesDestinationRoute
@@ -71,10 +72,11 @@ fun destinationPendingIntent(
 )
 
 fun publishPrivacySafeShortcuts(context: Context) {
+    val localizedContext = ContextCompat.getContextForLanguage(context)
     val shortcutManager = context.getSystemService(ShortcutManager::class.java) ?: return
-    val shortcut = ShortcutInfo.Builder(context, NEW_CHAT_SHORTCUT_ID)
-        .setShortLabel("New chat")
-        .setLongLabel("New Hermes chat")
+    val shortcut = ShortcutInfo.Builder(localizedContext, NEW_CHAT_SHORTCUT_ID)
+        .setShortLabel(localizedContext.getString(R.string.shortcut_new_chat))
+        .setLongLabel(localizedContext.getString(R.string.shortcut_new_hermes_chat))
         .setIcon(Icon.createWithResource(context, R.mipmap.ic_launcher))
         .setIntent(newChatIntent(context))
         .build()

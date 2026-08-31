@@ -15,7 +15,8 @@ class ToolPresentationTest {
             detail = """{"output":"first line\nsecond line","exit_code":0,"error":null}""",
         ).presentation()
 
-        assertEquals("Terminal completed", presentation.description)
+        assertEquals(null, presentation.summary)
+        assertEquals(ToolState.COMPLETE, presentation.state)
         assertEquals(
             """Output
 first line
@@ -65,8 +66,8 @@ Exit code
             summary = "Command returned output",
         ).presentation()
 
-        assertEquals("Command returned output", presentation.description)
-        assertEquals("Terminal failed", presentation.stateDescription)
+        assertEquals("Command returned output", presentation.summary)
+        assertEquals(ToolState.FAILED, presentation.state)
     }
 
     @Test
