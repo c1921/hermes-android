@@ -575,13 +575,13 @@ jobs:
           grep -Fx "android.version_code=$RELEASE_VERSION_CODE" hermes-android-release.provenance.properties
           grep -Fx "android.channel=release" hermes-android-release.provenance.properties
           grep -Fx "android.commit=$GITHUB_SHA" hermes-android-release.provenance.properties
-          grep -Fx "build.package=com.nousresearch.hermes" hermes-android-release.provenance.properties
+          grep -Fx "build.package=com.c1921.hermes_android" hermes-android-release.provenance.properties
           # TODO(fork): replace with your own release keystore's SHA-256 once generated.
           if [[ -n "${HERMES_RELEASE_FINGERPRINT:-}" ]]; then
             grep -Fx "build.signing_fingerprint=sha256:$HERMES_RELEASE_FINGERPRINT" hermes-android-release.provenance.properties
           fi
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging hermes-android-release.apk | \
-            grep -F "package: name='com.nousresearch.hermes' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"
+            grep -F "package: name='com.c1921.hermes_android' versionCode='$RELEASE_VERSION_CODE' versionName='$RELEASE_VERSION'"
       - name: Attest release provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:

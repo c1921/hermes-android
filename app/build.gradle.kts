@@ -125,9 +125,9 @@ require(provenanceChannel != "release" || rootProject.file(dependencyLockPath).i
 }
 val provenanceOutput = layout.buildDirectory.file("generated/provenance/hermes-android-$provenanceChannel.properties")
 val provenancePackageName = if (provenanceChannel == "release") {
-    "com.nousresearch.hermes"
+    "com.c1921.hermes_android"
 } else {
-    "com.nousresearch.hermes.debug"
+    "com.c1921.hermes_android.debug"
 }
 val provenanceVersionName = if (provenanceChannel == "release") appVersionName else "$appVersionName-debug"
 val provenanceSigningFingerprint = if (provenanceChannel == "release") {
@@ -185,7 +185,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.nousresearch.hermes"
+        applicationId = "com.c1921.hermes_android"
         minSdk = 28
         targetSdk = 36
         versionCode = appVersionCode
