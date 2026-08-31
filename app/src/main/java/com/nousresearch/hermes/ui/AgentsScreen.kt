@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.SpawnTreeListEntry
 import com.nousresearch.hermes.ui.theme.Warning
 import kotlinx.coroutines.delay
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun AgentsScreen(
@@ -83,10 +85,17 @@ internal fun AgentsScreen(
         }
     }
 
+    val sectionActive = stringResource(R.string.ui_agents_section_active_be810b)
+    val sectionBg = stringResource(R.string.ui_agents_section_bg_7705a5)
+    val sectionRecent = stringResource(R.string.ui_agents_section_recent_7f8fbe)
+    val sectionArchived = stringResource(R.string.ui_agents_section_archived_58f99d)
+    val replaySectionTitle = state.spawnTreeReplay?.let { replay ->
+        stringResource(R.string.ui_agents_section_archive_replay_063118, replay.archive.label.ifBlank { stringResource(R.string.ui_agents_n_subagents_caps_734876, replay.subagents.size) }.uppercase())
+    }
     Column(modifier.fillMaxSize()) {
         ManagementHeader(
-            "COMMAND CENTER",
-            "Agents, delegation and current-session processes",
+            stringResource(R.string.ui_agents_command_center_title_122b59),
+            stringResource(R.string.ui_agents_subtitle_8615dc),
             state.agentsLoading || state.spawnTreesLoading,
             {
                 onRefresh()
@@ -108,9 +117,9 @@ internal fun AgentsScreen(
                     onSetPaused = onSetPaused,
                 )
             }
-            section("ACTIVE WORKSTREAMS")
+            section(sectionActive)
             if (state.activeSubagents.isEmpty() && !state.agentsLoading) {
-                item { EmptyAgentCard("Hermes reports no active subagents. Live delegated work will appear here automatically.") }
+                item { EmptyAgentCard(stringResource(R.string.ui_agents_empty_active_eacd55)) }
             } else {
                 items(SubagentReducer.rows(state.activeSubagents), key = { "active:${it.progress.id}" }) { row ->
                     SubagentCard(
@@ -122,11 +131,11 @@ internal fun AgentsScreen(
                     )
                 }
             }
-            section("BACKGROUND PROCESSES")
+            section(sectionBg)
             if (state.runtimeSessionId == null) {
-                item { EmptyAgentCard("Open a session to inspect the background processes owned by that Hermes run.") }
+                item { EmptyAgentCard(stringResource(R.string.ui_agents_empty_open_session_4b5edb)) }
             } else if (state.backgroundProcesses.isEmpty() && !state.agentsLoading) {
-                item { EmptyAgentCard("Hermes reports no background processes for the open session.") }
+                item { EmptyAgentCard(stringResource(R.string.ui_agents_empty_no_bg_bbe5ce)) }
             } else {
                 items(state.backgroundProcesses, key = { "process:${it.id}" }) { process ->
                     BackgroundProcessCard(process) {
@@ -134,9 +143,9 @@ internal fun AgentsScreen(
                     }
                 }
             }
-            section("RECENT AGENT ACTIVITY")
+            section(sectionRecent)
             if (recent.isEmpty() && !state.agentsLoading) {
-                item { EmptyAgentCard("No subagent events have been observed since this Android connection opened.") }
+                item { EmptyAgentCard(stringResource(R.string.ui_agents_empty_no_events_ebef7a)) }
             } else {
                 items(recent.take(100), key = { (session, agent) -> "recent:$session:${agent.id}" }) { (session, agent) ->
                     SubagentCard(
@@ -148,9 +157,9 @@ internal fun AgentsScreen(
                     )
                 }
             }
-            section("ARCHIVED SPAWN TREES")
+            section(sectionArchived)
             if (state.spawnTreeArchives.isEmpty() && !state.spawnTreesLoading) {
-                item { EmptyAgentCard("No TUI-persisted spawn trees were returned by this Hermes profile.") }
+                item { EmptyAgentCard(stringResource(R.string.ui_agents_empty_no_spawn_96fb2a)) }
             } else {
                 itemsIndexed(
                     state.spawnTreeArchives,
@@ -165,7 +174,7 @@ internal fun AgentsScreen(
                 }
             }
             state.spawnTreeReplay?.let { replay ->
-                section("ARCHIVE REPLAY / ${replay.archive.label.ifBlank { "${replay.subagents.size} SUBAGENTS" }.uppercase()}")
+                replaySectionTitle?.let { section(it) }
                 items(SubagentReducer.rows(replay.subagents), key = { "replay:${replay.archive.finishedAt}:${it.progress.id}" }) { row ->
                     SubagentCard(
                         row = row,
@@ -183,9 +192,9 @@ internal fun AgentsScreen(
         val agent = state.activeSubagents.firstOrNull { it.id == id }
         AlertDialog(
             onDismissRequest = { pendingInterrupt = null },
-            title = { Text("INTERRUPT SUBAGENT?") },
+            title = { Text(stringResource(R.string.ui_interrupt_subagent_47f8fc)) },
             text = {
-                Text("Hermes will ask ${agent?.goal ?: id} to stop at its next safe iteration boundary. Other workstreams continue.")
+                Text(stringResource(R.string.interrupt_subagent_description, agent?.goal ?: id))
             },
             confirmButton = {
                 TextButton(
@@ -193,9 +202,9 @@ internal fun AgentsScreen(
                         pendingInterrupt = null
                         onInterrupt(id)
                     },
-                ) { Text("Interrupt") }
+                ) { Text(stringResource(R.string.ui_interrupt_d5db45)) }
             },
-            dismissButton = { TextButton(onClick = { pendingInterrupt = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingInterrupt = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 
@@ -203,9 +212,9 @@ internal fun AgentsScreen(
         val process = state.backgroundProcesses.firstOrNull { it.id == id }
         AlertDialog(
             onDismissRequest = { pendingProcessStop = null },
-            title = { Text("STOP BACKGROUND PROCESS?") },
+            title = { Text(stringResource(R.string.ui_stop_background_process_95afa4)) },
             text = {
-                Text("Hermes will terminate ${process?.command?.lineSequence()?.firstOrNull().orEmpty().ifBlank { id }}. This can stop a server, watcher, or long-running tool started by the open session.")
+                Text(stringResource(R.string.stop_process_description, process?.command?.lineSequence()?.firstOrNull().orEmpty().ifBlank { id }))
             },
             confirmButton = {
                 TextButton(
@@ -213,9 +222,9 @@ internal fun AgentsScreen(
                         pendingProcessStop = null
                         onStopProcess(id)
                     },
-                ) { Text("Stop process") }
+                ) { Text(stringResource(R.string.ui_stop_process_48cb30)) }
             },
-            dismissButton = { TextButton(onClick = { pendingProcessStop = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingProcessStop = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -234,17 +243,17 @@ private fun SpawnTreeArchiveCard(
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(archive.label.ifBlank { "${archive.count} subagents" }, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(archive.label.ifBlank { stringResource(R.string.ui_agents_n_subagents_1d11bb, archive.count) }, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
                     listOfNotNull(
-                        "${archive.count} subagents",
-                        archive.sessionId?.takeIf(String::isNotBlank)?.let { "session ${it.take(12)}" },
+                        stringResource(R.string.ui_agents_n_subagents_1d11bb, archive.count),
+                        archive.sessionId?.takeIf(String::isNotBlank)?.let { stringResource(R.string.ui_agents_session_570232, it.take(12)) },
                     ).joinToString(" / "),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
             OutlinedButton(onClick = onLoad, enabled = !loading) {
-                Text(if (selected) "Reload" else "Replay")
+                Text(stringResource(if (selected) R.string.reload else R.string.replay))
             }
         }
     }
@@ -253,6 +262,7 @@ private fun SpawnTreeArchiveCard(
 @Composable
 private fun DelegationSummary(state: HermesState, onSetPaused: (Boolean) -> Unit) {
     val status = state.delegationStatus
+    val spawnsDesc = stringResource(if (status?.paused == true) R.string.ui_agents_a11y_resume_spawns_410b39 else R.string.ui_agents_a11y_pause_spawns_af09e1)
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -261,9 +271,9 @@ private fun DelegationSummary(state: HermesState, onSetPaused: (Boolean) -> Unit
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("DELEGATION", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.ui_delegation_6d3fa6), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (status?.paused == true) "New spawns paused" else "New spawns enabled",
+                        stringResource(if (status?.paused == true) R.string.ui_agents_spawns_paused_010b84 else R.string.ui_agents_spawns_enabled_550c17),
                         style = MaterialTheme.typography.labelMedium,
                         color = if (status?.paused == true) Warning else MaterialTheme.colorScheme.primary,
                     )
@@ -275,17 +285,16 @@ private fun DelegationSummary(state: HermesState, onSetPaused: (Boolean) -> Unit
                     onCheckedChange = onSetPaused,
                     enabled = status != null && !state.agentsLoading,
                     modifier = Modifier.semantics {
-                        contentDescription = if (status?.paused == true) "Resume new subagent spawns" else "Pause new subagent spawns"
+                        contentDescription = spawnsDesc
                     },
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Metric("ACTIVE", state.activeSubagents.size.toString(), Modifier.weight(1f))
-                Metric("MAX PARALLEL", status?.maxConcurrentChildren?.takeIf { it > 0 }?.toString() ?: "?", Modifier.weight(1f))
-                Metric("MAX DEPTH", status?.maxSpawnDepth?.takeIf { it > 0 }?.toString() ?: "?", Modifier.weight(1f))
+                Metric(stringResource(R.string.ui_agents_metric_active_8c4f72), state.activeSubagents.size.toString(), Modifier.weight(1f))
+                Metric(stringResource(R.string.ui_agents_metric_max_parallel_a30e4c), status?.maxConcurrentChildren?.takeIf { it > 0 }?.toString() ?: "?", Modifier.weight(1f))
+                Metric(stringResource(R.string.ui_agents_metric_max_depth_fa4a88), status?.maxSpawnDepth?.takeIf { it > 0 }?.toString() ?: "?", Modifier.weight(1f))
             }
-            Text(
-                "Pausing affects only future delegate_task calls. Running children keep working until completion or an explicit interrupt.",
+            Text(stringResource(R.string.ui_pausing_affects_only_future_delegate_task_calls_running_899136),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -324,7 +333,7 @@ private fun SubagentCard(
                 Column(Modifier.weight(1f)) {
                     Text(agent.goal, fontWeight = FontWeight.SemiBold, maxLines = if (expanded) 4 else 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        listOfNotNull(agent.model, sessionLabel?.let { "session ${it.take(8)}" }).joinToString(" / ").ifBlank { agent.id.take(12) },
+                        listOfNotNull(agent.model, sessionLabel?.let { stringResource(R.string.ui_agents_session_570232, it.take(8)) }).joinToString(" / ").ifBlank { agent.id.take(12) },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -334,8 +343,8 @@ private fun SubagentCard(
                 Text(agent.status.label(), style = MaterialTheme.typography.labelMedium, color = statusColor)
             }
             val detail = listOfNotNull(
-                agent.currentTool?.let { "Tool: $it" },
-                agent.toolCount?.let { "$it tools" },
+                agent.currentTool?.let { stringResource(R.string.ui_agents_tool_d04181, it) },
+                agent.toolCount?.let { stringResource(R.string.ui_agents_n_tools_4553e7, it) },
                 agent.inputTokens?.let { "$it in" },
                 agent.outputTokens?.let { "$it out" },
                 agent.durationSeconds?.let { "${it.toInt()}s" },
@@ -353,8 +362,8 @@ private fun SubagentCard(
                         color = if (entry.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (agent.filesRead.isNotEmpty()) Text("Read / ${agent.filesRead.joinToString()}", style = MaterialTheme.typography.bodySmall)
-                if (agent.filesWritten.isNotEmpty()) Text("Wrote / ${agent.filesWritten.joinToString()}", style = MaterialTheme.typography.bodySmall)
+                if (agent.filesRead.isNotEmpty()) Text(stringResource(R.string.files_read, agent.filesRead.joinToString()), style = MaterialTheme.typography.bodySmall)
+                if (agent.filesWritten.isNotEmpty()) Text(stringResource(R.string.files_written, agent.filesWritten.joinToString()), style = MaterialTheme.typography.bodySmall)
             }
             if (matchingSession != null || onInterrupt != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -362,14 +371,14 @@ private fun SubagentCard(
                         OutlinedButton(onClick = { onOpenSession(session) }) {
                             Icon(Icons.AutoMirrored.Outlined.OpenInNew, null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Open session")
+                            Text(stringResource(R.string.ui_open_session_777092))
                         }
                     }
                     onInterrupt?.let {
                         Button(onClick = it) {
                             Icon(Icons.Outlined.StopCircle, null)
                             Spacer(Modifier.width(6.dp))
-                            Text("Interrupt")
+                            Text(stringResource(R.string.ui_interrupt_d5db45))
                         }
                     }
                 }
@@ -392,9 +401,9 @@ private fun BackgroundProcessCard(process: BackgroundProcess, onStop: () -> Unit
                 Icon(Icons.Outlined.Terminal, null, tint = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(process.command.lineSequence().firstOrNull().orEmpty().ifBlank { "Background process" }, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(process.command.lineSequence().firstOrNull().orEmpty().ifBlank { stringResource(R.string.ui_agents_background_process_177e28) }, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        listOf(process.id, "${process.uptimeSeconds}s", process.status, process.exitCode?.let { "exit $it" }).filterNotNull().joinToString(" / "),
+                        listOf(process.id, "${process.uptimeSeconds}s", process.status, process.exitCode?.let { stringResource(R.string.ui_agents_exit_27b8d8, it) }).filterNotNull().joinToString(" / "),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -410,7 +419,7 @@ private fun BackgroundProcessCard(process: BackgroundProcess, onStop: () -> Unit
                 OutlinedButton(onClick = onStop) {
                     Icon(Icons.Outlined.StopCircle, null)
                     Spacer(Modifier.width(6.dp))
-                    Text("Stop process")
+                    Text(stringResource(R.string.ui_stop_process_48cb30))
                 }
             }
         }

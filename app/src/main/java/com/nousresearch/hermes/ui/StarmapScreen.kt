@@ -1,5 +1,6 @@
 package com.nousresearch.hermes.ui
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nousresearch.hermes.data.HermesState
 import com.nousresearch.hermes.protocol.StarmapNode
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun StarmapScreen(
@@ -68,14 +70,13 @@ internal fun StarmapScreen(
     }
 
     Column(modifier.fillMaxSize()) {
-        ManagementHeader("STARMAP", "Remote learning graph / profile $profile", state.starmapLoading, { onRefresh(profile) }, onBack)
+        ManagementHeader(stringResource(R.string.ui_starmap_title_74bf20), stringResource(R.string.ui_starmap_subtitle_f876ff, profile), state.starmapLoading, { onRefresh(profile) }, onBack)
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         ) {
-            Text(
-                "Skills and memory remain on the selected Hermes profile. Editing or removal changes that remote profile only.",
+            Text(stringResource(R.string.ui_skills_and_memory_remain_on_the_selected_hermes_profile_660f01),
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -83,13 +84,14 @@ internal fun StarmapScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it.take(200) },
-            label = { Text("Search learning") },
+            label = { Text(stringResource(R.string.ui_search_learning_b4aea5)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         )
         graph?.clusters?.takeIf { it.isNotEmpty() }?.let { clusters ->
+            val uncategorised = stringResource(R.string.ui_starmap_uncategorised_c474c0)
             Text(
-                clusters.joinToString(" · ") { "${it.category.ifBlank { "uncategorised" }} ${it.count}" },
+                clusters.joinToString(" · ") { "${it.category.ifBlank { uncategorised }} ${it.count}" },
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 2,
@@ -106,7 +108,7 @@ internal fun StarmapScreen(
             }
         } else if (nodes.isEmpty() && memories.isEmpty()) {
             Text(
-                if (query.isBlank()) "This Hermes profile has no learning nodes." else "No learning nodes match this search.",
+                if (query.isBlank()) stringResource(R.string.ui_starmap_no_learning_nodes_251908) else stringResource(R.string.ui_starmap_no_learning_nodes_match_fcdce4),
                 modifier = Modifier.padding(32.dp),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -127,7 +129,7 @@ internal fun StarmapScreen(
                             Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                                 Text(node.label.take(200), fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    listOf(node.kind, node.category, node.state, "${node.useCount} uses", "$connections links")
+                                    listOf(node.kind, node.category, node.state, stringResource(R.string.ui_starmap_n_uses_b314f6, node.useCount), stringResource(R.string.ui_starmap_n_links_8d9dcb, connections))
                                         .filter(String::isNotBlank).joinToString(" / "),
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 2,
@@ -164,24 +166,24 @@ internal fun StarmapScreen(
         }
         AlertDialog(
             onDismissRequest = ::requestClose,
-            title = { Text(detail?.label?.take(200) ?: "LEARNING NODE") },
+            title = { Text(detail?.label?.take(200) ?: stringResource(R.string.ui_starmap_learning_node_title_d7a085)) },
             text = {
                 if (detail == null && state.starmapLoading) {
                     CircularProgressIndicator()
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "${detail?.kind.orEmpty().uppercase()} / profile $profile",
+                            stringResource(R.string.ui_starmap_learning_node_meta_a36893, detail?.kind.orEmpty().uppercase(), profile),
                             style = MaterialTheme.typography.labelMedium,
                         )
                         OutlinedTextField(
                             value = draft,
                             onValueChange = { draft = it.take(262_144) },
-                            label = { Text("Content") },
+                            label = { Text(stringResource(R.string.ui_content_4f9be0)) },
                             minLines = 9,
                             maxLines = 18,
                             enabled = detail != null && !state.starmapLoading,
-                            supportingText = { Text("${draft.length}/262144 characters") },
+                            supportingText = { Text(stringResource(R.string.characters_used, draft.length)) },
                             modifier = Modifier.fillMaxWidth(),
                         )
                         state.starmapError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -192,15 +194,15 @@ internal fun StarmapScreen(
                 Button(
                     onClick = { onUpdateNode(profile, selectedId, draft) },
                     enabled = detail != null && dirty && !state.starmapLoading,
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.ui_save_efc007)) }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = { deleteNodeId = selectedId }, enabled = detail != null && !state.starmapLoading) {
                         Icon(Icons.Outlined.Delete, null)
-                        Text("Remove")
+                        Text(stringResource(R.string.ui_remove_e96390))
                     }
-                    TextButton(onClick = ::requestClose) { Text("Close") }
+                    TextButton(onClick = ::requestClose) { Text(stringResource(R.string.ui_close_bbfa77)) }
                 }
             },
         )
@@ -208,23 +210,23 @@ internal fun StarmapScreen(
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
-            title = { Text("DISCARD LEARNING EDITS?") },
-            text = { Text("Unsaved changes to this remote learning node will be lost.") },
+            title = { Text(stringResource(R.string.ui_discard_learning_edits_7be6ca)) },
+            text = { Text(stringResource(R.string.ui_unsaved_changes_to_this_remote_learning_node_will_be_lo_826a19)) },
             confirmButton = {
-                TextButton(onClick = { confirmDiscard = false; onCloseNode() }) { Text("Discard") }
+                TextButton(onClick = { confirmDiscard = false; onCloseNode() }) { Text(stringResource(R.string.ui_discard_36fff6)) }
             },
-            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
+            dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(stringResource(R.string.ui_keep_editing_d4d9e3)) } },
         )
     }
     deleteNodeId?.let { id ->
         AlertDialog(
             onDismissRequest = { deleteNodeId = null },
-            title = { Text("REMOVE LEARNING NODE?") },
-            text = { Text("Hermes will archive a skill or remove a memory node from profile $profile. This cannot be undone from Android.") },
+            title = { Text(stringResource(R.string.ui_remove_learning_node_adb82c)) },
+            text = { Text(stringResource(R.string.remove_learning_description, profile)) },
             confirmButton = {
-                TextButton(onClick = { deleteNodeId = null; onDeleteNode(profile, id) }) { Text("Remove") }
+                TextButton(onClick = { deleteNodeId = null; onDeleteNode(profile, id) }) { Text(stringResource(R.string.ui_remove_e96390)) }
             },
-            dismissButton = { TextButton(onClick = { deleteNodeId = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deleteNodeId = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }

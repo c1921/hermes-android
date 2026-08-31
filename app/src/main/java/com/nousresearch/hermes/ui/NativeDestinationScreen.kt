@@ -1,5 +1,7 @@
 package com.nousresearch.hermes.ui
 
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nousresearch.hermes.R
 
 /** The native product homes introduced around the legacy management destinations. */
 internal enum class NativeDestination {
@@ -91,18 +94,18 @@ internal enum class NativeDestinationAction {
 
 internal data class NativeDestinationEntry(
     val id: String,
-    val title: String,
-    val description: String,
+    @StringRes val title: Int,
+    @StringRes val description: Int,
     val availability: NativeEntryAvailability,
-    val status: String,
+    @StringRes val status: Int,
     val icon: ImageVector,
     val action: NativeDestinationAction? = null,
 )
 
 internal data class NativeManageSectionModel(
     val section: NativeManageSection,
-    val title: String,
-    val description: String,
+    @StringRes val title: Int,
+    @StringRes val description: Int,
     val entries: List<NativeDestinationEntry>,
 )
 
@@ -132,14 +135,14 @@ internal fun NativeDestinationScreen(
     modifier: Modifier = Modifier,
 ) {
     val title = when (destination) {
-        NativeDestination.ARTIFACTS -> "ARTIFACTS"
-        NativeDestination.AUTOMATIONS -> "AUTOMATIONS"
-        NativeDestination.MANAGE -> "MANAGE"
+        NativeDestination.ARTIFACTS -> stringResource(R.string.ui_native_artifacts_title_793cf4)
+        NativeDestination.AUTOMATIONS -> stringResource(R.string.ui_native_automations_title_220c91)
+        NativeDestination.MANAGE -> stringResource(R.string.ui_native_manage_title_7b8538)
     }
     val subtitle = when (destination) {
-        NativeDestination.ARTIFACTS -> "Remote files and artifact status"
-        NativeDestination.AUTOMATIONS -> "Cron, agents, and delivery status"
-        NativeDestination.MANAGE -> "Hermes capabilities and account"
+        NativeDestination.ARTIFACTS -> stringResource(R.string.ui_native_artifacts_subtitle_608865)
+        NativeDestination.AUTOMATIONS -> stringResource(R.string.ui_native_automations_subtitle_99b2ac)
+        NativeDestination.MANAGE -> stringResource(R.string.ui_native_manage_subtitle_757f82)
     }
 
     val entries = when (destination) {
@@ -175,7 +178,7 @@ internal fun ScopedDestinationScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        NativeDestinationHeader(title.uppercase(), "Scoped Hermes resource", onBack)
+        NativeDestinationHeader(title.uppercase(), stringResource(R.string.ui_scoped_hermes_resource_90996d), onBack)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -183,11 +186,11 @@ internal fun ScopedDestinationScreen(
         ) {
             item {
                 CategorySummary(
-                    "This destination preserves the backend, profile, and stable resource identity. Actions remain unavailable until the connected Hermes contract exposes this detail surface.",
+                    stringResource(R.string.ui_scoped_destination_intro_d9de57),
                 )
             }
             item {
-                Text("RESOURCE ID", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.ui_resource_id_067bbd), style = MaterialTheme.typography.labelMedium)
                 SelectionContainer {
                     Text(resourceId, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -211,7 +214,7 @@ private fun NativeDestinationHeader(
         if (onBack != null) {
             IconButton(
                 onClick = onBack,
-                modifier = Modifier.semantics { contentDescription = "Back" },
+                modifier = Modifier.localizedContentDescription(R.string.a11y_back_b52b36),
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
             }
@@ -251,7 +254,7 @@ private fun DestinationEntries(
     ) {
         item {
             CategorySummary(
-                text = "Choose a remote Hermes destination. Entries marked status-only are reported by the server and have no Android operation yet.",
+                text = stringResource(R.string.ui_entries_intro_98121e),
             )
         }
         items(entries, key = NativeDestinationEntry::id) { entry ->
@@ -273,7 +276,7 @@ private fun ManageSections(
     ) {
         item {
             CategorySummary(
-                text = "Manage Hermes remotely. Device-local preferences stay in App settings and never inherit backend or profile scope.",
+                text = stringResource(R.string.ui_manage_sections_intro_8fa462),
             )
         }
         items(sections, key = NativeManageSectionModel::section) { section ->
@@ -282,13 +285,13 @@ private fun ManageSections(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    section.title,
+                    stringResource(section.title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    section.description,
+                    stringResource(section.description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -339,9 +342,7 @@ private fun NativeEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .semantics {
-                contentDescription = "${entry.title}. ${entry.status}"
-            },
+            .localizedContentDescription(R.string.native_entry_description, stringResource(entry.title), stringResource(entry.status)),
     ) {
         Row(
             modifier = Modifier
@@ -364,14 +365,14 @@ private fun NativeEntryCard(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    entry.title,
+                    stringResource(entry.title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    entry.description,
+                    stringResource(entry.description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -380,7 +381,7 @@ private fun NativeEntryCard(
             }
             Spacer(Modifier.width(12.dp))
             Text(
-                text = entry.status,
+                text = stringResource(entry.status),
                 style = MaterialTheme.typography.labelSmall,
                 color = availabilityColor(entry.availability),
                 maxLines = 2,
@@ -400,19 +401,19 @@ private fun availabilityColor(availability: NativeEntryAvailability) = when (ava
 internal fun defaultNativeArtifactsEntries(): List<NativeDestinationEntry> = listOf(
     NativeDestinationEntry(
         id = "remote-files",
-        title = "Remote Files",
-        description = "Browse, preview, download, and share files managed by Hermes.",
+        title = R.string.ui_entry_remote_files_title_0b1e5b,
+        description = R.string.ui_entry_remote_files_desc_b93e6d,
         availability = NativeEntryAvailability.AVAILABLE,
-        status = "REMOTE FILES",
+        status = R.string.ui_status_remote_files_4d296e,
         icon = Icons.Outlined.Folder,
         action = NativeDestinationAction.REMOTE_FILES,
     ),
     NativeDestinationEntry(
         id = "artifact-index",
-        title = "Artifact index",
-        description = "A canonical artifact catalogue is not exposed by the current Hermes contract.",
+        title = R.string.ui_entry_artifact_index_title_631115,
+        description = R.string.ui_entry_artifact_index_desc_41f7a1,
         availability = NativeEntryAvailability.UNAVAILABLE,
-        status = "NOT EXPOSED",
+        status = R.string.ui_status_not_exposed_9a0a9a,
         icon = Icons.Outlined.Archive,
     ),
 )
@@ -420,37 +421,37 @@ internal fun defaultNativeArtifactsEntries(): List<NativeDestinationEntry> = lis
 internal fun defaultNativeAutomationsEntries(): List<NativeDestinationEntry> = listOf(
     NativeDestinationEntry(
         id = "cron",
-        title = "Cron",
-        description = "Create and monitor scheduled Hermes jobs.",
+        title = R.string.ui_entry_cron_title_39d6f6,
+        description = R.string.ui_entry_cron_desc_7edf17,
         availability = NativeEntryAvailability.AVAILABLE,
-        status = "REMOTE JOBS",
+        status = R.string.ui_status_remote_jobs_9e01b2,
         icon = Icons.Outlined.Schedule,
         action = NativeDestinationAction.CRON,
     ),
     NativeDestinationEntry(
         id = "command-center",
-        title = "Command Center",
-        description = "Inspect agents, delegation, and background process status.",
+        title = R.string.ui_entry_command_center_title_de7d6f,
+        description = R.string.ui_entry_command_center_desc_611887,
         availability = NativeEntryAvailability.AVAILABLE,
-        status = "REMOTE STATUS",
+        status = R.string.ui_status_remote_status_7873a5,
         icon = Icons.Outlined.Terminal,
         action = NativeDestinationAction.COMMAND_CENTER,
     ),
     NativeDestinationEntry(
         id = "agents",
-        title = "Agents",
-        description = "Review the agents exposed by the connected Hermes backend.",
+        title = R.string.ui_entry_agents_title_67d84a,
+        description = R.string.ui_entry_agents_desc_1a3c1f,
         availability = NativeEntryAvailability.AVAILABLE,
-        status = "REMOTE STATUS",
+        status = R.string.ui_status_remote_status_7873a5,
         icon = Icons.Outlined.Terminal,
         action = NativeDestinationAction.AGENTS,
     ),
     NativeDestinationEntry(
         id = "webhooks",
-        title = "Webhooks",
-        description = "Webhook delivery status is reported here when Hermes exposes its contract.",
+        title = R.string.ui_entry_webhooks_title_c2d65a,
+        description = R.string.ui_entry_webhooks_desc_9fad68,
         availability = NativeEntryAvailability.REMOTE_STATUS,
-        status = "STATUS ONLY",
+        status = R.string.ui_status_status_only_da6a31,
         icon = Icons.AutoMirrored.Outlined.Send,
     ),
 )
@@ -458,60 +459,60 @@ internal fun defaultNativeAutomationsEntries(): List<NativeDestinationEntry> = l
 internal fun defaultNativeManageSections(): List<NativeManageSectionModel> = listOf(
     NativeManageSectionModel(
         section = NativeManageSection.CAPABILITIES,
-        title = "Capabilities",
-        description = "Remote skills, tools, and host capability reporting.",
+        title = R.string.ui_sec_capabilities_title_acf286,
+        description = R.string.ui_sec_capabilities_desc_1c4815,
         entries = listOf(
-            entry("skills-and-hub", "Skills & Hub", "Browse Hermes skills and the capability hub.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Psychology, NativeDestinationAction.SKILLS),
-            entry("mcp", "MCP", "Manage remote Model Context Protocol servers.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Hub, NativeDestinationAction.MCP),
-            entry("host-capabilities", "Host capabilities", "Desktop-only capabilities are reported by Hermes and never executed locally on Android.", NativeEntryAvailability.REMOTE_STATUS, "STATUS ONLY", Icons.Outlined.HealthAndSafety),
+            entry("skills-and-hub", R.string.ui_entry_skills_hub_title_de269f, R.string.ui_entry_skills_hub_desc_d35b55, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Psychology, NativeDestinationAction.SKILLS),
+            entry("mcp", R.string.ui_entry_mcp_title_4afa80, R.string.ui_entry_mcp_desc_50933f, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Hub, NativeDestinationAction.MCP),
+            entry("host-capabilities", R.string.ui_entry_host_capabilities_title_f27d9b, R.string.ui_entry_host_capabilities_desc_7501ae, NativeEntryAvailability.REMOTE_STATUS, R.string.ui_status_status_only_da6a31, Icons.Outlined.HealthAndSafety),
         ),
     ),
     NativeManageSectionModel(
         section = NativeManageSection.PROFILES_AND_MODELS,
-        title = "Profiles & models",
-        description = "Remote profiles, provider accounts, and model availability.",
+        title = R.string.ui_sec_profiles_models_title_efcc60,
+        description = R.string.ui_sec_profiles_models_desc_65083c,
         entries = listOf(
-            entry("profiles", "Profiles", "Select and manage Hermes profiles.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Person, NativeDestinationAction.PROFILES),
-            entry("providers", "Providers & API keys", "Manage provider accounts and their remote credentials.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Key, NativeDestinationAction.PROVIDERS),
-            entry("model-catalogue", "Model catalogue", "Model availability follows the connected Hermes backend.", NativeEntryAvailability.REMOTE_STATUS, "STATUS ONLY", Icons.Outlined.Memory),
+            entry("profiles", R.string.ui_entry_profiles_title_9eec48, R.string.ui_entry_profiles_desc_ba4d24, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Person, NativeDestinationAction.PROFILES),
+            entry("providers", R.string.ui_entry_providers_title_59b6b2, R.string.ui_entry_providers_desc_2c5aba, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Key, NativeDestinationAction.PROVIDERS),
+            entry("model-catalogue", R.string.ui_entry_model_catalogue_title_59002b, R.string.ui_entry_model_catalogue_desc_355f23, NativeEntryAvailability.REMOTE_STATUS, R.string.ui_status_status_only_da6a31, Icons.Outlined.Memory),
         ),
     ),
     NativeManageSectionModel(
         section = NativeManageSection.CONNECTIONS_AND_DELIVERY,
-        title = "Connections & delivery",
-        description = "Backends, messaging channels, and delivery status.",
+        title = R.string.ui_sec_connections_title_c7165a,
+        description = R.string.ui_sec_connections_desc_fe0213,
         entries = listOf(
-            entry("backends", "Backends", "Switch between saved Hermes installations.", NativeEntryAvailability.AVAILABLE, "DEVICE + REMOTE", Icons.Outlined.Tune, NativeDestinationAction.BACKENDS),
-            entry("messaging", "Messaging", "Configure remote messaging channels.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.AutoMirrored.Outlined.Send, NativeDestinationAction.MESSAGING),
+            entry("backends", R.string.ui_entry_backends_title_5f79c7, R.string.ui_entry_backends_desc_f79b7a, NativeEntryAvailability.AVAILABLE, R.string.ui_status_device_remote_948c5a, Icons.Outlined.Tune, NativeDestinationAction.BACKENDS),
+            entry("messaging", R.string.ui_entry_messaging_title_ecca9e, R.string.ui_entry_messaging_desc_d085eb, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.AutoMirrored.Outlined.Send, NativeDestinationAction.MESSAGING),
         ),
     ),
     NativeManageSectionModel(
         section = NativeManageSection.MEMORY_AND_LEARNING,
-        title = "Memory & learning",
-        description = "Remote memory status without local execution or invented storage.",
+        title = R.string.ui_sec_memory_title_f841b2,
+        description = R.string.ui_sec_memory_desc_09b22e,
         entries = listOf(
-            entry("starmap-memory-graph", "Starmap / Memory Graph", "Search and maintain profile-scoped learning nodes exposed by Hermes.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Memory, NativeDestinationAction.STARMAP),
+            entry("starmap-memory-graph", R.string.ui_entry_starmap_title_cc042e, R.string.ui_entry_starmap_desc_b928f7, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Memory, NativeDestinationAction.STARMAP),
         ),
     ),
     NativeManageSectionModel(
         section = NativeManageSection.SERVER_AND_ACCOUNT,
-        title = "Server & account",
-        description = "Connected Hermes installations, settings, health, and account records.",
+        title = R.string.ui_sec_server_account_title_c69c7f,
+        description = R.string.ui_sec_server_account_desc_c323bd,
         entries = listOf(
-            entry("server-settings", "Server settings", "Review configuration exposed by the connected Hermes server.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Tune, NativeDestinationAction.SERVER_SETTINGS),
-            entry("usage", "Usage", "Review remote usage and quota information.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.BarChart, NativeDestinationAction.USAGE),
-            entry("billing", "Billing", "Review account billing information held by Hermes.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.Key, NativeDestinationAction.BILLING),
-            entry("remote-diagnostics", "Remote diagnostics", "Run Hermes health and security checks on the connected backend.", NativeEntryAvailability.AVAILABLE, "REMOTE", Icons.Outlined.HealthAndSafety, NativeDestinationAction.REMOTE_DIAGNOSTICS),
+            entry("server-settings", R.string.ui_entry_server_settings_title_f24729, R.string.ui_entry_server_settings_desc_415c80, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Tune, NativeDestinationAction.SERVER_SETTINGS),
+            entry("usage", R.string.ui_entry_usage_title_75361a, R.string.ui_entry_usage_desc_238195, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.BarChart, NativeDestinationAction.USAGE),
+            entry("billing", R.string.ui_entry_billing_title_4d42b0, R.string.ui_entry_billing_desc_4d469f, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.Key, NativeDestinationAction.BILLING),
+            entry("remote-diagnostics", R.string.ui_entry_remote_diagnostics_title_2c558c, R.string.ui_entry_remote_diagnostics_desc_9ca5c1, NativeEntryAvailability.AVAILABLE, R.string.ui_status_remote_d6e85b, Icons.Outlined.HealthAndSafety, NativeDestinationAction.REMOTE_DIAGNOSTICS),
         ),
     ),
 )
 
 private fun entry(
     id: String,
-    title: String,
-    description: String,
+    @StringRes title: Int,
+    @StringRes description: Int,
     availability: NativeEntryAvailability,
-    status: String,
+    @StringRes status: Int,
     icon: ImageVector,
     action: NativeDestinationAction? = null,
 ) = NativeDestinationEntry(id, title, description, availability, status, icon, action)

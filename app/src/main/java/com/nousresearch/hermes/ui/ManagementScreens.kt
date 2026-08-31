@@ -2,6 +2,7 @@ package com.nousresearch.hermes.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,6 +75,7 @@ import com.nousresearch.hermes.protocol.StoredSession
 import com.nousresearch.hermes.protocol.ToolsetInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.nousresearch.hermes.R
 
 private enum class CapabilityView { SKILLS, HUB, TOOLSETS }
 
@@ -92,14 +94,13 @@ internal fun BackendsScreen(
     var forgetId by remember { mutableStateOf<String?>(null) }
     val forgetBackend = state.savedBackends.firstOrNull { it.id == forgetId }
     Column(modifier.fillMaxSize()) {
-        ManagementHeader("BACKENDS", "Saved Hermes installations", state.loading, null, onBack)
+        ManagementHeader(stringResource(R.string.ui_mgmt_backends_title_4283fe), stringResource(R.string.ui_mgmt_saved_hermes_installations_fc63f0), state.loading, null, onBack)
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         ) {
-            Text(
-                "Connection metadata is stored in app-private preferences. Dashboard session cookies are encrypted separately with Android Keystore and are never displayed here.",
+            Text(stringResource(R.string.ui_connection_metadata_is_stored_in_app_private_preference_401ebb),
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -107,7 +108,7 @@ internal fun BackendsScreen(
         Button(onClick = { reconnectId = null; adding = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
             Icon(Icons.Outlined.Add, null)
             Spacer(Modifier.width(6.dp))
-            Text("Add backend")
+            Text(stringResource(R.string.ui_add_backend_88b685))
         }
         state.error?.let { ManagementError(it) }
         LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -125,7 +126,7 @@ internal fun BackendsScreen(
                                 Text(backend.baseUrl, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             if (selected) {
-                                Text("CONNECTED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                Text(stringResource(R.string.ui_connected_073afc), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             } else {
                                 val reconnectRequired = backend.authMode != com.nousresearch.hermes.data.AuthMode.DASHBOARD_SESSION ||
                                     state.reconnectRequiredBackendId == backend.id
@@ -138,16 +139,16 @@ internal fun BackendsScreen(
                                             onSelect(backend.id)
                                         }
                                     },
-                                ) { Text(if (reconnectRequired) "Reconnect" else "Connect") }
+                                ) { Text(stringResource(if (reconnectRequired) R.string.reconnect else R.string.ui_connect_b65463)) }
                             }
-                            IconButton(onClick = { forgetId = backend.id }) { Icon(Icons.Outlined.Delete, "Forget ${backend.label}") }
+                            IconButton(onClick = { forgetId = backend.id }) { Icon(Icons.Outlined.Delete, stringResource(R.string.forget_named, backend.label)) }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            backend.lastHermesVersion?.let { Text("HERMES $it", style = MaterialTheme.typography.labelSmall) }
+                            backend.lastHermesVersion?.let { Text(stringResource(R.string.ui_mgmt_hermes_version_cd0e87, it), style = MaterialTheme.typography.labelSmall) }
                             if (backend.baseUrl.startsWith("http://")) {
-                                Text("PRIVATE HTTP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.ui_private_http_e0aab5), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                             } else {
-                                Text("TLS", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.ui_tls_d91e18), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -171,17 +172,17 @@ internal fun BackendsScreen(
     forgetBackend?.let { backend ->
         AlertDialog(
             onDismissRequest = { forgetId = null },
-            title = { Text("FORGET BACKEND?") },
-            text = { Text("${backend.label} will be removed from this device and its encrypted Dashboard session deleted. Nothing is deleted from the Hermes server.") },
+            title = { Text(stringResource(R.string.ui_forget_backend_ed8798)) },
+            text = { Text(stringResource(R.string.remove_backend_description, backend.label)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         forgetId = null
                         onForget(backend.id)
                     },
-                ) { Text("Forget") }
+                ) { Text(stringResource(R.string.ui_forget_03d5d8)) }
             },
-            dismissButton = { TextButton(onClick = { forgetId = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { forgetId = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -193,6 +194,7 @@ private fun BackendConnectionDialog(
     onDismiss: () -> Unit,
     onConnect: (String, String, String, String, Boolean, String) -> Unit,
 ) {
+    val context = LocalContext.current
     var label by remember(initial?.id) { mutableStateOf(initial?.label.orEmpty()) }
     var url by remember(initial?.id) { mutableStateOf(initial?.baseUrl.orEmpty()) }
     var username by remember { mutableStateOf("") }
@@ -217,38 +219,38 @@ private fun BackendConnectionDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "ADD HERMES BACKEND" else "RECONNECT HERMES BACKEND") },
+        title = { Text(stringResource(if (initial == null) R.string.add_backend_title else R.string.reconnect_backend_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(label, { label = it.take(100) }, label = { Text("Connection name") }, singleLine = true)
+                OutlinedTextField(label, { label = it.take(100) }, label = { Text(stringResource(R.string.ui_connection_name_5584ef)) }, singleLine = true)
                 OutlinedTextField(
                     url,
                     { value -> url = value; clearProviderSelection() },
-                    label = { Text("HTTPS URL") },
+                    label = { Text(stringResource(R.string.ui_https_url_93e9be)) },
                     singleLine = true,
                 )
                 OutlinedTextField(
                     username,
                     { username = it },
-                    label = { Text("Dashboard username") },
+                    label = { Text(stringResource(R.string.ui_dashboard_username_6e522d)) },
                     singleLine = true,
                 )
                 OutlinedTextField(
                     password,
                     { password = it },
-                    label = { Text("Dashboard password") },
+                    label = { Text(stringResource(R.string.ui_dashboard_password_ade7f2)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Allow private-network HTTP")
-                        Text("Only literal LAN, loopback, or Tailscale IPs.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.ui_allow_private_network_http_2be5ea))
+                        Text(stringResource(R.string.ui_only_literal_lan_loopback_or_tailscale_ips_f7e430), style = MaterialTheme.typography.bodySmall)
                     }
                     Switch(
                         checked = allowPrivate,
                         onCheckedChange = { allowPrivate = it; clearProviderSelection() },
-                        modifier = Modifier.semantics { contentDescription = "Allow private-network HTTP" },
+                        modifier = Modifier.localizedContentDescription(R.string.a11y_allow_private_network_http_2be5ea),
                     )
                 }
                 if (passwordProviders.size > 1 && providerSource == providerKey) {
@@ -293,7 +295,7 @@ private fun BackendConnectionDialog(
                                 } catch (failure: Throwable) {
                                     if (providerDiscoveryGate.isCurrent(requestToken)) {
                                         clearProviderSelection()
-                                        providerError = failure.message ?: "Could not load Dashboard sign-in providers."
+                                        providerError = failure.message ?: context.getString(R.string.ui_mgmt_could_not_load_dashboard_providers_3a0000)
                                     }
                                 } finally {
                                     val current = providerDiscoveryGate.isCurrent(requestToken)
@@ -310,11 +312,11 @@ private fun BackendConnectionDialog(
                 if (discoveringProviders) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(if (providerSource == providerKey) "Test and save" else "Check sign-in options")
+                    Text(stringResource(if (providerSource == providerKey) R.string.test_save else R.string.check_signin_options))
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 
@@ -354,11 +356,11 @@ internal fun SkillsScreen(
     }
     Column(modifier.fillMaxSize()) {
         ManagementHeader(
-            "CAPABILITIES",
+            stringResource(R.string.ui_mgmt_capabilities_title_c6d07e),
             when (view) {
-                CapabilityView.SKILLS -> "Installed skills"
-                CapabilityView.HUB -> "Review before installing"
-                CapabilityView.TOOLSETS -> "Server tools for ${state.activeProfile}"
+                CapabilityView.SKILLS -> stringResource(R.string.ui_mgmt_installed_skills_f7b77e)
+                CapabilityView.HUB -> stringResource(R.string.ui_mgmt_review_before_installing_90d359)
+                CapabilityView.TOOLSETS -> stringResource(R.string.ui_mgmt_server_tools_for_3ad699, state.activeProfile)
             },
             state.managementLoading || state.skillHubLoading || state.toolsetsLoading,
             refresh,
@@ -368,14 +370,14 @@ internal fun SkillsScreen(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CapabilityTab("Skills", view == CapabilityView.SKILLS, Modifier.weight(1f)) {
+            CapabilityTab(stringResource(R.string.ui_mgmt_tab_skills_fc1f7c), view == CapabilityView.SKILLS, Modifier.weight(1f)) {
                 view = CapabilityView.SKILLS
             }
-            CapabilityTab("Hub", view == CapabilityView.HUB, Modifier.weight(1f)) {
+            CapabilityTab(stringResource(R.string.ui_mgmt_tab_hub_d5bb2e), view == CapabilityView.HUB, Modifier.weight(1f)) {
                 view = CapabilityView.HUB
                 onLoadHub("")
             }
-            CapabilityTab("Tools", view == CapabilityView.TOOLSETS, Modifier.weight(1f)) {
+            CapabilityTab(stringResource(R.string.ui_mgmt_tab_tools_35cbf0), view == CapabilityView.TOOLSETS, Modifier.weight(1f)) {
                 view = CapabilityView.TOOLSETS
                 onRefreshToolsets()
             }
@@ -385,7 +387,7 @@ internal fun SkillsScreen(
                 onClick = onUpdate,
                 enabled = state.skillAction?.running != true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            ) { Text("Update all skills", maxLines = 1, style = MaterialTheme.typography.labelMedium) }
+            ) { Text(stringResource(R.string.ui_update_all_skills_ebb6f9), maxLines = 1, style = MaterialTheme.typography.labelMedium) }
         }
         OutlinedTextField(
             value = query,
@@ -393,9 +395,9 @@ internal fun SkillsScreen(
             placeholder = {
                 Text(
                     when (view) {
-                        CapabilityView.SKILLS -> "Search installed skills"
-                        CapabilityView.HUB -> "Search the Hermes skills hub"
-                        CapabilityView.TOOLSETS -> "Search toolsets and tools"
+                        CapabilityView.SKILLS -> stringResource(R.string.ui_mgmt_search_installed_skills_f19c55)
+                        CapabilityView.HUB -> stringResource(R.string.ui_mgmt_search_hermes_skills_hub_7067cb)
+                        CapabilityView.TOOLSETS -> stringResource(R.string.ui_mgmt_search_toolsets_tools_be80c4)
                     },
                 )
             },
@@ -407,15 +409,15 @@ internal fun SkillsScreen(
                 onClick = { onLoadHub(query) },
                 enabled = query.isNotBlank() && !state.skillHubLoading,
                 modifier = Modifier.padding(horizontal = 12.dp),
-            ) { Text("Search hub") }
+            ) { Text(stringResource(R.string.ui_search_hub_d3545c)) }
         }
         if (view != CapabilityView.TOOLSETS) state.skillAction?.let { action ->
             Text(
                 when {
-                    action.running -> "Skill operation running on Hermes${action.pid?.let { " / PID $it" }.orEmpty()}"
-                    action.exitCode == 0 -> "Skill operation completed"
+                    action.running -> stringResource(R.string.ui_mgmt_skill_op_running_6d1fb6, action.pid?.let { stringResource(R.string.ui_mgmt_pid_suffix_dfbdb0, it) }.orEmpty())
+                    action.exitCode == 0 -> stringResource(R.string.ui_mgmt_skill_op_completed_ae0755)
                     action.error != null -> action.error
-                    else -> "Skill operation exited ${action.exitCode ?: "without status"}"
+                    else -> stringResource(R.string.ui_mgmt_skill_op_exited_281220, action.exitCode?.toString() ?: stringResource(R.string.ui_mgmt_without_status_e08783))
                 },
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.bodySmall,
@@ -429,7 +431,7 @@ internal fun SkillsScreen(
             }
             state.toolsetError?.let { ManagementError(it) }
             if (!state.toolsetsLoading && visibleToolsets.isEmpty()) {
-                ManagementEmpty(if (state.toolsets.isEmpty()) "No configurable toolsets were returned by Hermes." else "No matching toolsets.")
+                ManagementEmpty(if (state.toolsets.isEmpty()) stringResource(R.string.ui_mgmt_no_configurable_toolsets_5b9255) else stringResource(R.string.ui_mgmt_no_matching_toolsets_8589ea))
             } else {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(visibleToolsets, key = ToolsetInfo::name) { toolset ->
@@ -439,7 +441,7 @@ internal fun SkillsScreen(
             }
         } else if (view == CapabilityView.HUB) {
             if (!state.skillHubLoading && state.skillHubResults.isEmpty()) {
-                ManagementEmpty("No hub results. Search by capability, tool or workflow.")
+                ManagementEmpty(stringResource(R.string.ui_mgmt_no_hub_results_ff309c))
             } else {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(state.skillHubResults, key = SkillHubResult::identifier) { skill ->
@@ -448,7 +450,7 @@ internal fun SkillsScreen(
                 }
             }
         } else if (!state.managementLoading && visible.isEmpty()) {
-            ManagementEmpty(if (state.skills.isEmpty()) "No installed skills were returned by Hermes." else "No matching skills.")
+            ManagementEmpty(if (state.skills.isEmpty()) stringResource(R.string.ui_mgmt_no_installed_skills_ad6838) else stringResource(R.string.ui_mgmt_no_matching_skills_6d070c))
         } else {
             LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visible, key = SkillInfo::name) { skill ->
@@ -462,7 +464,7 @@ internal fun SkillsScreen(
         val blocked = review.scan.policy == "block"
         AlertDialog(
             onDismissRequest = onCloseReview,
-            title = { Text("REVIEW ${review.preview.name.uppercase()}") },
+            title = { Text(stringResource(R.string.review_named, review.preview.name.uppercase())) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("${review.preview.trustLevel.uppercase()} / ${review.preview.source} / ${review.scan.verdict.uppercase()}")
@@ -474,25 +476,25 @@ internal fun SkillsScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    Text("FILES / ${review.preview.files.joinToString().ifBlank { "SKILL.md only" }}", style = MaterialTheme.typography.labelSmall)
+                    Text(stringResource(R.string.files_named, review.preview.files.joinToString().ifBlank { "SKILL.md only" }), style = MaterialTheme.typography.labelSmall)
                     Text(review.preview.skillMarkdown.take(4_000), style = MaterialTheme.typography.bodySmall, maxLines = 14, overflow = TextOverflow.Ellipsis)
                 }
             },
             confirmButton = {
                 Button(onClick = onInstall, enabled = !blocked) {
-                    Text(if (review.scan.policy == "ask") "Accept risk and install" else if (blocked) "Blocked by Hermes" else "Install")
+                    Text(if (review.scan.policy == "ask") stringResource(R.string.ui_mgmt_accept_risk_and_install_415ed7) else if (blocked) stringResource(R.string.ui_mgmt_blocked_by_hermes_e70cad) else stringResource(R.string.ui_mgmt_install_194619))
                 }
             },
-            dismissButton = { TextButton(onClick = onCloseReview) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = onCloseReview) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     uninstallName?.let { name ->
         AlertDialog(
             onDismissRequest = { uninstallName = null },
-            title = { Text("REMOVE SKILL") },
-            text = { Text("Uninstall $name from the selected Hermes profile?") },
-            confirmButton = { TextButton(onClick = { uninstallName = null; onUninstall(name) }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { uninstallName = null }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.ui_remove_skill_9ad745)) },
+            text = { Text(stringResource(R.string.uninstall_skill_question, name)) },
+            confirmButton = { TextButton(onClick = { uninstallName = null; onUninstall(name) }) { Text(stringResource(R.string.ui_remove_e96390)) } },
+            dismissButton = { TextButton(onClick = { uninstallName = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -534,14 +536,13 @@ internal fun CronScreen(
     val deleteJob = state.cronJobs.firstOrNull { it.id == deleteJobId }
     LaunchedEffect(Unit) { onRefresh() }
     Column(modifier.fillMaxSize()) {
-        ManagementHeader("AUTOMATIONS", "Server-side Hermes cron", state.managementLoading, onRefresh, onBack)
+        ManagementHeader(stringResource(R.string.ui_mgmt_automations_title_22995d), stringResource(R.string.ui_mgmt_server_side_hermes_cron_84016e), state.managementLoading, onRefresh, onBack)
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         ) {
-            Text(
-                "Schedules execute on the Hermes backend, not on this Android device. Android notifications are a separate delivery surface.",
+            Text(stringResource(R.string.ui_schedules_execute_on_the_hermes_backend_not_on_this_and_3497ba),
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -549,11 +550,11 @@ internal fun CronScreen(
         Button(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
             Icon(Icons.Outlined.Add, null)
             Spacer(Modifier.width(6.dp))
-            Text("Create job")
+            Text(stringResource(R.string.ui_create_job_b9a738))
         }
         if (state.error != null) ManagementError(state.error)
         if (!state.managementLoading && state.cronJobs.isEmpty()) {
-            ManagementEmpty("No cron jobs are configured on this Hermes backend.")
+            ManagementEmpty(stringResource(R.string.ui_mgmt_no_cron_jobs_51c6b3))
         } else {
             LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.cronJobs, key = CronJob::id) { job ->
@@ -601,53 +602,57 @@ internal fun CronScreen(
     deleteJob?.let { job ->
         AlertDialog(
             onDismissRequest = { deleteJobId = null },
-            title = { Text("DELETE CRON JOB?") },
-            text = { Text("${job.name ?: job.id} will stop running on the Hermes backend. Existing run sessions are not deleted.") },
+            title = { Text(stringResource(R.string.ui_delete_cron_job_3c9650)) },
+            text = { Text(stringResource(R.string.delete_cron_description, job.name ?: job.id)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         deleteJobId = null
                         onDelete(job.id)
                     },
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.ui_delete_f6fdbe)) }
             },
-            dismissButton = { TextButton(onClick = { deleteJobId = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deleteJobId = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     pendingToggle?.let { (jobId, enabled) ->
         val job = state.cronJobs.firstOrNull { it.id == jobId }
         AlertDialog(
             onDismissRequest = { pendingToggle = null },
-            title = { Text(if (enabled) "RESUME CRON JOB?" else "PAUSE CRON JOB?") },
+            title = { Text(stringResource(if (enabled) R.string.ui_mgmt_resume_cron_job_6d6f3c else R.string.ui_mgmt_pause_cron_job_9f0ac9)) },
             text = {
                 Text(
-                    "${if (enabled) "Resume" else "Pause"} ${job?.name?.takeIf(String::isNotBlank) ?: jobId} " +
-                        "for profile ${state.activeProfile}? ${if (enabled) "Future scheduled runs will resume." else "Future scheduled runs will stop until resumed."}",
+                    stringResource(
+                        R.string.ui_mgmt_cron_toggle_body_f72124,
+                        stringResource(if (enabled) R.string.ui_mgmt_resume_056a4a else R.string.ui_mgmt_pause_d683cb),
+                        job?.name?.takeIf(String::isNotBlank) ?: jobId,
+                        state.activeProfile,
+                        stringResource(if (enabled) R.string.ui_mgmt_future_runs_resume_5568a8 else R.string.ui_mgmt_future_runs_stop_baa397),
+                    ),
                 )
             },
             confirmButton = {
                 TextButton(onClick = { pendingToggle = null; onSetEnabled(jobId, enabled) }) {
-                    Text(if (enabled) "Resume" else "Pause")
+                    Text(stringResource(if (enabled) R.string.ui_mgmt_resume_056a4a else R.string.ui_mgmt_pause_d683cb))
                 }
             },
-            dismissButton = { TextButton(onClick = { pendingToggle = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingToggle = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     pendingRunJobId?.let { jobId ->
         val job = state.cronJobs.firstOrNull { it.id == jobId }
         AlertDialog(
             onDismissRequest = { pendingRunJobId = null },
-            title = { Text("RUN CRON JOB NOW?") },
+            title = { Text(stringResource(R.string.ui_run_cron_job_now_565765)) },
             text = {
                 Text(
-                    "Run ${job?.name?.takeIf(String::isNotBlank) ?: jobId} now for profile ${state.activeProfile}? " +
-                        "Hermes will start backend work immediately and may deliver the configured result.",
+                    stringResource(R.string.ui_mgmt_cron_run_body_f43a1d, job?.name?.takeIf(String::isNotBlank) ?: jobId, state.activeProfile),
                 )
             },
             confirmButton = {
-                TextButton(onClick = { pendingRunJobId = null; onTrigger(jobId) }) { Text("Run now") }
+                TextButton(onClick = { pendingRunJobId = null; onTrigger(jobId) }) { Text(stringResource(R.string.ui_run_now_2af00e)) }
             },
-            dismissButton = { TextButton(onClick = { pendingRunJobId = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { pendingRunJobId = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
 }
@@ -708,7 +713,7 @@ internal fun ProfilesScreen(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
-            identityError = error.message ?: "Hermes could not load this profile identity"
+            identityError = error.message ?: context.getString(R.string.ui_mgmt_could_not_load_profile_identity_2c44a3)
         } finally {
             identityLoading = false
         }
@@ -738,14 +743,14 @@ internal fun ProfilesScreen(
         }
     }
     Column(modifier.fillMaxSize()) {
-        ManagementHeader("PROFILES", "Isolated Hermes workspaces", state.managementLoading, onRefresh, onBack)
+        ManagementHeader(stringResource(R.string.ui_mgmt_profiles_title_c2728b), stringResource(R.string.ui_mgmt_isolated_hermes_workspaces_93e831), state.managementLoading, onRefresh, onBack)
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.fillMaxWidth().padding(12.dp),
         ) {
             Text(
-                "Running profile: ${state.currentProfile}. Sticky default: ${state.activeProfile}. The sticky default affects future Hermes CLI processes; starting a session here scopes this live connection explicitly.",
+                stringResource(R.string.ui_mgmt_profiles_intro_9002d3, state.currentProfile, state.activeProfile),
                 modifier = Modifier.padding(12.dp),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -753,11 +758,11 @@ internal fun ProfilesScreen(
         Button(onClick = { creating = true }, modifier = Modifier.padding(horizontal = 12.dp)) {
             Icon(Icons.Outlined.Add, null)
             Spacer(Modifier.width(6.dp))
-            Text("Create profile")
+            Text(stringResource(R.string.ui_create_profile_96b8ee))
         }
         if (state.error != null) ManagementError(state.error)
         if (!state.managementLoading && state.profiles.isEmpty()) {
-            ManagementEmpty("No profiles were returned by this Hermes backend.")
+            ManagementEmpty(stringResource(R.string.ui_mgmt_no_profiles_167d53))
         } else {
             LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.profiles, key = ProfileInfo::name) { profile ->
@@ -804,69 +809,69 @@ internal fun ProfilesScreen(
     deleteProfile?.let { profile ->
         AlertDialog(
             onDismissRequest = { deleteProfileName = null },
-            title = { Text("DELETE PROFILE?") },
-            text = { Text("${profile.name} and its isolated config, sessions, skills, and memory will be deleted from the Hermes server. This cannot be undone.") },
+            title = { Text(stringResource(R.string.ui_delete_profile_99163f)) },
+            text = { Text(stringResource(R.string.delete_profile_description, profile.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         deleteProfileName = null
                         onDelete(profile.name)
                     },
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.ui_delete_f6fdbe)) }
             },
-            dismissButton = { TextButton(onClick = { deleteProfileName = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deleteProfileName = null }) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
         )
     }
     identityName?.let { name ->
         AlertDialog(
             onDismissRequest = ::requestCloseIdentity,
-            title = { Text("PROFILE IDENTITY / $name") },
+            title = { Text(stringResource(R.string.profile_identity, name)) },
             text = {
                 if (identityLoading && !identityLoaded) {
                     CircularProgressIndicator()
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            "Stored on ${state.backend?.label.orEmpty()} for profile $name.",
+                            stringResource(R.string.ui_mgmt_stored_on_for_profile_e5753d, state.backend?.label.orEmpty(), name),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         if (setupCommand.isNotBlank()) {
                             Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
                                 Column(Modifier.padding(10.dp)) {
-                                    Text("HOST SETUP COMMAND", style = MaterialTheme.typography.labelMedium)
+                                    Text(stringResource(R.string.ui_host_setup_command_077939), style = MaterialTheme.typography.labelMedium)
                                     Text(setupCommand, style = MaterialTheme.typography.bodySmall)
                                     TextButton(
                                         onClick = {
                                             context.getSystemService(ClipboardManager::class.java)
-                                                .setPrimaryClip(ClipData.newPlainText("Hermes profile setup command", setupCommand))
-                                            identityNotice = "Setup command copied. Run it only on the Hermes host."
+                                                .setPrimaryClip(ClipData.newPlainText(context.getString(R.string.ui_hermes_profile_setup_command_07e096), setupCommand))
+                                            identityNotice = context.getString(R.string.ui_mgmt_setup_command_copied_c98fa3)
                                         },
-                                    ) { Text("Copy command") }
+                                    ) { Text(stringResource(R.string.ui_copy_command_a8e104)) }
                                 }
                             }
                         }
                         OutlinedTextField(
                             value = soulDraft,
                             onValueChange = { soulDraft = it.take(131_072); identityNotice = null },
-                            label = { Text("SOUL.md") },
+                            label = { Text(stringResource(R.string.ui_soul_md_808c7e)) },
                             minLines = 7,
                             maxLines = 14,
                             enabled = identityLoaded && !identityLoading,
-                            supportingText = { Text("Full profile persona; ${soulDraft.length}/131072 characters") },
+                            supportingText = { Text(stringResource(R.string.persona_characters, soulDraft.length)) },
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = providerDraft,
                                 onValueChange = { providerDraft = it.take(200); identityNotice = null },
-                                label = { Text("Provider") },
+                                label = { Text(stringResource(R.string.ui_provider_7ceee3)) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
                             )
                             OutlinedTextField(
                                 value = modelDraft,
                                 onValueChange = { modelDraft = it.take(200); identityNotice = null },
-                                label = { Text("Model") },
+                                label = { Text(stringResource(R.string.ui_model_68c2cc)) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
                             )
@@ -880,18 +885,18 @@ internal fun ProfilesScreen(
                                         try {
                                             onSaveSoul(name, soulDraft)
                                             originalSoul = soulDraft
-                                            identityNotice = "SOUL.md saved"
+                                            identityNotice = context.getString(R.string.ui_mgmt_soul_saved_6a1009)
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
                                         } catch (error: Throwable) {
-                                            identityError = error.message ?: "Hermes could not save SOUL.md"
+                                            identityError = error.message ?: context.getString(R.string.ui_mgmt_could_not_save_soul_aecac2)
                                         } finally {
                                             identityLoading = false
                                         }
                                     }
                                 },
                                 enabled = identityLoaded && !identityLoading && soulDraft != originalSoul,
-                            ) { Text("Save SOUL") }
+                            ) { Text(stringResource(R.string.ui_save_soul_dea0b3)) }
                             Button(
                                 onClick = {
                                     identityLoading = true
@@ -903,11 +908,11 @@ internal fun ProfilesScreen(
                                             originalModel = modelDraft.trim()
                                             providerDraft = originalProvider
                                             modelDraft = originalModel
-                                            identityNotice = "Profile model saved"
+                                            identityNotice = context.getString(R.string.ui_mgmt_profile_model_saved_2ae386)
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
                                         } catch (error: Throwable) {
-                                            identityError = error.message ?: "Hermes could not save the profile model"
+                                            identityError = error.message ?: context.getString(R.string.ui_mgmt_could_not_save_profile_model_fb8569)
                                         } finally {
                                             identityLoading = false
                                         }
@@ -915,23 +920,23 @@ internal fun ProfilesScreen(
                                 },
                                 enabled = identityLoaded && !identityLoading && providerDraft.isNotBlank() && modelDraft.isNotBlank() &&
                                     (providerDraft != originalProvider || modelDraft != originalModel),
-                            ) { Text("Save model") }
+                            ) { Text(stringResource(R.string.ui_save_model_390868)) }
                         }
                         identityNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                         identityError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = ::requestCloseIdentity) { Text("Close") } },
+            confirmButton = { TextButton(onClick = ::requestCloseIdentity) { Text(stringResource(R.string.ui_close_bbfa77)) } },
         )
     }
     if (confirmDiscardIdentity) {
         AlertDialog(
             onDismissRequest = { confirmDiscardIdentity = false },
-            title = { Text("DISCARD PROFILE CHANGES?") },
-            text = { Text("Unsaved SOUL, provider, or model edits will be lost.") },
-            confirmButton = { TextButton(onClick = ::closeIdentity) { Text("Discard") } },
-            dismissButton = { TextButton(onClick = { confirmDiscardIdentity = false }) { Text("Keep editing") } },
+            title = { Text(stringResource(R.string.ui_discard_profile_changes_575ef6)) },
+            text = { Text(stringResource(R.string.ui_unsaved_soul_provider_or_model_edits_will_be_lost_3c721e)) },
+            confirmButton = { TextButton(onClick = ::closeIdentity) { Text(stringResource(R.string.ui_discard_36fff6)) } },
+            dismissButton = { TextButton(onClick = { confirmDiscardIdentity = false }) { Text(stringResource(R.string.ui_keep_editing_d4d9e3)) } },
         )
     }
 }
@@ -966,26 +971,26 @@ private fun ProfileRow(
                 Column(Modifier.weight(1f)) {
                     Text(profile.name, fontWeight = FontWeight.SemiBold)
                     Text(
-                        listOfNotNull(profile.provider, profile.model).joinToString(" / ").ifBlank { "Model not assigned" },
+                        listOfNotNull(profile.provider, profile.model).joinToString(" / ").ifBlank { stringResource(R.string.ui_mgmt_model_not_assigned_67b282) },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                IconButton(onClick = onStartSession) { Icon(Icons.Outlined.PlayArrow, "Start session in ${profile.name}") }
-                IconButton(onClick = onEditIdentity) { Icon(Icons.Outlined.Description, "Edit identity for ${profile.name}") }
-                if (!profile.isDefault) IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, "Rename ${profile.name}") }
-                if (!protected) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Delete ${profile.name}") }
+                IconButton(onClick = onStartSession) { Icon(Icons.Outlined.PlayArrow, stringResource(R.string.start_session_named, profile.name)) }
+                IconButton(onClick = onEditIdentity) { Icon(Icons.Outlined.Description, stringResource(R.string.edit_identity_named, profile.name)) }
+                if (!profile.isDefault) IconButton(onClick = onRename) { Icon(Icons.Outlined.Edit, stringResource(R.string.rename_named, profile.name)) }
+                if (!protected) IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, stringResource(R.string.delete_named, profile.name)) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (profile.isDefault) Text("DEFAULT ROOT", style = MaterialTheme.typography.labelSmall)
-                if (isCurrent) Text("SERVER PROCESS", style = MaterialTheme.typography.labelSmall)
-                Text("${profile.skillCount} SKILLS", style = MaterialTheme.typography.labelSmall)
+                if (profile.isDefault) Text(stringResource(R.string.ui_default_root_5062b2), style = MaterialTheme.typography.labelSmall)
+                if (isCurrent) Text(stringResource(R.string.ui_server_process_85ac55), style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.skill_count, profile.skillCount), style = MaterialTheme.typography.labelSmall)
                 if (isActive) {
-                    Text("STICKY DEFAULT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ui_sticky_default_a734d7), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 } else {
                     TextButton(onClick = onSetActive) {
                         Icon(Icons.Outlined.Star, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Make default")
+                        Text(stringResource(R.string.ui_make_default_7b2628))
                     }
                 }
             }
@@ -1004,37 +1009,37 @@ private fun ProfileCreateDialog(
     var noSkills by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("CREATE PROFILE") },
+        title = { Text(stringResource(R.string.ui_create_profile_ba1c80)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(name, { name = it.take(100) }, label = { Text("Profile name") }, singleLine = true)
+                OutlinedTextField(name, { name = it.take(100) }, label = { Text(stringResource(R.string.ui_profile_name_775747)) }, singleLine = true)
                 OutlinedTextField(
                     cloneFrom,
                     { cloneFrom = it.take(100) },
-                    label = { Text("Clone source (optional)") },
-                    supportingText = { Text("Leave empty for a fresh profile. Use an exact existing profile name.") },
+                    label = { Text(stringResource(R.string.ui_clone_source_optional_cf5105)) },
+                    supportingText = { Text(stringResource(R.string.ui_leave_empty_for_a_fresh_profile_use_an_exact_existing_p_d9486a)) },
                     singleLine = true,
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Clone sessions and full state", Modifier.weight(1f))
+                    Text(stringResource(R.string.ui_clone_sessions_and_full_state_a38a73), Modifier.weight(1f))
                     Switch(
                         checked = cloneAll,
                         onCheckedChange = { cloneAll = it },
-                        modifier = Modifier.semantics { contentDescription = "Clone sessions and full state" },
+                        modifier = Modifier.localizedContentDescription(R.string.a11y_clone_sessions_and_full_state_a38a73),
                     )
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Start without bundled skills", Modifier.weight(1f))
+                    Text(stringResource(R.string.ui_start_without_bundled_skills_ce6cb3), Modifier.weight(1f))
                     Switch(
                         checked = noSkills,
                         onCheckedChange = { noSkills = it },
-                        modifier = Modifier.semantics { contentDescription = "Start without bundled skills" },
+                        modifier = Modifier.localizedContentDescription(R.string.a11y_start_without_bundled_skills_ce6cb3),
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onCreate(name, cloneFrom, cloneAll, noSkills) }, enabled = name.isNotBlank()) { Text("Create") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onCreate(name, cloneFrom, cloneAll, noSkills) }, enabled = name.isNotBlank()) { Text(stringResource(R.string.ui_create_6e157c)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 
@@ -1047,10 +1052,10 @@ private fun ProfileRenameDialog(
     var name by remember(profile.name) { mutableStateOf(profile.name) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("RENAME PROFILE") },
-        text = { OutlinedTextField(name, { name = it.take(100) }, label = { Text("New name") }, singleLine = true) },
-        confirmButton = { TextButton(onClick = { onRename(name) }, enabled = name.isNotBlank() && name != profile.name) { Text("Rename") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text(stringResource(R.string.ui_rename_profile_8cb84e)) },
+        text = { OutlinedTextField(name, { name = it.take(100) }, label = { Text(stringResource(R.string.ui_new_name_9e627c)) }, singleLine = true) },
+        confirmButton = { TextButton(onClick = { onRename(name) }, enabled = name.isNotBlank() && name != profile.name) { Text(stringResource(R.string.ui_rename_d3f4cb)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 
@@ -1066,14 +1071,14 @@ internal fun ManagementHeader(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } }
+        onBack?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) } }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
         onRefresh?.let {
-            IconButton(onClick = it, enabled = !loading) { Icon(Icons.Outlined.Refresh, "Refresh $title") }
+            IconButton(onClick = it, enabled = !loading) { Icon(Icons.Outlined.Refresh, stringResource(R.string.refresh_named, title)) }
         }
     }
     HorizontalDivider()
@@ -1091,21 +1096,21 @@ private fun SkillRow(
             Column(Modifier.weight(1f)) {
                 Text(skill.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    skill.provenance ?: skill.category ?: "general",
+                    skill.provenance ?: skill.category ?: stringResource(R.string.ui_mgmt_general_e2a7c9),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(skill.description, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                skill.usage?.let { Text("$it observed actions", style = MaterialTheme.typography.labelSmall) }
+                skill.usage?.let { Text(stringResource(R.string.observed_actions, it), style = MaterialTheme.typography.labelSmall) }
             }
             Switch(
                 checked = skill.enabled,
                 onCheckedChange = { onToggle(skill.name, it) },
-                modifier = Modifier.semantics { contentDescription = "Enable ${skill.name}" },
+                modifier = Modifier.localizedContentDescription(R.string.enable_named, skill.name),
             )
-            IconButton(onClick = { onUninstall(skill.name) }) { Icon(Icons.Outlined.Delete, "Uninstall ${skill.name}") }
+            IconButton(onClick = { onUninstall(skill.name) }) { Icon(Icons.Outlined.Delete, stringResource(R.string.uninstall_named, skill.name)) }
         }
     }
 }
@@ -1122,7 +1127,7 @@ private fun ToolsetRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(toolset.label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    "${toolset.platformLabel.uppercase()} / ${if (toolset.configured) "CONFIGURED" else "SETUP MAY BE REQUIRED"}",
+                    "${toolset.platformLabel.uppercase()} / ${stringResource(if (toolset.configured) R.string.ui_mgmt_configured_1a5a97 else R.string.ui_mgmt_setup_may_be_required_a32770)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -1140,7 +1145,7 @@ private fun ToolsetRow(
                 checked = toolset.enabled,
                 onCheckedChange = { onToggle(toolset.name, it) },
                 enabled = !loading,
-                modifier = Modifier.semantics { contentDescription = "Enable ${toolset.label}" },
+                modifier = Modifier.localizedContentDescription(R.string.enable_named, toolset.label),
             )
         }
     }
@@ -1155,7 +1160,7 @@ private fun SkillHubRow(skill: SkillHubResult, onReview: (String) -> Unit, modif
                     Text(skill.name, fontWeight = FontWeight.SemiBold)
                     Text("${skill.trustLevel.uppercase()} / ${skill.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
-                Button(onClick = { onReview(skill.identifier) }) { Text("Review") }
+                Button(onClick = { onReview(skill.identifier) }) { Text(stringResource(R.string.ui_review_e29a79)) }
             }
             Text(skill.description, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             if (skill.tags.isNotEmpty()) Text(skill.tags.joinToString(" · "), style = MaterialTheme.typography.labelSmall)
@@ -1184,35 +1189,35 @@ private fun CronRow(
                 Column(Modifier.weight(1f)) {
                     Text(job.name?.takeIf(String::isNotBlank) ?: job.id, fontWeight = FontWeight.SemiBold)
                     Text(
-                        job.scheduleDisplay ?: job.schedule?.display ?: job.schedule?.expr ?: "Schedule unavailable",
+                        job.scheduleDisplay ?: job.schedule?.display ?: job.schedule?.expr ?: stringResource(R.string.ui_mgmt_schedule_unavailable_7c2822),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 IconButton(onClick = { onSetEnabled(job.id, !job.enabled) }) {
-                    Icon(if (job.enabled) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, if (job.enabled) "Pause job" else "Resume job")
+                    Icon(if (job.enabled) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, stringResource(if (job.enabled) R.string.ui_mgmt_pause_job_009bff else R.string.ui_mgmt_resume_job_43a255))
                 }
-                IconButton(onClick = { onTrigger(job.id) }) { Icon(Icons.Outlined.PlayArrow, "Run job now") }
-                IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "Edit job") }
-                IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, "Delete job") }
+                IconButton(onClick = { onTrigger(job.id) }) { Icon(Icons.Outlined.PlayArrow, stringResource(R.string.a11y_run_job_now_e80ea6)) }
+                IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, stringResource(R.string.a11y_edit_job_4b27b5)) }
+                IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, stringResource(R.string.a11y_delete_job_ede40d)) }
             }
             job.prompt?.takeIf(String::isNotBlank)?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (job.enabled) "ENABLED" else "PAUSED", style = MaterialTheme.typography.labelSmall)
-                job.nextRunAt?.let { Text("NEXT $it", style = MaterialTheme.typography.labelSmall) }
-                job.deliver?.let { Text("DELIVER $it", style = MaterialTheme.typography.labelSmall) }
+                Text(stringResource(if (job.enabled) R.string.enabled else R.string.paused), style = MaterialTheme.typography.labelSmall)
+                job.nextRunAt?.let { Text(stringResource(R.string.next_run, it), style = MaterialTheme.typography.labelSmall) }
+                job.deliver?.let { Text(stringResource(R.string.deliver_to, it), style = MaterialTheme.typography.labelSmall) }
             }
-            job.lastError?.let { Text("Last failure: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            job.lastError?.let { Text(stringResource(R.string.last_failure, it), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             TextButton(onClick = onHistory) {
                 Icon(Icons.Outlined.History, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(if (expanded) "Hide runs" else "Recent runs")
+                Text(stringResource(if (expanded) R.string.hide_runs else R.string.recent_runs))
             }
             if (expanded) {
                 when {
-                    runs == null -> Text("Loading run history…", style = MaterialTheme.typography.bodySmall)
-                    runs.isEmpty() -> Text("No executions have produced sessions for this job.", style = MaterialTheme.typography.bodySmall)
+                    runs == null -> Text(stringResource(R.string.ui_loading_run_history_7aba72), style = MaterialTheme.typography.bodySmall)
+                    runs.isEmpty() -> Text(stringResource(R.string.ui_no_executions_have_produced_sessions_for_this_job_33c7f3), style = MaterialTheme.typography.bodySmall)
                     else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         runs.forEach { run ->
                             Surface(
@@ -1231,7 +1236,7 @@ private fun CronRow(
                                             overflow = TextOverflow.Ellipsis,
                                         )
                                     }
-                                    if (run.isActive) Text("ACTIVE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    if (run.isActive) Text(stringResource(R.string.ui_active_c72633), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -1257,27 +1262,27 @@ private fun CronEditorDialog(
     val valid = prompt.isNotBlank() && schedule.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (job == null) "CREATE CRON JOB" else "EDIT CRON JOB") },
+        title = { Text(stringResource(if (job == null) R.string.create_cron_job else R.string.edit_cron_job)) },
         text = {
             Column(
                 Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()).imePadding(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedTextField(name, { name = it.take(200) }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(prompt, { prompt = it }, label = { Text("Hermes prompt") }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 7)
+                OutlinedTextField(name, { name = it.take(200) }, label = { Text(stringResource(R.string.ui_name_709a23)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(prompt, { prompt = it }, label = { Text(stringResource(R.string.ui_hermes_prompt_7dc987)) }, modifier = Modifier.fillMaxWidth(), minLines = 3, maxLines = 7)
                 OutlinedTextField(
                     schedule,
                     { schedule = it },
-                    label = { Text("Exact schedule") },
-                    supportingText = { Text("Cron expression or schedule form accepted by this Hermes server; timezone is evaluated server-side.") },
+                    label = { Text(stringResource(R.string.ui_exact_schedule_a2d1d3)) },
+                    supportingText = { Text(stringResource(R.string.ui_cron_expression_or_schedule_form_accepted_by_this_herme_81b79d)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                OutlinedTextField(deliver, { deliver = it }, label = { Text("Delivery destination (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(deliver, { deliver = it }, label = { Text(stringResource(R.string.ui_delivery_destination_optional_d55fe3)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(name, prompt, schedule, deliver) }, enabled = valid) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onSave(name, prompt, schedule, deliver) }, enabled = valid) { Text(stringResource(R.string.ui_save_efc007)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ui_cancel_77dfd2)) } },
     )
 }
 
