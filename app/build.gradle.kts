@@ -208,6 +208,10 @@ android {
         compose = true
     }
 
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     signingConfigs {
         if (hasDebugSigning) {
             getByName("debug") {
@@ -292,6 +296,7 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
 
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.hilt.navigation.compose)
