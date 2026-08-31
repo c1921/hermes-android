@@ -4,6 +4,7 @@ import android.content.Intent
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,6 +80,7 @@ import com.nousresearch.hermes.platform.textShareIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.nousresearch.hermes.R
 
 @Composable
 internal fun ArtifactsScreen(
@@ -176,11 +178,11 @@ private fun ArtifactListPane(
     modifier: Modifier,
 ) {
     Column(modifier) {
-        ArtifactsHeader("ARTIFACTS", profileId, onBack, onRefresh)
+        ArtifactsHeader(stringResource(R.string.ui_artifacts_title_5b7c9d), profileId, onBack, onRefresh)
         OutlinedTextField(
             value = preferences.query,
             onValueChange = onQueryChange,
-            label = { Text("Search artifacts") },
+            label = { Text(stringResource(R.string.ui_search_artifacts_200f88)) },
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -193,7 +195,7 @@ private fun ArtifactListPane(
                 FilterChip(
                     selected = preferences.filter == filter,
                     onClick = { onFilterChange(filter) },
-                    label = { Text(filter.label) },
+                    label = { Text(stringResource(filter.labelRes)) },
                 )
             }
         }
@@ -204,7 +206,8 @@ private fun ArtifactListPane(
             indexState.error != null && entries.isEmpty() -> ArtifactError(indexState.error, onRefresh, Modifier.fillMaxSize())
             entries.isEmpty() -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    if (preferences.query.isBlank()) "No detected artifacts in this profile." else "No artifacts match this search.",
+                    if (preferences.query.isBlank()) stringResource(R.string.ui_no_artifacts_in_profile_1c2d3e)
+                    else stringResource(R.string.ui_no_artifacts_match_search_2d3e4f),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -232,7 +235,7 @@ private fun ArtifactsHeader(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.a11y_back_b52b36)) }
         Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(
                 title,
@@ -243,7 +246,7 @@ private fun ArtifactsHeader(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         onRefresh?.let { refresh ->
-            IconButton(onClick = refresh) { Icon(Icons.Outlined.Refresh, "Refresh detected artifacts") }
+            IconButton(onClick = refresh) { Icon(Icons.Outlined.Refresh, stringResource(R.string.a11y_refresh_detected_artifacts_5c614a)) }
         }
     }
     HorizontalDivider()
@@ -251,6 +254,7 @@ private fun ArtifactsHeader(
 
 @Composable
 private fun ArtifactRow(entry: DetectedArtifactIndexEntry, selected: Boolean, onClick: () -> Unit) {
+    val context = LocalContext.current
     val artifact = entry.artifact
     Surface(
         onClick = onClick,
@@ -259,7 +263,7 @@ private fun ArtifactRow(entry: DetectedArtifactIndexEntry, selected: Boolean, on
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
-            .semantics { contentDescription = "${artifact.label}. ${artifact.kind.name.lowercase()}. Detected in ${entry.sessionTitle}" },
+            .semantics { contentDescription = context.getString(R.string.artifact_detected_description, artifact.label, artifact.kind.name.lowercase(), entry.sessionTitle) },
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
@@ -276,13 +280,16 @@ private fun ArtifactRow(entry: DetectedArtifactIndexEntry, selected: Boolean, on
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "From: ${entry.sessionTitle}",
+                    stringResource(R.string.ui_artifact_from_session_3e4f5a, entry.sessionTitle),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${relativeTime(entry.sessionTimestamp)}  •  DETECTED",
+                    stringResource(
+                        R.string.ui_artifact_relative_detected_4f5a6b,
+                        relativeTime(entry.sessionTimestamp, stringResource(R.string.ui_unknown_time_7e8f9a)),
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -313,9 +320,9 @@ private fun ArtifactDetailPane(
             runCatching {
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri, "w")?.use { it.write(content.exportBytes()) }
-                        ?: error("Android could not open the export destination")
+                        ?: error(context.getString(R.string.ui_export_destination_open_failed_8b9c0d))
                 }
-            }.onFailure { actionError = it.message ?: "Artifact export failed" }
+            }.onFailure { actionError = it.message ?: context.getString(R.string.ui_artifact_export_failed_9c0d1e) }
         }
     }
 
@@ -333,21 +340,25 @@ private fun ArtifactDetailPane(
                     }
                 }
             }.onSuccess { intent ->
-                runCatching { context.startActivity(Intent.createChooser(intent, if (openWith) "Open artifact" else "Share artifact")) }
-                    .onFailure { actionError = it.message ?: "No compatible app is installed" }
-            }.onFailure { actionError = it.message ?: "Artifact sharing failed" }
+                runCatching { context.startActivity(Intent.createChooser(intent, if (openWith) context.getString(R.string.ui_open_artifact_2f3a4b) else context.getString(R.string.ui_share_artifact_3a4b5c))) }
+                    .onFailure { actionError = it.message ?: context.getString(R.string.ui_no_compatible_app_installed_0d1e2f) }
+            }.onFailure { actionError = it.message ?: context.getString(R.string.ui_artifact_share_failed_1e2f3a) }
         }
     }
 
     Column(modifier.fillMaxSize()) {
         ArtifactsHeader(
             title = entry.artifact.label,
-            subtitle = "Detected in ${entry.sessionTitle}",
+            subtitle = stringResource(R.string.ui_artifact_detected_in_session_5a6b7c, entry.sessionTitle),
             onBack = onBack,
             onRefresh = null,
         )
         Text(
-            "${entry.artifact.kind.name}  /  ${entry.artifact.mimeType ?: "unknown type"}  /  DETECTED",
+            stringResource(
+                R.string.ui_artifact_meta_6b7c8d,
+                entry.artifact.kind.name,
+                entry.artifact.mimeType ?: context.getString(R.string.ui_artifact_unknown_type_7c8d9e),
+            ),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -356,7 +367,7 @@ private fun ArtifactDetailPane(
             when {
                 result == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 result?.isFailure == true -> PreviewFailure(
-                    result?.exceptionOrNull()?.message ?: "Artifact preview could not be loaded",
+                    result?.exceptionOrNull()?.message ?: stringResource(R.string.ui_artifact_preview_unavailable_8d9e0f),
                 )
                 preview != null -> ArtifactPreview(preview)
             }
@@ -371,10 +382,10 @@ private fun ArtifactDetailPane(
         }
         HorizontalDivider()
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)) {
-            ArtifactAction("Open chat", Icons.Outlined.ChatBubbleOutline, onOpenChat, Modifier.weight(1f))
-            ArtifactAction("Export", Icons.Outlined.Download, { preview?.let { exportLauncher.launch(it.name) } }, Modifier.weight(1f), preview != null)
-            ArtifactAction("Share", Icons.Outlined.Share, { launchShared(false) }, Modifier.weight(1f), preview != null)
-            ArtifactAction("Open with", Icons.AutoMirrored.Outlined.OpenInNew, { launchShared(true) }, Modifier.weight(1f), preview != null)
+            ArtifactAction(stringResource(R.string.ui_artifact_open_chat_0f1a2b), Icons.Outlined.ChatBubbleOutline, onOpenChat, Modifier.weight(1f))
+            ArtifactAction(stringResource(R.string.ui_artifact_export_1a2b3c), Icons.Outlined.Download, { preview?.let { exportLauncher.launch(it.name) } }, Modifier.weight(1f), preview != null)
+            ArtifactAction(stringResource(R.string.ui_artifact_share_2b3c4d), Icons.Outlined.Share, { launchShared(false) }, Modifier.weight(1f), preview != null)
+            ArtifactAction(stringResource(R.string.ui_artifact_open_with_3c4d5e), Icons.AutoMirrored.Outlined.OpenInNew, { launchShared(true) }, Modifier.weight(1f), preview != null)
         }
     }
 }
@@ -405,7 +416,7 @@ private fun ArtifactPreview(content: ArtifactPreviewContent) {
             is ArtifactPreviewContent.Binary -> when {
                 content.mimeType.startsWith("image/") -> RasterPreview(content.bytes, content.name)
                 content.mimeType == "application/pdf" -> PdfPreview(content.bytes)
-                else -> PreviewFailure("Use Export or Open with to inspect this file type safely.")
+                else -> PreviewFailure(stringResource(R.string.ui_artifact_binary_inspect_hint_9e0f1a))
             }
         }
     }
@@ -430,16 +441,16 @@ private fun ArtifactAction(
 @Composable
 private fun ArtifactError(message: String, onRetry: () -> Unit, modifier: Modifier) {
     Column(modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("ARTIFACTS UNAVAILABLE", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.ui_artifacts_unavailable_a4e165), style = MaterialTheme.typography.titleMedium)
         Text(message, style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = onRetry) { Text("Retry") }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.ui_retry_9f5cd8)) }
     }
 }
 
 @Composable
 private fun ArtifactLoading(onBack: () -> Unit, modifier: Modifier) {
     Column(modifier.fillMaxSize()) {
-        ArtifactsHeader("ARTIFACT", "Loading detected origin", onBack, null)
+        ArtifactsHeader(stringResource(R.string.ui_artifact_title_2f3a4b), stringResource(R.string.ui_artifact_loading_subtitle_4b5c6d), onBack, null)
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
 }
@@ -447,24 +458,24 @@ private fun ArtifactLoading(onBack: () -> Unit, modifier: Modifier) {
 @Composable
 private fun ArtifactMissing(onBack: () -> Unit, onRefresh: () -> Unit, modifier: Modifier) {
     Column(modifier.fillMaxSize()) {
-        ArtifactsHeader("ARTIFACT", "Detected origin unavailable", onBack, onRefresh)
-        ArtifactError("This artifact is no longer present in the authenticated transcript.", onRefresh, Modifier.fillMaxSize())
+        ArtifactsHeader(stringResource(R.string.ui_artifact_title_2f3a4b), stringResource(R.string.ui_artifact_missing_subtitle_5c6d7e), onBack, onRefresh)
+        ArtifactError(stringResource(R.string.ui_artifact_missing_body_6d7e8f), onRefresh, Modifier.fillMaxSize())
     }
 }
 
 @Composable
 private fun ArtifactEmptyDetail(modifier: Modifier) {
     Box(modifier.padding(32.dp), contentAlignment = Alignment.Center) {
-        Text("Select a detected artifact to preview it.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.ui_select_a_detected_artifact_to_preview_it_fdf933), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
-private val ArtifactIndexFilter.label: String
+private val ArtifactIndexFilter.labelRes: Int
     get() = when (this) {
-        ArtifactIndexFilter.ALL -> "All"
-        ArtifactIndexFilter.IMAGES -> "Images"
-        ArtifactIndexFilter.FILES -> "Files"
-        ArtifactIndexFilter.LINKS -> "Links"
+        ArtifactIndexFilter.ALL -> R.string.ui_filter_all_4d5e6f
+        ArtifactIndexFilter.IMAGES -> R.string.ui_filter_images_5e6f7a
+        ArtifactIndexFilter.FILES -> R.string.ui_filter_files_6f7a8b
+        ArtifactIndexFilter.LINKS -> R.string.ui_filter_links_7a8b9c
     }
 
 private val com.nousresearch.hermes.domain.DetectedArtifact.icon: ImageVector
@@ -478,9 +489,9 @@ private val com.nousresearch.hermes.domain.DetectedArtifact.icon: ImageVector
         DetectedArtifactKind.FILE -> Icons.AutoMirrored.Outlined.InsertDriveFile
     }
 
-private fun relativeTime(timestampSeconds: Double): String {
+private fun relativeTime(timestampSeconds: Double, unknown: String): String {
     val millis = (timestampSeconds * 1_000.0).toLong().coerceAtLeast(0L)
-    return if (millis == 0L) "Unknown time" else DateUtils.getRelativeTimeSpanString(
+    return if (millis == 0L) unknown else DateUtils.getRelativeTimeSpanString(
         millis,
         System.currentTimeMillis(),
         DateUtils.MINUTE_IN_MILLIS,
