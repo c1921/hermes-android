@@ -69,8 +69,8 @@ fun signingFingerprint(path: String?, password: String?, alias: String?): String
     }.getOrDefault("unavailable")
 }
 
-val appVersionCode = 6
-val appVersionName = "1.1.1"
+val appVersionCode = 1
+val appVersionName = "1.0.0"
 require(Regex("\\d+\\.\\d+\\.\\d+").matches(appVersionName)) {
     "Hermes versionName must be semantic major.minor.patch."
 }
